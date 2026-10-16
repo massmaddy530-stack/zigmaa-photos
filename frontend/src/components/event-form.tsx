@@ -1,0 +1,144 @@
+"use client";
+
+import { ImagePlus, X } from "lucide-react";
+import { useEffect, useRef, useState, type FormEvent, type ReactNode } from "react";
+import { ApiError, errorMessage } from "@/lib/api";
+import { ACCEPTED_IMAGE_TYPES, MAX_UPLOAD_MB } from "@/lib/config";
+import type { EventCreate, EventOut } from "@/lib/types";
+import { Button } from "./ui/button";
+import { Field, Input, Textarea } from "./ui/primitives";
+import { Alert } from "./ui/states";
+
+export interface EventFormValues extends EventCreate {
+  cover?: File | null;
+}
+
+type FieldErrors = Partial<Record<"name" | "event_date" | "venue" | "description" | "cover", string>>;
+
+/** Maps backend validation errors (422 details with `loc`) onto form fields. */
+function fieldErrorsFrom(err: unknown): FieldErrors {
+  if (!(err instanceof ApiError) || err.code !== "validation_error" || !Array.isArray(err.details)) return {};
+  const out: FieldErrors = {};
+  for (const d of err.details as { loc?: (string | number)[]; msg?: string }[]) {
+    const f = d.loc?.[d.loc.length - 1];
+    if (typeof f === "string" && ["name", "event_date", "venue", "description"].includes(f)) {
+      out[f as keyof FieldErrors] = d.msg?.replace(/^Value error, /, "") ?? "Invalid value";
+    }
+  }
+  return out;
+}
+
+export function EventForm({ initial, submitLabel, onSubmit, footerExtra, withCover = true }: {
+  initial?: Partial<EventOut>;
+  submitLabel: string;
+  onSubmit: (values: EventFormValues) => Promise<void>;
+  footerExtra?: ReactNode;
+  withCover?: boolean;
+}) {
+  const [name, setName] = useState(initial?.name ?? "");
+  const [date, setDate] = useState(initial?.event_date ?? "");
+  const [venue, setVenue] = useState(initial?.venue ?? "");
+  const [description, setDescription] = useState(initial?.description ?? "");
+  const [cover, setCover] = useState<File | null>(null);
+  const [preview, setPreview] = useState<string | null>(null);
+  const [errors, setErrors] = useState<FieldErrors>({});
+  const [formError, setFormError] = useState<unknown>(null);
+  const [busy, setBusy] = useState(false);
+  const fileRef = useRef<HTMLInputElement>(null);
+
+  useEffect(() => {
+    if (!cover) { setPreview(null); return; }
+    const url = URL.createObjectURL(cover);
+    setPreview(url);
+    return () => URL.revokeObjectURL(url);
+  }, [cover]);
+
+  function pickCover(f: File | undefined) {
+    if (!f) return;
+    if (!ACCEPTED_IMAGE_TYPES.includes(f.type)) {
+      setErrors((e) => ({ ...e, cover: "Use a JPEG, PNG or WebP image." }));
+      return;
+    }
+    if (f.size > MAX_UPLOAD_MB * 1024 * 1024) {
+      setErrors((e) => ({ ...e, cover: `Image must be under ${MAX_UPLOAD_MB} MB.` }));
+      return;
+    }
+    setErrors((e) => ({ ...e, cover: undefined }));
+    setCover(f);
+  }
+
+  async function submit(e: FormEvent) {
+    e.preventDefault();
+    const local: FieldErrors = {};
+    if (!name.trim()) local.name = "Event name is required.";
+    if (name.trim().length > 200) local.name = "Keep the name under 200 characters.";
+    if (venue.length > 300) local.venue = "Keep the venue under 300 characters.";
+    setErrors(local);
+    if (Object.keys(local).length) return;
+    setBusy(true);
+    setFormError(null);
+    try {
+      await onSubmit({
+        name: name.trim(),
+        event_date: date || null,
+        venue: venue.trim() || null,
+        description: description.trim() || null,
+        cover,
+      });
+    } catch (err) {
+      const fe = fieldErrorsFrom(err);
+      setErrors(fe);
+      if (!Object.keys(fe).length) setFormError(err);
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  return (
+    <form onSubmit={submit} className="space-y-5" noValidate>
+      {formError ? <Alert tone="error" title="Could not save">{errorMessage(formError)}</Alert> : null}
+      <Field label="Event name" htmlFor="ev-name" error={errors.name}>
+        <Input id="ev-name" value={name} onChange={(e) => setName(e.target.value)} maxLength={200} required
+               placeholder="e.g. Aisha & Rohan's Wedding" aria-invalid={!!errors.name} />
+      </Field>
+      <div className="grid gap-5 sm:grid-cols-2">
+        <Field label="Date" htmlFor="ev-date" error={errors.event_date}>
+          <Input id="ev-date" type="date" value={date} onChange={(e) => setDate(e.target.value)} />
+        </Field>
+        <Field label="Venue" htmlFor="ev-venue" error={errors.venue}>
+          <Input id="ev-venue" value={venue} onChange={(e) => setVenue(e.target.value)} maxLength={300}
+                 placeholder="e.g. The Grand Palace, Jaipur" />
+        </Field>
+      </div>
+      <Field label="Description" htmlFor="ev-desc" error={errors.description} hint="Shown to guests on the event page.">
+        <Textarea id="ev-desc" value={description} onChange={(e) => setDescription(e.target.value)} maxLength={5000}
+                  placeholder="A short welcome message for your guests" />
+      </Field>
+      {withCover && (
+        <Field label="Cover image" htmlFor="ev-cover" error={errors.cover} hint="Optional. Shown at the top of the guest page.">
+          <input ref={fileRef} id="ev-cover" type="file" accept={ACCEPTED_IMAGE_TYPES.join(",")} className="sr-only"
+                 onChange={(e) => { pickCover(e.target.files?.[0]); e.target.value = ""; }} />
+          {preview ? (
+            <div className="relative aspect-[16/7] overflow-hidden rounded-xl border border-line">
+              <img src={preview} alt="Cover preview" className="h-full w-full object-cover" />
+              <button type="button" onClick={() => setCover(null)} aria-label="Remove cover"
+                      className="absolute right-2 top-2 grid h-8 w-8 place-items-center rounded-full bg-black/60 text-white hover:bg-black/75">
+                <X className="h-4 w-4" />
+              </button>
+            </div>
+          ) : (
+            <button type="button" onClick={() => fileRef.current?.click()}
+                    className="flex w-full flex-col items-center justify-center gap-2 rounded-xl border-2 border-dashed border-line bg-canvas/50 px-4 py-8 text-sm text-muted transition hover:border-brand-300 hover:bg-brand-50/40">
+              <ImagePlus className="h-6 w-6 text-brand-500" aria-hidden />
+              <span><span className="font-medium text-brand-700">Choose an image</span> (JPEG, PNG or WebP)</span>
+            </button>
+          )}
+        </Field>
+      )}
+      <div className="flex flex-wrap items-center justify-end gap-2 pt-2">
+        {footerExtra}
+        <Button type="submit" loading={busy}>{submitLabel}</Button>
+      </div>
+    </form>
+  );
+}

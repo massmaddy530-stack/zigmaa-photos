@@ -1,0 +1,103 @@
+"use client";
+
+export class ImageReadError extends Error {}
+
+const MAX_SIDE = 1280;
+
+function canvasToJpeg(canvas: HTMLCanvasElement, quality = 0.9): Promise<Blob> {
+  return new Promise((resolve, reject) =>
+    canvas.toBlob((b) => (b ? resolve(b) : reject(new ImageReadError("Could not encode image"))), "image/jpeg", quality),
+  );
+}
+
+function fit(w: number, h: number, max = MAX_SIDE) {
+  const scale = Math.min(1, max / Math.max(w, h));
+  return { w: Math.round(w * scale), h: Math.round(h * scale) };
+}
+
+/**
+ * Re-encode a user-chosen image as a bounded JPEG: applies EXIF orientation, strips metadata
+ * (including GPS), converts formats the browser can decode (e.g. HEIC on Safari) and shrinks the upload.
+ */
+export async function normalizeImage(file: Blob): Promise<Blob> {
+  let bitmap: ImageBitmap;
+  try {
+    bitmap = await createImageBitmap(file, { imageOrientation: "from-image" });
+  } catch {
+    throw new ImageReadError("This image format can't be read on this device. Please use a JPEG or PNG photo, or take a new one.");
+  }
+  try {
+    const { w, h } = fit(bitmap.width, bitmap.height);
+    const canvas = document.createElement("canvas");
+    canvas.width = w;
+    canvas.height = h;
+    const ctx = canvas.getContext("2d");
+    if (!ctx) throw new ImageReadError("Your browser could not process the image.");
+    ctx.drawImage(bitmap, 0, 0, w, h);
+    return await canvasToJpeg(canvas);
+  } finally {
+    bitmap.close();
+  }
+}
+
+/** Grab the current camera frame as a JPEG (un-mirrored, bounded size). */
+export async function captureVideoFrame(video: HTMLVideoElement): Promise<Blob> {
+  const { w, h } = fit(video.videoWidth, video.videoHeight);
+  if (!w || !h) throw new ImageReadError("The camera isn't ready yet.");
+  const canvas = document.createElement("canvas");
+  canvas.width = w;
+  canvas.height = h;
+  const ctx = canvas.getContext("2d");
+  if (!ctx) throw new ImageReadError("Your browser could not capture the photo.");
+  ctx.drawImage(video, 0, 0, w, h);
+  return canvasToJpeg(canvas);
+}
+
+export class DownloadError extends Error {
+  constructor(message: string, public expired = false) {
+    super(message);
+  }
+}
+
+/**
+ * Download a (possibly cross-origin) image. Falls back to opening it in a new tab if CORS blocks the fetch.
+ * Throws DownloadError when offline, when the link has expired, or when the transfer is interrupted.
+ */
+export async function downloadImage(url: string, filename: string) {
+  if (typeof navigator !== "undefined" && navigator.onLine === false) {
+    throw new DownloadError("You're offline. Reconnect and tap Download again.");
+  }
+  let res: Response;
+  try {
+    res = await fetch(url, { mode: "cors" });
+  } catch {
+    if (navigator.onLine === false) throw new DownloadError("Your connection dropped. Reconnect and tap Download again.");
+    window.open(url, "_blank", "noopener,noreferrer"); // e.g. storage without CORS: let the browser download it
+    return;
+  }
+  if (res.status === 403) throw new DownloadError("This download link has expired. Start a new search to refresh it.", true);
+  if (!res.ok) throw new DownloadError(`Download failed (${res.status}). Please try again.`);
+  try {
+    const blob = await res.blob(); // throws if the connection drops mid-transfer
+    const href = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = href;
+    a.download = filename;
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    setTimeout(() => URL.revokeObjectURL(href), 10_000);
+  } catch {
+    throw new DownloadError("The download was interrupted. Check your connection and tap Download again.");
+  }
+}
+
+/** File extension of a (signed) URL's path, e.g. ".jpg" — used to name downloads of originals. */
+export function urlExtension(url: string, fallback = ".jpg"): string {
+  try {
+    const m = /\.(jpe?g|png|webp)$/i.exec(new URL(url).pathname);
+    return m ? `.${m[1].toLowerCase()}` : fallback;
+  } catch {
+    return fallback;
+  }
+}
