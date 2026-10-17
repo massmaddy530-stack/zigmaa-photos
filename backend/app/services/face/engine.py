@@ -270,6 +270,8 @@ def set_analyzer(analyzer: FaceAnalyzer | None) -> None:
 
 def get_analyzer() -> FaceAnalyzer:
     global _analyzer
+    if not get_settings().face_analysis_enabled:
+        raise FaceModelUnavailableError("Face analysis is disabled (FACE_ANALYSIS_ENABLED=false)")
     if _analyzer is None:
         with _analyzer_lock:
             if _analyzer is None:
@@ -280,6 +282,8 @@ def get_analyzer() -> FaceAnalyzer:
 
 
 def analyzer_available() -> bool:
+    if not get_settings().face_analysis_enabled:
+        return False
     if _analyzer is not None:
         return True
     d = get_settings().face_model_dir

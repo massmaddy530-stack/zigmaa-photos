@@ -55,7 +55,7 @@ def process_file(photo: Photo, storage: Storage, settings: Settings) -> Processe
         storage.put_bytes(derivative_key(photo.event_id, photo.id, "thumbnails"), deriv.thumbnail, "image/webp")
         storage.put_bytes(derivative_key(photo.event_id, photo.id, "previews"), deriv.preview, "image/webp")
         analysis = deriv.analysis
-        faces = get_analyzer().analyze(analysis)
+        faces = get_analyzer().analyze(analysis) if settings.face_analysis_enabled else []
         w, h = analysis.size
         records = [
             FaceRecord(

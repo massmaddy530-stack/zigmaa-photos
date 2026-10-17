@@ -61,6 +61,8 @@ def choose_selfie_faces(faces: list[DetectedFace], require_single: bool) -> list
 
 
 def selfie_embeddings(data: bytes, settings: Settings, timings: Timings) -> list[np.ndarray]:
+    if not settings.face_analysis_enabled:  # refuse before the selfie is even decoded
+        raise ServiceUnavailableError("Face matching is temporarily unavailable.", code="face_model_unavailable")
     t0 = time.perf_counter()
     try:
         inspect_image(io.BytesIO(data), settings)

@@ -9,8 +9,29 @@ from typing import Annotated, Literal
 
 from pydantic import Field, SecretStr, field_validator, model_validator
 from pydantic_settings import BaseSettings, NoDecode, SettingsConfigDict
+from sqlalchemy.engine import make_url
 
 BACKEND_DIR = Path(__file__).resolve().parents[2]
+
+
+def async_database_url(url: str) -> str:
+    """Use the asyncpg driver for plain PostgreSQL URLs (hosts such as Render provide ``postgresql://`` or
+    ``postgres://``) and translate libpq's ``sslmode`` to asyncpg's ``ssl``. Credentials and other query
+    parameters are kept; other URLs are returned unchanged. Error messages never include the URL."""
+    try:
+        u = make_url(url)
+    except Exception:
+        raise ValueError("DATABASE_URL is not a valid database URL") from None
+    if u.drivername in ("postgres", "postgresql"):
+        u = u.set(drivername="postgresql+asyncpg")
+    elif u.drivername != "postgresql+asyncpg" or "sslmode" not in u.query:
+        return url
+    if "sslmode" in u.query:
+        query = dict(u.query)
+        sslmode = query.pop("sslmode")
+        query.setdefault("ssl", sslmode)
+        u = u.set(query=query)
+    return u.render_as_string(hide_password=False)
 
 
 class Settings(BaseSettings):
@@ -18,6 +39,7 @@ class Settings(BaseSettings):
         env_file=(BACKEND_DIR / ".env", BACKEND_DIR.parent / ".env"),
         env_file_encoding="utf-8",
         extra="ignore",
+        hide_input_in_errors=True,  # validation errors must not echo DATABASE_URL or other secrets into logs
     )
 
     # --- General -----------------------------------------------------------
@@ -80,6 +102,9 @@ class Settings(BaseSettings):
     preview_quality: int = 82
 
     # --- Face analysis -------------------------------------------------------
+    # false: photos still get thumbnails/previews and are marked indexed with no faces; face detection,
+    # embeddings and selfie matching are skipped and the model runtime is never loaded.
+    face_analysis_enabled: bool = True
     face_model_dir: Path = BACKEND_DIR / "models" / "buffalo_l"
     face_det_size: int = 640
     face_det_threshold: float = 0.5
@@ -109,6 +134,11 @@ class Settings(BaseSettings):
                 return json.loads(v)
             return [item.strip() for item in v.split(",") if item.strip()]
         return v
+
+    @field_validator("database_url")
+    @classmethod
+    def _async_driver(cls, v: str) -> str:
+        return async_database_url(v)
 
     @model_validator(mode="after")
     def _check_production(self) -> "Settings":

@@ -131,7 +131,9 @@ async def lifespan(app: FastAPI):
         settings.task_mode,
     )
 
-    if not analyzer_available():
+    if not settings.face_analysis_enabled:
+        logger.info("Face analysis disabled (FACE_ANALYSIS_ENABLED=false): photos get previews only; matching is off")
+    elif not analyzer_available():
         logger.warning(
             "Face model files not found in %s; indexing and matching "
             "will fail until installed",
@@ -199,7 +201,8 @@ def create_app() -> FastAPI:
             checks["database"] = f"error: {type(exc).__name__}"
 
         checks["face_model"] = (
-            "ok" if analyzer_available() else "missing"
+            "disabled" if not settings.face_analysis_enabled
+            else "ok" if analyzer_available() else "missing"
         )
         checks["storage"] = settings.storage_backend
         checks["task_mode"] = settings.task_mode
