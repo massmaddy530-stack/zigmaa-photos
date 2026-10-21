@@ -1,9 +1,12 @@
 """Supabase Storage (S3-compatible API) backend. Network-free: boto3 presigns locally and Stubber fakes S3 responses."""
 
 import io
+from unittest import mock
 from urllib.parse import parse_qs, urlsplit
 
 import pytest
+from boto3.exceptions import RetriesExceededError
+from botocore.exceptions import ConnectTimeoutError, EndpointConnectionError, ReadTimeoutError
 from botocore.response import StreamingBody
 from botocore.stub import ANY, Stubber
 from pydantic import SecretStr, ValidationError
@@ -156,6 +159,64 @@ def test_errors_are_storage_errors_without_secrets(st, stub, method, call, expec
         call(st)
     assert str(e.value) == expected
     assert SECRET not in str(e.value) and KEY_ID not in str(e.value)
+
+
+class _TimingOutStream(io.RawIOBase):
+    def readable(self):
+        return True
+
+    def readinto(self, b):
+        raise ReadTimeoutError(endpoint_url=f"https://{REF}.storage.supabase.co")
+
+
+def _r2() -> R2Storage:
+    return R2Storage(Settings(_env_file=None, storage_backend="r2", r2_account_id="acct", r2_access_key_id=KEY_ID,
+                              r2_secret_access_key=SECRET, r2_bucket="r2-bucket"))
+
+
+@pytest.fixture(params=["supabase", "r2"])
+def s3(request):
+    return SupabaseStorage(_settings()) if request.param == "supabase" else _r2()
+
+
+def test_download_retry_exhaustion_is_storage_error(s3, tmp_path):
+    # Every GetObject body times out mid-read; the transfer manager retries, then raises boto3's RetriesExceededError.
+    with Stubber(s3.client) as s:
+        if isinstance(s3, R2Storage):  # boto3's default checksum mode makes the transfer manager HEAD first
+            s.add_response("head_object", {"ContentLength": 5, "ETag": '"etag"'})
+        for _ in range(10):  # more than the transfer manager's attempts; unused ones are fine
+            s.add_response("get_object", {"Body": StreamingBody(_TimingOutStream(), 5), "ContentLength": 5,
+                                          "ETag": '"etag"'})
+        with pytest.raises(StorageError) as e:
+            s3.download_to(KEY, tmp_path / "out.bin")
+    assert str(e.value) == f"{s3.label} download failed: RetriesExceededError"
+    assert isinstance(e.value.__cause__, RetriesExceededError)
+    assert not (tmp_path / "out.bin").exists()
+
+
+_TRANSPORT_ERRORS = [
+    EndpointConnectionError(endpoint_url=f"https://{REF}.storage.supabase.co/storage/v1/s3?X-Amz-Signature=sig"),
+    ConnectTimeoutError(endpoint_url=f"https://{REF}.storage.supabase.co"),
+    ReadTimeoutError(endpoint_url=f"https://{REF}.storage.supabase.co"),
+]
+
+
+@pytest.mark.parametrize("exc", _TRANSPORT_ERRORS, ids=lambda e: type(e).__name__)
+@pytest.mark.parametrize("client_method,op,call", [
+    ("upload_fileobj", "upload", lambda st, p: st.put_bytes(KEY, b"x", "image/webp")),
+    ("download_file", "download", lambda st, p: st.download_to(KEY, p / "out.bin")),
+    ("delete_object", "delete", lambda st, p: st.delete(KEY)),
+    ("head_object", "head", lambda st, p: st.exists(KEY)),
+])
+def test_transport_errors_are_redacted_storage_errors(s3, tmp_path, exc, client_method, op, call):
+    with mock.patch.object(s3.client, client_method, side_effect=exc):
+        with pytest.raises(StorageError) as e:
+            call(s3, tmp_path)
+    msg = str(e.value)
+    assert msg == f"{s3.label} {op} failed: {type(exc).__name__}"
+    assert e.value.__cause__ is exc
+    for leaked in (SECRET, KEY_ID, REF, "X-Amz-Signature", "http"):
+        assert leaked not in msg
 
 
 @pytest.mark.parametrize("bad", ["", "/abs/key.jpg", "../escape.jpg", "events/../x.jpg", "events//x.jpg",

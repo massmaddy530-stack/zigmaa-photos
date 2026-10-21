@@ -150,12 +150,15 @@ class S3CompatibleStorage(Storage):
         )
 
     def _wrap(self, op: str, fn, *args, **kwargs):
+        from boto3.exceptions import Boto3Error
         from botocore.exceptions import BotoCoreError, ClientError
 
         try:
             return fn(*args, **kwargs)
-        except (BotoCoreError, ClientError) as exc:
-            code = getattr(exc, "response", {}).get("Error", {}).get("Code", type(exc).__name__)
+        # Boto3Error covers the transfer manager's own failures, e.g. RetriesExceededError from download_file.
+        except (BotoCoreError, ClientError, Boto3Error) as exc:
+            # Some botocore errors (e.g. ReadTimeoutError) carry response=None.
+            code = (getattr(exc, "response", None) or {}).get("Error", {}).get("Code", type(exc).__name__)
             raise StorageError(f"{self.label} {op} failed: {code}") from exc
 
     def put_file(self, key: str, fileobj: BinaryIO, content_type: str) -> None:
@@ -169,7 +172,7 @@ class S3CompatibleStorage(Storage):
         self._wrap("delete", self.client.delete_object, Bucket=self.bucket, Key=_validate_key(key))
 
     def exists(self, key: str) -> bool:
-        from botocore.exceptions import ClientError
+        from botocore.exceptions import BotoCoreError, ClientError
 
         try:
             self.client.head_object(Bucket=self.bucket, Key=_validate_key(key))
@@ -178,6 +181,8 @@ class S3CompatibleStorage(Storage):
             if exc.response.get("Error", {}).get("Code") in ("404", "NoSuchKey", "NotFound"):
                 return False
             raise StorageError(f"{self.label} head failed") from exc
+        except BotoCoreError as exc:  # transport failures (connection, timeouts)
+            raise StorageError(f"{self.label} head failed: {type(exc).__name__}") from exc
 
     def signed_url(self, key: str, expires_in: int | None = None) -> str:
         return self.client.generate_presigned_url(
