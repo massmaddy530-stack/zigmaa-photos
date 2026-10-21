@@ -70,6 +70,10 @@ Minimum setup (any host that runs Python + Node, or containers):
    * Face model files in `backend/models/buffalo_l` (`python scripts/download_models.py`). Check their licence.
 2. **Frontend** on `https://photos.example.com` (e.g. Vercel, or `npm run build; npm start` behind a proxy):
    `NEXT_PUBLIC_API_BASE_URL=https://api.example.com`, `API_BASE_URL=https://api.example.com`.
+   * Admin sign-in (server-side only): `ADMIN_USERNAME`, `ADMIN_PASSWORD_HASH` (from
+     `node scripts/hash-password.mjs`), `SESSION_SECRET` (32+ random characters) and `ADMIN_API_KEY` (the same value
+     as the backend's). Sign-in stays disabled until all four are set. The browser only receives a signed, 12-hour
+     session cookie; the password and the API key never leave the server.
 3. **Ingestion agent** on the photographer's laptop: `API_BASE_URL=https://api.example.com`. It only makes outgoing
    HTTPS requests, so no port forwarding is needed and the camera stays on the local network.
 4. Open the Share tab: the warning disappears once both URLs are public HTTPS. Test with a phone **on mobile data**

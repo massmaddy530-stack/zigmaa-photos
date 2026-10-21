@@ -12,15 +12,13 @@ export default function LoginPage() {
         <Logo />
         <div className="mx-auto flex w-full max-w-sm flex-1 flex-col justify-center py-12">
           <h1 className="text-2xl font-semibold tracking-tight">Sign in to your studio</h1>
-          <p className="mt-2 text-sm text-muted">
-            Enter the admin API key configured on your backend (<code className="font-mono text-xs">ADMIN_API_KEY</code>).
-          </p>
+          <p className="mt-2 text-sm text-muted">Sign in with your admin username and password.</p>
           <Suspense>
             <LoginForm />
           </Suspense>
           <p className="mt-6 text-xs leading-relaxed text-muted">
-            The key is verified by the server and kept in a secure, httpOnly session cookie. It is never stored in
-            browser JavaScript.
+            Your password is checked on the server. This browser only keeps a signed, httpOnly session cookie that
+            expires after 12 hours.
           </p>
         </div>
       </div>

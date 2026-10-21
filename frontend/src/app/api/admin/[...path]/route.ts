@@ -1,7 +1,15 @@
-// Same-origin proxy for admin API calls. The admin key lives in an httpOnly cookie and is attached here,
-// server-side, so it is never readable by browser JavaScript.
+// Same-origin proxy for admin API calls. The browser's signed session cookie is verified here, then the admin API
+// key from the server environment is attached, so the key never reaches the browser in any form.
 import { NextRequest, NextResponse } from "next/server";
-import { API_BASE_URL, SESSION_COOKIE } from "@/lib/server-config";
+import { hasCsrfHeader } from "@/lib/auth/request";
+import { verifySessionToken } from "@/lib/auth/session";
+import {
+  API_BASE_URL,
+  authConfig,
+  LEGACY_SESSION_COOKIE,
+  SESSION_COOKIE,
+  SESSION_MAX_AGE_S,
+} from "@/lib/server-config";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -18,16 +26,25 @@ async function proxy(req: NextRequest, ctx: { params: Promise<{ path: string[] }
   if (!path?.length || !ALLOWED_ROOTS.has(path[0]) || path.some((p) => p === ".." || p === "." || p === "")) {
     return errorJson(404, "not_found", "Not found");
   }
-  const key = req.cookies.get(SESSION_COOKIE)?.value;
-  if (!key) return errorJson(401, "unauthorized", "Please sign in.");
+  const config = authConfig();
+  if (!config) {
+    return errorJson(503, "auth_not_configured", "Sign-in is not configured on the server. Contact the administrator.");
+  }
+  const token = req.cookies.get(SESSION_COOKIE)?.value;
+  if (!token || !(await verifySessionToken(token, config, SESSION_MAX_AGE_S))) {
+    const res = errorJson(401, "unauthorized", "Please sign in.");
+    if (token) res.cookies.delete(SESSION_COOKIE);
+    if (req.cookies.has(LEGACY_SESSION_COOKIE)) res.cookies.delete(LEGACY_SESSION_COOKIE);
+    return res;
+  }
 
   // CSRF defence in depth (cookie is also SameSite=Strict): cross-site forms cannot set custom headers.
-  if (req.method !== "GET" && req.method !== "HEAD" && req.headers.get("x-requested-with") !== "evp") {
+  if (req.method !== "GET" && req.method !== "HEAD" && !hasCsrfHeader(req)) {
     return errorJson(403, "csrf", "Missing request header");
   }
 
   const target = `${API_BASE_URL}/api/v1/${path.map(encodeURIComponent).join("/")}${req.nextUrl.search}`;
-  const headers = new Headers({ Authorization: `Bearer ${key}`, Accept: "application/json" });
+  const headers = new Headers({ Authorization: `Bearer ${config.adminApiKey}`, Accept: "application/json" });
   const contentType = req.headers.get("content-type");
   if (contentType) headers.set("content-type", contentType);
   const fwd = req.headers.get("x-forwarded-for");
@@ -49,17 +66,23 @@ async function proxy(req: NextRequest, ctx: { params: Promise<{ path: string[] }
     return errorJson(502, "backend_unreachable", "The API server is not reachable.");
   }
 
+  // The backend only answers 401/403 when it rejects the API key itself: a server misconfiguration, not an
+  // expired session, so the user is not signed out.
+  if (upstream.status === 401 || upstream.status === 403) {
+    await upstream.body?.cancel().catch(() => undefined);
+    console.error(`Admin proxy: backend rejected ADMIN_API_KEY (HTTP ${upstream.status}); frontend and backend values must match`);
+    return errorJson(502, "backend_auth_misconfigured", "The server is misconfigured. Contact the administrator.");
+  }
+
   const resHeaders = new Headers();
   for (const h of FORWARD_RESPONSE_HEADERS) {
     const v = upstream.headers.get(h);
     if (v) resHeaders.set(h, v);
   }
-  const res = new NextResponse(upstream.status === 204 ? null : upstream.body, {
+  return new NextResponse(upstream.status === 204 ? null : upstream.body, {
     status: upstream.status,
     headers: resHeaders,
   });
-  if (upstream.status === 401) res.cookies.delete(SESSION_COOKIE); // key rotated/revoked: force re-login
-  return res;
 }
 
 export { proxy as GET, proxy as POST, proxy as PATCH, proxy as PUT, proxy as DELETE };
