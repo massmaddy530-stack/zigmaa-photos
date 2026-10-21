@@ -1,4 +1,4 @@
-"""Object storage abstraction: Cloudflare R2 (S3 API via boto3) or local disk for development.
+"""Object storage abstraction: Cloudflare R2 or Supabase Storage (S3 API via boto3), or local disk for development.
 
 All methods are synchronous (boto3 is blocking); call them via a thread pool from async code.
 """
@@ -120,32 +120,33 @@ class LocalStorage(Storage):
         return f"{self.base_url}/media/{quote(key)}?{query}"
 
 
-# --------------------------------------------------------------------------- R2
+# --------------------------------------------------------------------------- S3-compatible (R2, Supabase)
 
 
-class R2Storage(Storage):
-    def __init__(self, settings: Settings) -> None:
+class S3CompatibleStorage(Storage):
+    """Objects in an S3-compatible bucket; URLs are presigned (SigV4) GET links straight to the provider.
+
+    Error messages carry only the provider's error code, never credentials or URLs."""
+
+    label = "S3"
+
+    def __init__(self, *, endpoint: str, region: str, access_key_id: str, secret_access_key: str, bucket: str,
+                 ttl: int, addressing_style: str | None = None, **config_options) -> None:
         import boto3
         from botocore.config import Config
 
-        missing = [n for n, v in {
-            "R2_ACCESS_KEY_ID": settings.r2_access_key_id,
-            "R2_SECRET_ACCESS_KEY": settings.r2_secret_access_key,
-            "R2_BUCKET": settings.r2_bucket,
-            "R2_ACCOUNT_ID or R2_ENDPOINT_URL": settings.r2_endpoint,
-        }.items() if not v]
-        if missing:
-            raise RuntimeError(f"R2 storage selected but missing settings: {', '.join(missing)}")
-        self.bucket = settings.r2_bucket
-        self.ttl = settings.signed_url_ttl_s
+        self.bucket = bucket
+        self.ttl = ttl
         self.client = boto3.client(
             "s3",
-            endpoint_url=settings.r2_endpoint,
-            aws_access_key_id=settings.r2_access_key_id.get_secret_value(),
-            aws_secret_access_key=settings.r2_secret_access_key.get_secret_value(),
-            region_name="auto",
+            endpoint_url=endpoint,
+            aws_access_key_id=access_key_id,
+            aws_secret_access_key=secret_access_key,
+            region_name=region,
             config=Config(signature_version="s3v4", retries={"max_attempts": 4, "mode": "standard"},
-                          connect_timeout=10, read_timeout=60),
+                          connect_timeout=10, read_timeout=60,
+                          s3={"addressing_style": addressing_style} if addressing_style else None,
+                          **config_options),
         )
 
     def _wrap(self, op: str, fn, *args, **kwargs):
@@ -155,7 +156,7 @@ class R2Storage(Storage):
             return fn(*args, **kwargs)
         except (BotoCoreError, ClientError) as exc:
             code = getattr(exc, "response", {}).get("Error", {}).get("Code", type(exc).__name__)
-            raise StorageError(f"R2 {op} failed: {code}") from exc
+            raise StorageError(f"{self.label} {op} failed: {code}") from exc
 
     def put_file(self, key: str, fileobj: BinaryIO, content_type: str) -> None:
         self._wrap("upload", self.client.upload_fileobj, fileobj, self.bucket, _validate_key(key),
@@ -176,12 +177,53 @@ class R2Storage(Storage):
         except ClientError as exc:
             if exc.response.get("Error", {}).get("Code") in ("404", "NoSuchKey", "NotFound"):
                 return False
-            raise StorageError("R2 head failed") from exc
+            raise StorageError(f"{self.label} head failed") from exc
 
     def signed_url(self, key: str, expires_in: int | None = None) -> str:
         return self.client.generate_presigned_url(
             "get_object", Params={"Bucket": self.bucket, "Key": _validate_key(key)},
             ExpiresIn=expires_in or self.ttl,
+        )
+
+
+class R2Storage(S3CompatibleStorage):
+    label = "R2"
+
+    def __init__(self, settings: Settings) -> None:
+        missing = [n for n, v in {
+            "R2_ACCESS_KEY_ID": settings.r2_access_key_id,
+            "R2_SECRET_ACCESS_KEY": settings.r2_secret_access_key,
+            "R2_BUCKET": settings.r2_bucket,
+            "R2_ACCOUNT_ID or R2_ENDPOINT_URL": settings.r2_endpoint,
+        }.items() if not v]
+        if missing:
+            raise RuntimeError(f"R2 storage selected but missing settings: {', '.join(missing)}")
+        super().__init__(
+            endpoint=settings.r2_endpoint, region="auto",
+            access_key_id=settings.r2_access_key_id.get_secret_value(),
+            secret_access_key=settings.r2_secret_access_key.get_secret_value(),
+            bucket=settings.r2_bucket, ttl=settings.signed_url_ttl_s,
+        )
+
+
+class SupabaseStorage(S3CompatibleStorage):
+    """Supabase Storage through its S3-compatible endpoint (path-style addressing, SigV4). Use a private bucket."""
+
+    label = "Supabase"
+
+    def __init__(self, settings: Settings) -> None:
+        missing = settings.supabase_missing_settings
+        if missing:
+            raise RuntimeError(f"Supabase storage selected but missing settings: {', '.join(missing)}")
+        super().__init__(
+            endpoint=settings.supabase_endpoint, region=settings.supabase_s3_region,
+            access_key_id=settings.supabase_s3_access_key_id.get_secret_value(),
+            secret_access_key=settings.supabase_s3_secret_access_key.get_secret_value(),
+            bucket=settings.supabase_storage_bucket, ttl=settings.signed_url_ttl_s,
+            addressing_style="path",
+            # Only send/validate the newer default CRC checksums when an operation requires them: not every
+            # S3-compatible service accepts boto3's default (>=1.36) checksum headers.
+            request_checksum_calculation="when_required", response_checksum_validation="when_required",
         )
 
 
@@ -200,6 +242,8 @@ def _build() -> Storage:
     s = get_settings()
     if s.storage_backend == "r2":
         return R2Storage(s)
+    if s.storage_backend == "supabase":
+        return SupabaseStorage(s)
     return LocalStorage(s.local_storage_dir, s.public_base_url, s.signing_secret.get_secret_value(),
                         s.signed_url_ttl_s)
 

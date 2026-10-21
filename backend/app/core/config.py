@@ -78,13 +78,20 @@ class Settings(BaseSettings):
     task_time_limit_s: int = 300
 
     # --- Storage -------------------------------------------------------------
-    storage_backend: Literal["local", "r2"] = "local"
+    storage_backend: Literal["local", "r2", "supabase"] = "local"
     local_storage_dir: Path = BACKEND_DIR / "data" / "storage"
     r2_account_id: str | None = None
     r2_access_key_id: SecretStr | None = None
     r2_secret_access_key: SecretStr | None = None
     r2_bucket: str | None = None
     r2_endpoint_url: str | None = None  # defaults to https://<account>.r2.cloudflarestorage.com
+    # Supabase Storage via its S3-compatible API. The S3 access keys bypass RLS: keep them server-side only.
+    supabase_project_ref: str | None = None
+    supabase_s3_endpoint: str | None = None  # defaults to https://<project_ref>.storage.supabase.co/storage/v1/s3
+    supabase_s3_region: str | None = None
+    supabase_s3_access_key_id: SecretStr | None = None
+    supabase_s3_secret_access_key: SecretStr | None = None
+    supabase_storage_bucket: str | None = None
     signed_url_ttl_s: int = 900
 
     # --- Upload limits -------------------------------------------------------
@@ -150,6 +157,9 @@ class Settings(BaseSettings):
                 raise ValueError("ADMIN_API_KEY must be set (24+ chars) in production")
             if "*" in self.cors_origins:
                 raise ValueError("Wildcard CORS origins are not allowed in production")
+            if self.storage_backend == "supabase" and self.supabase_missing_settings:
+                raise ValueError("Supabase storage selected but missing settings: "
+                                 + ", ".join(self.supabase_missing_settings))
         return self
 
     @property
@@ -159,6 +169,25 @@ class Settings(BaseSettings):
         if self.r2_account_id:
             return f"https://{self.r2_account_id}.r2.cloudflarestorage.com"
         return None
+
+    @property
+    def supabase_endpoint(self) -> str | None:
+        if self.supabase_s3_endpoint:
+            return self.supabase_s3_endpoint.rstrip("/")
+        if self.supabase_project_ref:
+            return f"https://{self.supabase_project_ref}.storage.supabase.co/storage/v1/s3"
+        return None
+
+    @property
+    def supabase_missing_settings(self) -> list[str]:
+        """Names (never values) of the Supabase storage settings that are not set."""
+        return [name for name, value in {
+            "SUPABASE_S3_ENDPOINT or SUPABASE_PROJECT_REF": self.supabase_endpoint,
+            "SUPABASE_S3_REGION": self.supabase_s3_region,
+            "SUPABASE_S3_ACCESS_KEY_ID": self.supabase_s3_access_key_id,
+            "SUPABASE_S3_SECRET_ACCESS_KEY": self.supabase_s3_secret_access_key,
+            "SUPABASE_STORAGE_BUCKET": self.supabase_storage_bucket,
+        }.items() if not value]
 
     @property
     def is_postgres(self) -> bool:
