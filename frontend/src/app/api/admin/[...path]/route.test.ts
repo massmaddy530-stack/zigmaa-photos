@@ -27,7 +27,7 @@ function call(handler: typeof GET, path: string[], init: {
     headers,
     body: init.body,
     ...(init.body ? { duplex: "half" } : {}),
-  } as RequestInit);
+  } as ConstructorParameters<typeof NextRequest>[1]);
   return handler(req, { params: Promise.resolve({ path }) });
 }
 

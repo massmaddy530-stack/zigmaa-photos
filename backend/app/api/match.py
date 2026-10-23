@@ -136,7 +136,9 @@ async def public_event(slug: str, session: SessionDep, storage: StorageDep) -> P
 
 @public_router.get("/{slug}/qr.svg", response_class=Response, responses={200: {"content": {"image/svg+xml": {}}}})
 async def public_event_qr(slug: str, session: SessionDep) -> Response:
-    event = await get_public_event_or_404(session, slug)
+    # The QR only encodes the public link, so it is served even after expiry (the dashboard still shows it);
+    # the guest page itself refuses expired links.
+    event = await get_public_event_or_404(session, slug, allow_expired=True)
     img = qrcode.make(public_url(event.slug), image_factory=qrcode.image.svg.SvgPathImage, box_size=10, border=2)
     buf = io.BytesIO()
     img.save(buf)

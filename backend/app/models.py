@@ -75,6 +75,8 @@ class Event(TimestampMixin, Base):
     cover_key: Mapped[str | None] = mapped_column(String(500))
     status: Mapped[EventStatus] = mapped_column(_enum(EventStatus, "event_status"), default=EventStatus.active,
                                                 nullable=False)
+    # Optional: the guest link / QR code stops working at this time. NULL = no expiry.
+    guest_link_expires_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
 
     photos: Mapped[list[Photo]] = relationship(back_populates="event", passive_deletes=True)
 

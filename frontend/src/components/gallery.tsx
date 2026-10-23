@@ -48,7 +48,13 @@ export function PhotoTile({ src, alt, onClick, overlay, placeholder, selected }:
           </>
         ) : (
           <div className="grid h-full w-full place-items-center text-zinc-400">
-            {placeholder ?? <ImageOff className="h-6 w-6" aria-hidden />}
+            {failed ? (
+              // The image link exists but did not load: the stored file is missing, or the link expired.
+              <div className="flex flex-col items-center gap-1 px-2 text-center">
+                {placeholder ?? <ImageOff className="h-6 w-6" aria-hidden />}
+                <span className="rounded-full bg-amber-50 px-2 py-0.5 text-[10px] font-medium text-amber-700">Image unavailable</span>
+              </div>
+            ) : placeholder ?? <ImageOff className="h-6 w-6" aria-hidden />}
           </div>
         )}
         {overlay}

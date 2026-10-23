@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import uuid
-from datetime import date, datetime
+from datetime import date, datetime, timezone
 from typing import Generic, Literal, TypeVar
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator
@@ -66,6 +66,13 @@ class EventUpdate(BaseModel):
     venue: str | None = Field(default=None, max_length=300)
     description: str | None = Field(default=None, max_length=5000)
     status: EventStatus | None = None
+    # Send null to remove the expiry. A time without a timezone is taken as UTC.
+    guest_link_expires_at: datetime | None = None
+
+    @field_validator("guest_link_expires_at")
+    @classmethod
+    def _aware(cls, v: datetime | None) -> datetime | None:
+        return v.replace(tzinfo=timezone.utc) if v is not None and v.tzinfo is None else v
 
     @field_validator("name")
     @classmethod
@@ -101,6 +108,7 @@ class EventOut(BaseModel):
     status: EventStatus
     cover_url: str | None = None
     public_url: str
+    guest_link_expires_at: datetime | None = None
     created_at: datetime
     updated_at: datetime
     counts: PhotoCounts = PhotoCounts()
@@ -182,6 +190,8 @@ class UploadItemResult(BaseModel):
     photo_id: uuid.UUID | None = None
     error_code: str | None = None
     error: str | None = None
+    # A duplicate whose stored original was missing: the upload restored it and the photo is reprocessed.
+    restored: bool = False
 
 
 class UploadResponse(BaseModel):

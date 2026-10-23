@@ -34,6 +34,8 @@ export interface EventOut {
   status: EventStatus;
   cover_url: string | null;
   public_url: string;
+  /** When the guest link / QR code stops working; null = never (older servers omit the field). */
+  guest_link_expires_at?: string | null;
   created_at: string;
   updated_at: string;
   counts: PhotoCounts;
@@ -48,6 +50,7 @@ export interface EventCreate {
 
 export interface EventUpdate extends Partial<EventCreate> {
   status?: EventStatus;
+  guest_link_expires_at?: string | null;
 }
 
 export interface PhotoOut {
@@ -106,6 +109,8 @@ export interface UploadItemResult {
   photo_id: string | null;
   error_code: string | null;
   error: string | null;
+  /** A duplicate whose stored file was missing: this upload restored it (older servers omit the field). */
+  restored?: boolean;
 }
 
 export interface UploadResponse {

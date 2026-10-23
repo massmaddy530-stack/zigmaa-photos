@@ -53,6 +53,8 @@ function matchErrorCopy(err: unknown): { title: string; body: string; retake: bo
         return { title: "Search is temporarily unavailable", body: "The photographer's system isn't ready yet. Please try again later.", retake: false };
       case "not_found":
         return { title: "Event unavailable", body: "This event is no longer accepting searches.", retake: false };
+      case "link_expired":
+        return { title: "This link has expired", body: "Ask the event organiser for a new link or QR code.", retake: false };
       case "unsupported_format":
       case "corrupt_image":
       case "invalid_image":
@@ -67,14 +69,22 @@ export function GuestPortal({ slug }: { slug: string }) {
 
   if (event.error && !event.data) {
     const notFound = event.error instanceof ApiError && event.error.status === 404;
+    const expired = event.error instanceof ApiError && event.error.code === "link_expired";
     return (
       <Shell>
         <div className="mx-auto max-w-md px-4 py-16">
           {notFound ? (
             <div className="text-center">
-              <div className="mx-auto mb-4 grid h-14 w-14 place-items-center rounded-2xl bg-zinc-100 text-zinc-500"><Lock className="h-6 w-6" /></div>
-              <h1 className="text-xl font-semibold">This event isn&apos;t available</h1>
-              <p className="mt-2 text-sm text-muted">The link may be mistyped, or the organiser has closed the event. Check the QR code or link you were given.</p>
+              <div className="mx-auto mb-4 grid h-14 w-14 place-items-center rounded-2xl bg-zinc-100 text-zinc-500">
+                {expired ? <Clock className="h-6 w-6" /> : <Lock className="h-6 w-6" />}
+              </div>
+              <h1 className="text-xl font-semibold">{expired ? "This link has expired" : <>This event isn&apos;t available</>}</h1>
+              <p className="mt-2 text-sm text-muted">
+                {expired
+                  ? "The organiser set this link to stop working after a certain time. Ask them for a new link or QR code."
+                  : "The link may be mistyped, or the organiser has closed the event. Check the QR code or link you were given."}
+              </p>
+              <a href="/scan" className="mt-5 inline-block text-sm font-semibold text-brand-700 underline">Scan a QR code or enter a code</a>
             </div>
           ) : (
             <ErrorState error={event.error} onRetry={event.reload} />

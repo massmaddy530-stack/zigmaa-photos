@@ -93,6 +93,7 @@ export function UploadPanel({ eventId, disabled, onUploaded }: {
     const ctrl = new AbortController();
     abortRef.current = ctrl;
     let created = 0;
+    let restored = 0; // duplicates whose stored file was missing and was re-saved from this upload
     let stopAll = false;
 
     // Keep draining: files added while uploading are picked up in the next round.
@@ -114,12 +115,13 @@ export function UploadPanel({ eventId, disabled, onUploaded }: {
                 if (idx < 0) return it;
                 const r = body.items[idx];
                 if (!r) return { ...it, status: "error" as const, progress: 0, message: "No result returned" };
-                return { ...it, status: r.status, progress: 1, message: r.error ?? undefined };
+                return { ...it, status: r.status, progress: 1, message: r.error ?? (r.restored ? "Missing file restored" : undefined) };
               });
               itemsRef.current = next;
               return next;
             });
             created += body.created;
+            restored += body.items.filter((r) => r.restored).length;
           } catch (err) {
             const aborted = err instanceof ApiError && err.code === "aborted";
             patch(ids, { status: aborted ? "queued" : "error", progress: 0, message: aborted ? undefined : errorMessage(err) });
@@ -138,8 +140,11 @@ export function UploadPanel({ eventId, disabled, onUploaded }: {
     abortRef.current = null;
     if (created) {
       toast.success(`${formatNumber(created)} photo${created === 1 ? "" : "s"} uploaded`, "Processing has started.");
-      onUploaded();
     }
+    if (restored) {
+      toast.success(`${formatNumber(restored)} missing photo${restored === 1 ? "" : "s"} restored`, "Thumbnails are being rebuilt.");
+    }
+    if (created || restored) onUploaded();
   }, [eventId, onUploaded, patch, toast]);
 
   function addFiles(list: FileList | File[] | null) {

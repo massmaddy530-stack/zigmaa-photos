@@ -381,11 +381,14 @@ def test_full_run_folder_mode_uploads_each_photo_once(folder_cfg, watch, make_up
     status = (spool.root / "status.json").read_text(encoding="utf-8")
     assert '"mode": "folder"' in status and '"files_spooled": 3' in status
 
-    # Restart: nothing is uploaded twice
+    # Restart: nothing is uploaded twice. (The first run may send its photos in one or more batches,
+    # depending on how the folder scans and the uploader thread interleave.)
+    calls_before_restart = backend.upload_calls
     uploader2, spool2 = make_uploader(cfg)
     agent2 = Agent(cfg, build_source(cfg, spool2), uploader2, spool2)
     assert agent2.run(duration_s=1.0) == 0
-    assert agent2.stats["captures"] == 0 and backend.upload_calls == 1
+    assert agent2.stats["captures"] == 0 and backend.upload_calls == calls_before_restart
+    assert len(backend.photos) == 3
 
 
 def test_interrupted_upload_recovers_after_restart(folder_cfg, watch, make_uploader, backend):

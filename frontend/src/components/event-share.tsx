@@ -1,9 +1,11 @@
 "use client";
 
-import { Check, Copy, Download, ExternalLink, Printer, QrCode, RefreshCw, ShieldCheck } from "lucide-react";
+import { Check, Clock, Copy, Download, ExternalLink, Printer, QrCode, RefreshCw, ShieldCheck } from "lucide-react";
 import { useState } from "react";
 import { adminApi, errorMessage, publicApi } from "@/lib/api";
 import { PUBLIC_API_BASE_URL } from "@/lib/config";
+import { formatDateTime } from "@/lib/format";
+import { expiryState, fromLocalInput, toLocalInput } from "@/lib/link-expiry";
 import type { EventOut } from "@/lib/types";
 import { Button } from "./ui/button";
 import { ConfirmDialog } from "./ui/modal";
@@ -37,6 +39,24 @@ export function EventShare({ event, onChanged }: { event: EventOut; onChanged?: 
   const [rotating, setRotating] = useState(false);
   const qr = publicApi.qrUrl(event.slug);
   const notPublic = isNonPublicUrl(event.public_url) || isNonPublicUrl(PUBLIC_API_BASE_URL);
+  const expiry = expiryState(event.guest_link_expires_at);
+  const [expiryInput, setExpiryInput] = useState(() => toLocalInput(event.guest_link_expires_at));
+  const [savingExpiry, setSavingExpiry] = useState(false);
+
+  async function saveExpiry(value: string | null) {
+    setSavingExpiry(true);
+    try {
+      const updated = await adminApi.updateEvent(event.id, { guest_link_expires_at: value });
+      onChanged?.(updated);
+      setExpiryInput(toLocalInput(updated.guest_link_expires_at));
+      toast.success(value ? "Link expiry saved" : "Link expiry removed",
+        value ? `The guest link stops working on ${formatDateTime(value)}.` : "The guest link no longer expires.");
+    } catch (err) {
+      toast.error("Couldn't save the link expiry", errorMessage(err));
+    } finally {
+      setSavingExpiry(false);
+    }
+  }
 
   async function rotate() {
     setRotating(true);
@@ -99,6 +119,11 @@ export function EventShare({ event, onChanged }: { event: EventOut; onChanged?: 
           {event.status !== "active" && (
             <Alert tone="warning" title="This event is archived">Guests can&apos;t open the link until you make it live again in Settings.</Alert>
           )}
+          {expiry === "expired" && (
+            <Alert tone="warning" title="This link has expired">
+              Guests see &ldquo;This link has expired&rdquo;. Set a later expiry or remove it below to re-open the link.
+            </Alert>
+          )}
           {notPublic && (
             <Alert tone="warning" title="Guests' phones can't open this link yet">
               The link or API uses a local address ({hostOf(event.public_url)}) or plain HTTP. It only works on this
@@ -132,6 +157,31 @@ export function EventShare({ event, onChanged }: { event: EventOut; onChanged?: 
             <Button variant="outline" size="sm" onClick={() => setConfirmRotate(true)} icon={<RefreshCw className="h-4 w-4" />}>
               Replace link
             </Button>
+          </div>
+          <div className="space-y-3 rounded-2xl border border-line p-4">
+            <div>
+              <p className="flex items-center gap-2 text-sm font-semibold text-ink"><Clock className="h-4 w-4 text-brand-600" />Link expiry</p>
+              <p className="mt-1 text-sm text-muted">
+                {expiry === "none" ? "The link works until you replace it or archive the event."
+                  : expiry === "active" ? `The link and QR code stop working on ${formatDateTime(event.guest_link_expires_at)}.`
+                  : `Expired on ${formatDateTime(event.guest_link_expires_at)}.`}
+              </p>
+            </div>
+            <div className="flex flex-col gap-2 sm:flex-row">
+              <Input type="datetime-local" value={expiryInput} onChange={(e) => setExpiryInput(e.target.value)}
+                aria-label="Link expires at" className="sm:max-w-64" />
+              <div className="flex gap-2">
+                <Button variant="outline" size="sm" loading={savingExpiry} disabled={!fromLocalInput(expiryInput)}
+                  onClick={() => void saveExpiry(fromLocalInput(expiryInput))}>
+                  Save expiry
+                </Button>
+                {expiry !== "none" && (
+                  <Button variant="ghost" size="sm" disabled={savingExpiry} onClick={() => void saveExpiry(null)}>
+                    Remove
+                  </Button>
+                )}
+              </div>
+            </div>
           </div>
         </div>
       </Card>

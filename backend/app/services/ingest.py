@@ -62,10 +62,12 @@ async def ingest_upload(session: AsyncSession, event: Event, upload: UploadFile,
         return UploadItemResult(filename=filename, status="rejected", error_code=exc.code, error=str(exc)), None
 
     existing = (await session.execute(
-        select(Photo.id).where(Photo.event_id == event.id, Photo.content_hash == digest)
+        select(Photo).where(Photo.event_id == event.id, Photo.content_hash == digest)
     )).scalar_one_or_none()
     if existing:
-        return UploadItemResult(filename=filename, status="duplicate", photo_id=existing), None
+        restored = await _restore_if_missing(session, existing, upload, storage, info.content_type)
+        return (UploadItemResult(filename=filename, status="duplicate", photo_id=existing.id, restored=restored),
+                existing if restored else None)
 
     photo_id = uuid.uuid4()
     key = original_key(event.id, photo_id, info.extension)
@@ -93,6 +95,28 @@ async def ingest_upload(session: AsyncSession, event: Event, upload: UploadFile,
         )).scalar_one_or_none()
         return UploadItemResult(filename=filename, status="duplicate", photo_id=winner), None
     return UploadItemResult(filename=filename, status="created", photo_id=photo_id), photo
+
+
+async def _restore_if_missing(session: AsyncSession, photo: Photo, upload: UploadFile, storage: Storage,
+                              content_type: str) -> bool:
+    """Re-uploading identical bytes heals a photo whose stored original was lost (e.g. an ephemeral disk was
+    wiped): the original is written back under its existing key and the photo is queued for reprocessing, so
+    thumbnails and previews are rebuilt. The row, its id and its key are kept. Returns True if restored."""
+    try:
+        if await run_in_threadpool(storage.exists, photo.original_key):
+            return False
+        await run_in_threadpool(storage.put_file, photo.original_key, upload.file, content_type)
+    except StorageError as exc:
+        # Not fatal for the caller: the upload is still a duplicate, and a later re-upload can try again.
+        logger.error("Could not restore the original of photo %s: %s", photo.id, exc)
+        return False
+    photo.status = PhotoStatus.pending
+    photo.error_message = None
+    photo.thumbnail_key = photo.preview_key = None
+    photo.face_count = 0
+    await session.commit()
+    logger.info("Restored missing original", extra={"photo_id": str(photo.id), "event_id": str(photo.event_id)})
+    return True
 
 
 def _safe_delete(storage: Storage, key: str) -> None:
