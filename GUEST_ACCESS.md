@@ -14,6 +14,12 @@ How customers find their photos, what protects them, and what is needed before g
 5. QR shared somewhere it shouldn't be? **Replace link** (Share tab). The old link and every printed copy of the
    old QR stop working immediately; photos are unaffected. Print the new QR.
 
+6. Optional **Link expiry** (Share tab): the link and QR stop working at the chosen time and guests see "This
+   link has expired". Remove it or pick a later time to re-open the link. The dashboard keeps showing the QR.
+
+Guests who can't scan with their camera app can open `https://<frontend>/scan`: it scans the QR in the browser
+(where supported) or accepts the typed code, and only ever opens this site's `/e/<code>` page.
+
 The QR encodes only `https://<frontend>/e/<guest code>`. The guest code is a random 12-character value (about 59
 bits), not the database id. The QR never contains the admin key, ingest key, database credentials or internal ids.
 Archived events and unknown or replaced codes show "This event isn't available".
@@ -78,6 +84,26 @@ Minimum setup (any host that runs Python + Node, or containers):
    HTTPS requests, so no port forwarding is needed and the camera stays on the local network.
 4. Open the Share tab: the warning disappears once both URLs are public HTTPS. Test with a phone **on mobile data**
    (Wi-Fi off) before printing.
+
+## Storage: moving off the local disk, and recovering lost photos
+
+`STORAGE_BACKEND=local` keeps photos on the API server's disk. On hosts without a persistent disk (Render's free
+tier) that disk is wiped on every restart, redeploy or idle spin-down: the database keeps the photo rows but the
+files are gone, and the gallery shows "Image unavailable". `/health` reports `storage` and `storage_connection`.
+
+To move to a private Supabase or R2 bucket without downtime or data changes:
+
+1. Apply database migrations first: `cd backend; alembic upgrade head` (additive only).
+2. Set the provider's variables (see `.env.example`) where you run the copy, then
+   `python -m scripts.migrate_storage --to supabase` (dry run) and `... --apply`. It never deletes or rewrites
+   anything, verifies originals by SHA-256, can be re-run after an interruption, and lists originals missing locally.
+3. Set `STORAGE_BACKEND=supabase` (or `r2`) and the same variables on the API service, then redeploy. Keys are
+   unchanged, so every existing photo row works. Setting `local` again is a full rollback.
+
+A missing original can only come back from a copy of the file: **re-upload the same file** to the same event (Upload
+tab, or the agent). The server recognises it by SHA-256, writes it back under the photo's existing id and rebuilds
+the thumbnails ("Missing file restored"). With the ingestion agent's `KEEP_UPLOADED=true` (default), move the files
+from `spool/<event_id>/uploaded/` back to `pending/` and run the agent again.
 
 Speed depends on photo size, the guest's signal, server capacity and how many people search at once. Measure on
 your own deployment; there is no guaranteed download time. Thumbnails (≈400 px) and previews (≤1920 px) keep

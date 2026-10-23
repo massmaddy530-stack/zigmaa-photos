@@ -12,6 +12,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.openapi.utils import get_openapi
 from fastapi.responses import FileResponse, JSONResponse
 from sqlalchemy import text
+from starlette.concurrency import run_in_threadpool
 
 from app import __version__
 from app.api import events, match, photos
@@ -21,9 +22,18 @@ from app.core.logging import configure_logging
 from app.db.session import dispose_engine, get_sessionmaker
 from app.schemas import HealthOut
 from app.services.face.engine import analyzer_available
-from app.services.storage import LocalStorage, get_storage, verify_media_signature
+from app.services.storage import LocalStorage, connection_status, get_storage, verify_media_signature
 
 logger = logging.getLogger(__name__)
+
+
+def _storage_connection() -> str:
+    try:
+        storage = get_storage()
+    except Exception as exc:  # noqa: BLE001 - e.g. incomplete provider settings; names only, never values
+        logger.warning("Storage backend could not be initialised: %s", type(exc).__name__)
+        return "error"
+    return connection_status(storage)
 
 # Explicit map: the Windows mimetypes registry often lacks .webp
 _MEDIA_TYPES = {
@@ -205,6 +215,8 @@ def create_app() -> FastAPI:
             else "ok" if analyzer_available() else "missing"
         )
         checks["storage"] = settings.storage_backend
+        # Informational: a storage outage does not mark the API unhealthy (restarting it would not help).
+        checks["storage_connection"] = await run_in_threadpool(_storage_connection)
         checks["task_mode"] = settings.task_mode
 
         if settings.task_mode == "celery":

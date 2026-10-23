@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import secrets
 import uuid
+from datetime import datetime, timezone
 
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -32,12 +33,25 @@ async def get_event_or_404(session: AsyncSession, event_id: uuid.UUID) -> Event:
     return event
 
 
-async def get_public_event_or_404(session: AsyncSession, slug: str) -> Event:
+def link_expired(event: Event, now: datetime | None = None) -> bool:
+    expires = event.guest_link_expires_at
+    if expires is None:
+        return False
+    if expires.tzinfo is None:  # SQLite returns naive datetimes; values are always stored as UTC
+        expires = expires.replace(tzinfo=timezone.utc)
+    return (now or datetime.now(timezone.utc)) >= expires
+
+
+async def get_public_event_or_404(session: AsyncSession, slug: str, *, allow_expired: bool = False) -> Event:
+    """Resolve a guest code. Unknown, replaced and archived codes are indistinguishable ("not_found"); an expired
+    link says so ("link_expired") so guests know to ask the organiser for a new one."""
     if not slug or len(slug) > 32:
         raise NotFoundError("Event not found")
     event = (await session.execute(select(Event).where(Event.slug == slug))).scalar_one_or_none()
     if event is None or event.status != EventStatus.active:
         raise NotFoundError("Event not found")
+    if not allow_expired and link_expired(event):
+        raise NotFoundError("This link has expired. Ask the event organiser for a new one.", code="link_expired")
     return event
 
 
@@ -76,6 +90,7 @@ def event_out(event: Event, storage: Storage, counts: PhotoCounts | None = None)
         updated_at=event.updated_at,
         public_url=public_url(event.slug),
         cover_url=storage.signed_url(event.cover_key) if event.cover_key else None,
+        guest_link_expires_at=event.guest_link_expires_at,
         counts=counts or PhotoCounts(),
     )
 

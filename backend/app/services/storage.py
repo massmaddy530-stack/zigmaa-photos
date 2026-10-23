@@ -27,6 +27,9 @@ class StorageError(Exception):
     """Raised when the storage backend fails (treated as transient / retryable)."""
 
 
+HEALTH_PROBE_KEY = "health/probe"
+
+
 class Storage(ABC):
     @abstractmethod
     def put_file(self, key: str, fileobj: BinaryIO, content_type: str) -> None: ...
@@ -47,6 +50,13 @@ class Storage(ABC):
         import io
 
         self.put_file(key, io.BytesIO(data), content_type)
+
+    def size(self, key: str) -> int | None:
+        """Size in bytes of a stored object, or None if it does not exist."""
+        raise NotImplementedError
+
+    def check(self) -> None:
+        """Verify the backend is reachable and usable; raises StorageError (never with secrets) if not."""
 
 
 def _validate_key(key: str) -> str:
@@ -112,6 +122,14 @@ class LocalStorage(Storage):
     def exists(self, key: str) -> bool:
         return self.path_for(key).is_file()
 
+    def size(self, key: str) -> int | None:
+        path = self.path_for(key)
+        return path.stat().st_size if path.is_file() else None
+
+    def check(self) -> None:
+        if not self.root.is_dir() or not os.access(self.root, os.W_OK):
+            raise StorageError("Local storage directory is missing or not writable")
+
     def signed_url(self, key: str, expires_in: int | None = None) -> str:
         expires = int(time.time()) + (expires_in or self.ttl)
         # Round expiry up to the minute so URLs are cache-friendly within a window.
@@ -172,17 +190,25 @@ class S3CompatibleStorage(Storage):
         self._wrap("delete", self.client.delete_object, Bucket=self.bucket, Key=_validate_key(key))
 
     def exists(self, key: str) -> bool:
+        return self.size(key) is not None
+
+    def size(self, key: str) -> int | None:
         from botocore.exceptions import BotoCoreError, ClientError
 
         try:
-            self.client.head_object(Bucket=self.bucket, Key=_validate_key(key))
-            return True
+            head = self.client.head_object(Bucket=self.bucket, Key=_validate_key(key))
+            return int(head.get("ContentLength", 0))
         except ClientError as exc:
             if exc.response.get("Error", {}).get("Code") in ("404", "NoSuchKey", "NotFound"):
-                return False
+                return None
             raise StorageError(f"{self.label} head failed") from exc
         except BotoCoreError as exc:  # transport failures (connection, timeouts)
             raise StorageError(f"{self.label} head failed: {type(exc).__name__}") from exc
+
+    def check(self) -> None:
+        # HEAD on a probe key: "found" or "not found" both prove the endpoint, credentials and bucket work, without
+        # writing anything. (HeadBucket can be denied to object-scoped keys that upload and download fine.)
+        self.size(HEALTH_PROBE_KEY)
 
     def signed_url(self, key: str, expires_in: int | None = None) -> str:
         return self.client.generate_presigned_url(
@@ -255,3 +281,23 @@ def _build() -> Storage:
 
 def get_storage() -> Storage:
     return _override or _build()
+
+
+_status_cache: tuple[int, float, str] | None = None  # (id of the storage object, checked at, status)
+
+
+def connection_status(storage: Storage, *, max_age_s: float = 30.0, clock=time.monotonic) -> str:
+    """'ok' or 'error' for the health check, cached briefly so health polling does not hit the provider each time.
+    The reason is logged server-side only: /health is public."""
+    global _status_cache
+    now = clock()
+    if _status_cache and _status_cache[0] == id(storage) and now - _status_cache[1] < max_age_s:
+        return _status_cache[2]
+    try:
+        storage.check()
+        status = "ok"
+    except Exception as exc:  # noqa: BLE001 - any failure means "not usable"; never let health crash
+        logger.warning("Storage check failed: %s", exc if isinstance(exc, StorageError) else type(exc).__name__)
+        status = "error"
+    _status_cache = (id(storage), now, status)
+    return status

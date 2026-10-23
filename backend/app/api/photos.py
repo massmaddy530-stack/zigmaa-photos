@@ -73,23 +73,25 @@ async def upload_photos(
     if role is Role.ingest:
         source = "agent"
 
-    results, created = [], []
+    results, created, to_index = [], [], []
     try:
         for upload in files:
             result, photo = await ingest_upload(session, event, upload, storage, settings, source)
             results.append(result)
             if photo is not None:
-                created.append(photo.id)
+                to_index.append(photo.id)  # new photos, and duplicates whose missing original was restored
+                if result.status == "created":
+                    created.append(photo.id)
     finally:
         for upload in files:
             await upload.close()
 
-    if created:
+    if to_index:
         try:
-            await enqueue_index(created)
+            await enqueue_index(to_index)
         except QueueUnavailableError:
             # Photos are saved as "pending"; they can be re-queued with the retry endpoint.
-            logger.error("Uploaded %d photos but could not queue indexing", len(created))
+            logger.error("Uploaded %d photos but could not queue indexing", len(to_index))
 
     body = UploadResponse(
         created=len(created),
@@ -119,16 +121,27 @@ class HashCheckResponse(BaseModel):
 
 
 @router.post("/check-hashes", response_model=HashCheckResponse,
-             summary="Return which SHA-256 hashes already exist in the event (lets agents skip re-uploads)")
-async def check_hashes(event_id: uuid.UUID, body: HashCheckRequest, session: SessionDep,
+             summary="Return which SHA-256 hashes already exist in the event (lets agents skip re-uploads)",
+             description="A photo whose stored original is missing is not reported, so the agent re-sends it and "
+                         "the upload restores the file.")
+async def check_hashes(event_id: uuid.UUID, body: HashCheckRequest, session: SessionDep, storage: StorageDep,
                        _: Role = Depends(require_uploader)) -> HashCheckResponse:
     await get_event_or_404(session, event_id)
     hashes = [h.lower() for h in body.hashes if _HEX64.match(h.lower())]
     if not hashes:
         return HashCheckResponse(existing=[])
-    rows = await session.execute(
-        select(Photo.content_hash).where(Photo.event_id == event_id, Photo.content_hash.in_(hashes)))
-    return HashCheckResponse(existing=[r[0] for r in rows])
+    rows = (await session.execute(
+        select(Photo.content_hash, Photo.original_key)
+        .where(Photo.event_id == event_id, Photo.content_hash.in_(hashes)))).all()
+
+    def _stored(key: str) -> bool:
+        try:
+            return storage.exists(key)
+        except StorageError:
+            return True  # unknown: report it as existing; a re-sent file is de-duplicated by the upload anyway
+
+    present = await run_in_threadpool(lambda: [h for h, key in rows if _stored(key)])
+    return HashCheckResponse(existing=present)
 
 
 @router.get("", response_model=Page[PhotoOut], dependencies=[Depends(require_admin)])
