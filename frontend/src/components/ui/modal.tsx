@@ -55,7 +55,7 @@ export function Modal({ open, onClose, title, description, children, footer, siz
 
   return (
     <div className="fixed inset-0 z-50 flex items-end justify-center sm:items-center sm:p-4" role="presentation">
-      <div className="absolute inset-0 animate-[var(--animate-fade-in)] bg-zinc-950/60 backdrop-blur-sm" onClick={onClose} aria-hidden />
+      <div className="absolute inset-0 animate-[var(--animate-fade-in)] bg-brand-950/60 backdrop-blur-sm" onClick={onClose} aria-hidden />
       <div
         ref={panel}
         role="dialog"
@@ -74,7 +74,7 @@ export function Modal({ open, onClose, title, description, children, footer, siz
             {title && (
               <div className="flex items-start justify-between gap-4 border-b border-line px-5 py-4">
                 <div>
-                  <h2 id={titleId} className="text-base font-semibold text-ink">{title}</h2>
+                  <h2 id={titleId} className="font-display text-xl font-medium text-ink">{title}</h2>
                   {description && <p className="mt-0.5 text-sm text-muted">{description}</p>}
                 </div>
                 <Button variant="ghost" size="icon" onClick={onClose} aria-label="Close" className="-mr-2 -mt-1">

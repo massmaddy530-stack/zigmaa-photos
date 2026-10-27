@@ -23,7 +23,7 @@ export function CardHeader({ title, description, action, className }: {
 }
 
 const badgeTones = {
-  neutral: "bg-zinc-100 text-zinc-700 ring-zinc-200",
+  neutral: "bg-canvas text-ink/80 ring-line",
   brand: "bg-brand-50 text-brand-700 ring-brand-200",
   green: "bg-emerald-50 text-emerald-700 ring-emerald-200",
   amber: "bg-amber-50 text-amber-800 ring-amber-200",
@@ -57,7 +57,7 @@ export function Label({ className, ...rest }: ComponentProps<"label">) {
 }
 
 const fieldBase =
-  "w-full rounded-xl border border-line bg-surface px-3.5 text-sm text-ink shadow-sm placeholder:text-zinc-400 " +
+  "w-full rounded-xl border border-line bg-surface px-3.5 text-sm text-ink shadow-sm placeholder:text-muted/70 " +
   "transition focus:border-brand-400 focus:outline-none focus:ring-4 focus:ring-brand-100 disabled:bg-canvas";
 
 export function Input({ className, ...rest }: ComponentProps<"input">) {
@@ -101,7 +101,7 @@ export function ProgressBar({ value, className, tone = "brand", label }: {
   const pct = Math.max(0, Math.min(100, Math.round(value * 100)));
   const color = tone === "green" ? "bg-emerald-500" : tone === "red" ? "bg-red-500" : "bg-brand-500";
   return (
-    <div className={cn("h-2 w-full overflow-hidden rounded-full bg-zinc-100", className)} role="progressbar"
+    <div className={cn("h-2 w-full overflow-hidden rounded-full bg-brand-100", className)} role="progressbar"
          aria-valuenow={pct} aria-valuemin={0} aria-valuemax={100} aria-label={label}>
       <div className={cn("h-full rounded-full transition-[width] duration-500", color)} style={{ width: `${pct}%` }} />
     </div>

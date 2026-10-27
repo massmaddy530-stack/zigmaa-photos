@@ -3,33 +3,42 @@
 @theme {
   --font-sans: var(--font-geist-sans), ui-sans-serif, system-ui, sans-serif;
   --font-mono: var(--font-geist-mono), ui-monospace, monospace;
+  /* Headings only (20px and up); body text and controls stay in the sans face. */
+  --font-display: var(--font-playfair), Georgia, "Times New Roman", serif;
 
-  /* Brand: deep violet-indigo */
-  --color-brand-50: #f3f1ff;
-  --color-brand-100: #e9e5ff;
-  --color-brand-200: #d5ceff;
-  --color-brand-300: #b5a7ff;
-  --color-brand-400: #9176ff;
-  --color-brand-500: #7046fb;
-  --color-brand-600: #6128ef;
-  --color-brand-700: #5219d6;
-  --color-brand-800: #4416ae;
-  --color-brand-900: #39168c;
-  --color-brand-950: #210b5f;
+  /* Brand: champagne gold. 400 is the champagne accent (decorative, or behind espresso text: 6.1:1).
+     500 is the focus ring on ivory (3.1:1). 600+ carry white text (600: 5.0:1) or read as gold text (700: 5.7:1). */
+  --color-brand-50: #fbf8f1;
+  --color-brand-100: #f4ecdd;
+  --color-brand-200: #e9dbc0;
+  --color-brand-300: #dcc59b;
+  --color-brand-400: #c5a46d;
+  --color-brand-500: #a8864f;
+  --color-brand-600: #8a6a38;
+  --color-brand-700: #7a5c2e;
+  --color-brand-800: #5e4623;
+  --color-brand-900: #47351b;
+  --color-brand-950: #2a2016;
 
-  /* Surfaces */
-  --color-canvas: #f7f7fb;
+  /* Surfaces: ivory canvas, white cards, warm beige lines, espresso text */
+  --color-canvas: #f8f5ef;
   --color-surface: #ffffff;
-  --color-line: #e7e7ef;
-  --color-ink: #12121a;
-  --color-muted: #6b6b7b;
+  --color-line: #e8dfd1;
+  --color-ink: #302820;
+  --color-muted: #6f665b;
 
-  --shadow-card: 0 1px 2px rgb(18 18 26 / 0.04), 0 1px 3px rgb(18 18 26 / 0.06);
-  --shadow-pop: 0 10px 30px -10px rgb(33 11 95 / 0.25), 0 4px 12px -4px rgb(18 18 26 / 0.12);
+  --shadow-card: 0 1px 2px rgb(48 40 32 / 0.04), 0 1px 3px rgb(48 40 32 / 0.06);
+  --shadow-pop: 0 12px 32px -12px rgb(48 40 32 / 0.22), 0 4px 12px -4px rgb(48 40 32 / 0.08);
 
   --animate-shimmer: shimmer 1.6s linear infinite;
   --animate-fade-in: fade-in 0.18s ease-out;
   --animate-scale-in: scale-in 0.18s ease-out;
+  --animate-flash: flash 0.22s ease-out forwards;
+
+  @keyframes flash {
+    from { opacity: 0.7; }
+    to { opacity: 0; }
+  }
 
   @keyframes shimmer {
     0% { background-position: -400px 0; }
@@ -62,6 +71,7 @@ body {
 
 ::selection {
   background: var(--color-brand-200);
+  color: var(--color-ink);
 }
 
 :focus-visible {
@@ -70,7 +80,7 @@ body {
 }
 
 .skeleton {
-  background: linear-gradient(90deg, #ececf3 0px, #f6f6fa 120px, #ececf3 240px);
+  background: linear-gradient(90deg, #efe8dc 0px, #f8f4ec 120px, #efe8dc 240px);
   background-size: 800px 100%;
   animation: var(--animate-shimmer);
 }

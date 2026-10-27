@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useParams, usePathname, useRouter, useSearchParams } from "next/navigation";
-import { CalendarDays, ChevronLeft, ExternalLink, Images, MapPin, ScanSearch, Settings, Share2, UploadCloud } from "lucide-react";
+import { CalendarDays, Camera, ChevronLeft, ExternalLink, Images, MapPin, ScanSearch, Settings, Share2, UploadCloud } from "lucide-react";
 import { Suspense, useCallback, useEffect, useState } from "react";
 import { PageHeader } from "@/components/app-shell";
 import { EventPhotos } from "@/components/event-photos";
@@ -99,10 +99,16 @@ function EventDetailInner() {
           </span>
         }
         actions={
-          <a href={ev.public_url} target="_blank" rel="noopener noreferrer"
-             className="inline-flex h-10 items-center gap-2 rounded-xl border border-line bg-surface px-4 text-sm font-medium shadow-sm hover:bg-canvas">
-            <ExternalLink className="h-4 w-4" />Guest page
-          </a>
+          <div className="flex flex-wrap gap-2">
+            <Link href={`/dashboard/events/${id}/capture`}
+                  className="inline-flex h-10 items-center gap-2 rounded-xl border border-line bg-surface px-4 text-sm font-medium shadow-sm hover:bg-canvas">
+              <Camera className="h-4 w-4" />Camera
+            </Link>
+            <a href={ev.public_url} target="_blank" rel="noopener noreferrer"
+               className="inline-flex h-10 items-center gap-2 rounded-xl border border-line bg-surface px-4 text-sm font-medium shadow-sm hover:bg-canvas">
+              <ExternalLink className="h-4 w-4" />Guest page
+            </a>
+          </div>
         }
       />
 

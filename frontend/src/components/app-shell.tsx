@@ -13,15 +13,20 @@ const NAV = [
   { href: "/dashboard/events", label: "Events", icon: CalendarDays },
 ];
 
-export function Logo({ className }: { className?: string }) {
+/** `admin` shows the admin dashboard's brand (Everframe); public pages keep the default name. */
+export function Logo({ className, admin }: { className?: string; admin?: boolean }) {
   return (
     <span className={cn("flex items-center gap-2.5", className)}>
-      <span className="grid h-8 w-8 place-items-center rounded-xl bg-gradient-to-br from-brand-500 to-brand-800 text-white shadow-sm">
-        <ScanFace className="h-[18px] w-[18px]" aria-hidden />
+      <span className="grid h-8 w-8 place-items-center rounded-full bg-ink text-brand-300 ring-1 ring-brand-400/60 shadow-sm">
+        <ScanFace className="h-[17px] w-[17px]" aria-hidden />
       </span>
-      <span className="text-[15px] font-semibold tracking-tight text-ink">
-        Zigmaa<span className="text-brand-600"> Photos</span>
-      </span>
+      {admin ? (
+        <span className="font-display text-[19px] font-medium leading-none text-ink">Everframe</span>
+      ) : (
+        <span className="font-display text-[19px] font-medium leading-none text-ink">
+          ZigMaa<span className="text-brand-700"> Photos</span>
+        </span>
+      )}
     </span>
   );
 }
@@ -35,7 +40,7 @@ function NavLinks({ onNavigate }: { onNavigate?: () => void }) {
         return (
           <Link key={href} href={href} onClick={onNavigate} aria-current={active ? "page" : undefined}
             className={cn("flex items-center gap-3 rounded-xl px-3 py-2 text-sm font-medium transition-colors",
-              active ? "bg-brand-50 text-brand-700" : "text-muted hover:bg-black/[0.04] hover:text-ink")}>
+              active ? "bg-brand-50 text-brand-800 ring-1 ring-inset ring-brand-200" : "text-muted hover:bg-brand-50/70 hover:text-ink")}>
             <Icon className="h-[18px] w-[18px]" aria-hidden />
             {label}
           </Link>
@@ -57,7 +62,7 @@ function SignOut() {
         router.replace("/login");
         router.refresh();
       }}
-      className="flex w-full items-center gap-3 rounded-xl px-3 py-2 text-sm font-medium text-muted transition-colors hover:bg-black/[0.04] hover:text-ink disabled:opacity-50">
+      className="flex w-full items-center gap-3 rounded-xl px-3 py-2 text-sm font-medium text-muted transition-colors hover:bg-brand-50/70 hover:text-ink disabled:opacity-50">
       <LogOut className="h-[18px] w-[18px]" aria-hidden />
       Sign out
     </button>
@@ -71,14 +76,14 @@ export function AppShell({ children }: { children: ReactNode }) {
 
   const sidebar = (onNavigate?: () => void) => (
     <div className="flex h-full flex-col gap-6 px-4 py-5">
-      <Link href="/dashboard" onClick={onNavigate} className="px-2"><Logo /></Link>
+      <Link href="/dashboard" onClick={onNavigate} className="px-2"><Logo admin /></Link>
       <ButtonLink href="/dashboard/events/new" onClick={onNavigate} icon={<Plus className="h-4 w-4" />} className="w-full">
         New event
       </ButtonLink>
       <NavLinks onNavigate={onNavigate} />
       <div className="mt-auto space-y-3">
-        <div className="rounded-2xl border border-brand-100 bg-gradient-to-br from-brand-50 to-white p-4">
-          <p className="text-sm font-semibold text-ink">Share with guests</p>
+        <div className="rounded-2xl border border-brand-200/70 bg-brand-50/60 p-4">
+          <p className="font-display text-base font-medium text-ink">Share with guests</p>
           <p className="mt-1 text-xs leading-relaxed text-muted">
             Open an event and use its QR code. Guests find their photos with a selfie — no app or account needed.
           </p>
@@ -95,8 +100,8 @@ export function AppShell({ children }: { children: ReactNode }) {
       </aside>
 
       <header className="sticky top-0 z-30 flex h-14 items-center justify-between border-b border-line bg-surface/85 px-4 backdrop-blur lg:hidden">
-        <Link href="/dashboard"><Logo /></Link>
-        <button onClick={() => setOpen(true)} className="grid h-10 w-10 place-items-center rounded-xl text-ink hover:bg-black/5"
+        <Link href="/dashboard"><Logo admin /></Link>
+        <button onClick={() => setOpen(true)} className="grid h-11 w-11 place-items-center rounded-xl text-ink hover:bg-brand-50"
                 aria-label="Open menu" aria-expanded={open}>
           <Menu className="h-5 w-5" />
         </button>
@@ -104,9 +109,9 @@ export function AppShell({ children }: { children: ReactNode }) {
 
       {open && (
         <div className="fixed inset-0 z-40 lg:hidden" role="dialog" aria-modal="true" aria-label="Menu">
-          <div className="absolute inset-0 animate-[var(--animate-fade-in)] bg-zinc-950/50" onClick={() => setOpen(false)} />
+          <div className="absolute inset-0 animate-[var(--animate-fade-in)] bg-brand-950/50" onClick={() => setOpen(false)} />
           <div className="absolute inset-y-0 left-0 w-72 max-w-[85vw] animate-[var(--animate-scale-in)] bg-surface shadow-[var(--shadow-pop)]">
-            <button onClick={() => setOpen(false)} className="absolute right-3 top-4 grid h-9 w-9 place-items-center rounded-xl hover:bg-black/5"
+            <button onClick={() => setOpen(false)} className="absolute right-3 top-4 grid h-11 w-11 place-items-center rounded-xl hover:bg-brand-50"
                     aria-label="Close menu">
               <X className="h-5 w-5" />
             </button>
@@ -132,8 +137,9 @@ export function PageHeader({ title, description, actions, breadcrumb }: {
     <div className="mb-6 flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
       <div className="min-w-0">
         {breadcrumb && <div className="mb-2 text-sm text-muted">{breadcrumb}</div>}
-        <h1 className="text-2xl font-semibold tracking-tight text-ink sm:text-[28px]">{title}</h1>
-        {description && <div className="mt-1 text-sm text-muted">{description}</div>}
+        <h1 className="font-display text-[26px] font-medium leading-tight text-ink sm:text-[32px]">{title}</h1>
+        <span className="mt-2 block h-px w-12 bg-brand-400" aria-hidden />
+        {description && <div className="mt-2 text-sm text-muted">{description}</div>}
       </div>
       {actions && <div className="flex flex-wrap items-center gap-2">{actions}</div>}
     </div>
