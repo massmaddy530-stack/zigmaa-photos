@@ -25,7 +25,7 @@ export function EmptyState({ icon, title, description, action, className }: {
       <div className="mb-4 grid h-12 w-12 place-items-center rounded-2xl bg-brand-50 text-brand-600 ring-1 ring-brand-100">
         {icon}
       </div>
-      <h3 className="text-base font-semibold text-ink">{title}</h3>
+      <h3 className="font-display text-xl font-medium text-ink">{title}</h3>
       {description && <p className="mt-1 max-w-sm text-sm text-muted">{description}</p>}
       {action && <div className="mt-5">{action}</div>}
     </div>
@@ -56,7 +56,7 @@ export function ErrorState({ error, onRetry, className, compact }: {
       <div className="mb-4 grid h-12 w-12 place-items-center rounded-2xl bg-red-50 text-red-600 ring-1 ring-red-100">
         <Icon className="h-5 w-5" aria-hidden />
       </div>
-      <h3 className="text-base font-semibold text-ink">{offline ? "Connection problem" : "Something went wrong"}</h3>
+      <h3 className="font-display text-xl font-medium text-ink">{offline ? "Connection problem" : "Something went wrong"}</h3>
       <p className="mt-1 max-w-md text-sm text-muted">{errorMessage(error)}</p>
       {onRetry && (
         <Button variant="outline" className="mt-5" onClick={onRetry} icon={<RefreshCw className="h-4 w-4" />}>

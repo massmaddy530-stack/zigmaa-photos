@@ -33,7 +33,7 @@ function EventsList() {
     <>
       <div className="mb-5 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
         <div className="relative w-full sm:max-w-xs">
-          <Search className="pointer-events-none absolute left-3.5 top-1/2 h-4 w-4 -translate-y-1/2 text-zinc-400" aria-hidden />
+          <Search className="pointer-events-none absolute left-3.5 top-1/2 h-4 w-4 -translate-y-1/2 text-muted" aria-hidden />
           <Input type="search" placeholder="Search by name or venue" value={q} aria-label="Search events"
                  onChange={(e) => { setQ(e.target.value); setOffset(0); }} className="pl-10" />
         </div>
@@ -42,7 +42,7 @@ function EventsList() {
             <button key={f.label} role="tab" aria-selected={status === f.value}
                     onClick={() => { setStatus(f.value); setOffset(0); }}
                     className={cn("rounded-lg px-3 py-1.5 text-sm font-medium transition-colors",
-                      status === f.value ? "bg-brand-600 text-white shadow-sm" : "text-muted hover:text-ink")}>
+                      status === f.value ? "bg-brand-400 text-ink shadow-sm" : "text-muted hover:text-ink")}>
               {f.label}
             </button>
           ))}

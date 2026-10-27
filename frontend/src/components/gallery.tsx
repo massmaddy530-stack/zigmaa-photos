@@ -35,7 +35,7 @@ export function PhotoTile({ src, alt, onClick, overlay, placeholder, selected }:
   return (
     <li className="relative">
       <button type="button" onClick={onClick} disabled={!onClick}
-        className={cn("group relative block aspect-square w-full overflow-hidden rounded-xl bg-zinc-100 ring-offset-2 transition",
+        className={cn("group relative block aspect-square w-full overflow-hidden rounded-xl bg-brand-50 ring-offset-2 transition",
           "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-500 enabled:cursor-zoom-in",
           selected && "ring-2 ring-brand-500")}
         aria-label={alt}>
@@ -47,7 +47,7 @@ export function PhotoTile({ src, alt, onClick, overlay, placeholder, selected }:
                    loaded ? "opacity-100" : "opacity-0")} />
           </>
         ) : (
-          <div className="grid h-full w-full place-items-center text-zinc-400">
+          <div className="grid h-full w-full place-items-center text-brand-400">
             {failed ? (
               // The image link exists but did not load: the stored file is missing, or the link expired.
               <div className="flex flex-col items-center gap-1 px-2 text-center">
@@ -107,7 +107,7 @@ export function Lightbox({ items, index, onIndexChange, onClose, side, toolbar, 
   return (
     <Modal open={!!item} onClose={onClose} size="xl" bare>
       {item && (
-        <div className={cn("flex max-h-[92dvh] flex-col bg-zinc-950", side && "lg:flex-row")}>
+        <div className={cn("flex max-h-[92dvh] flex-col bg-brand-950", side && "lg:flex-row")}>
           <div className="relative flex min-h-[50dvh] flex-1 items-center justify-center lg:min-h-[80dvh]"
                onTouchStart={(e) => { touchX.current = e.touches[0].clientX; }}
                onTouchEnd={(e) => {
@@ -125,7 +125,7 @@ export function Lightbox({ items, index, onIndexChange, onClose, side, toolbar, 
                 {loadedSrc === src && imageOverlay?.(item)}
               </div>
             ) : (
-              <div className="flex flex-col items-center gap-2 text-zinc-400">
+              <div className="flex flex-col items-center gap-2 text-brand-200">
                 <ImageOff className="h-8 w-8" aria-hidden />
                 <p className="text-sm">Preview not available yet</p>
               </div>

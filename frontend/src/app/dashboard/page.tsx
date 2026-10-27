@@ -13,7 +13,6 @@ import {
   Server,
 } from "lucide-react";
 import { EventCard, EventCardSkeleton } from "@/components/event-card";
-import { PageHeader } from "@/components/app-shell";
 import { StatCard } from "@/components/stat-card";
 import { ButtonLink } from "@/components/ui/button";
 import { Card, CardHeader, ProgressBar, Skeleton } from "@/components/ui/primitives";
@@ -29,19 +28,27 @@ export default function DashboardPage() {
   const o = overview.data;
   const loading = overview.loading && !o;
 
+  // From 1180px wide the overview switches to a dense layout meant to fit one laptop viewport (about 1265x590 CSS px):
+  // dashboard-local header, slim stats, four events in a row, Processing and System status side by side. The negative
+  // margin trims part of the shared page padding for this page only. Smaller screens keep the regular stacked layout.
   return (
-    <>
-      <PageHeader
-        title="Overview"
-        description="Your events, photo processing and face indexing at a glance."
-        actions={<ButtonLink href="/dashboard/events/new" icon={<Plus className="h-4 w-4" />}>New event</ButtonLink>}
-      />
+    <div className="min-[1180px]:-my-3">
+      <header className="mb-6 flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between min-[1180px]:mb-3 min-[1180px]:items-center">
+        <div className="min-w-0">
+          <h1 className="font-display text-[26px] font-medium leading-tight text-ink sm:text-[32px] min-[1180px]:text-[26px]">Overview</h1>
+          <span className="mt-2 block h-px w-12 bg-brand-400 min-[1180px]:hidden" aria-hidden />
+          <div className="mt-2 text-sm text-muted min-[1180px]:mt-0.5">Your events, photo processing and face indexing at a glance.</div>
+        </div>
+        <div className="flex flex-wrap items-center gap-2">
+          <ButtonLink href="/dashboard/events/new" icon={<Plus className="h-4 w-4" />}>New event</ButtonLink>
+        </div>
+      </header>
 
       {overview.error && !o ? (
         <Card><ErrorState error={overview.error} onRetry={overview.reload} /></Card>
       ) : (
-        <div className="space-y-6">
-          <div className="grid grid-cols-2 gap-3 sm:gap-4 xl:grid-cols-4">
+        <div className="space-y-6 min-[1180px]:space-y-3">
+          <div className="grid grid-cols-2 gap-3 sm:gap-4 min-[1180px]:grid-cols-4 min-[1180px]:gap-3">
             <StatCard label="Events" loading={loading} icon={<CalendarDays className="h-[18px] w-[18px]" />}
                       value={o ? formatNumber(o.events) : "—"}
                       hint={o ? `${formatNumber(o.active_events)} live` : undefined} />
@@ -56,19 +63,19 @@ export default function DashboardPage() {
                       hint={o ? (o.processing ? `${formatNumber(o.processing)} in queue` : "Queue is empty") : undefined} />
           </div>
 
-          <div className="grid gap-6 xl:grid-cols-3">
-            <section className="xl:col-span-2">
-              <div className="mb-3 flex items-center justify-between">
-                <h2 className="text-base font-semibold">Recent events</h2>
+          <div className="grid gap-6 min-[1180px]:gap-3">
+            <section>
+              <div className="mb-3 flex items-center justify-between min-[1180px]:mb-2">
+                <h2 className="font-display text-xl font-medium min-[1180px]:text-lg">Recent events</h2>
                 <Link href="/dashboard/events" className="inline-flex items-center gap-1 text-sm font-medium text-brand-700 hover:text-brand-800">
                   View all <ArrowRight className="h-4 w-4" aria-hidden />
                 </Link>
               </div>
               {loading ? (
-                <div className="grid gap-4 sm:grid-cols-2">{[0, 1].map((i) => <EventCardSkeleton key={i} />)}</div>
+                <div className="grid gap-4 sm:grid-cols-2 min-[1180px]:grid-cols-4 min-[1180px]:gap-3">{[0, 1].map((i) => <EventCardSkeleton key={i} compact />)}</div>
               ) : o && o.recent_events.length ? (
-                <div className="grid gap-4 sm:grid-cols-2">
-                  {o.recent_events.slice(0, 4).map((e) => <EventCard key={e.id} event={e} />)}
+                <div className="grid gap-4 sm:grid-cols-2 min-[1180px]:grid-cols-4 min-[1180px]:gap-3">
+                  {o.recent_events.slice(0, 4).map((e) => <EventCard key={e.id} event={e} compact />)}
                 </div>
               ) : (
                 <Card>
@@ -79,7 +86,7 @@ export default function DashboardPage() {
               )}
             </section>
 
-            <div className="space-y-6">
+            <div className="space-y-6 min-[1180px]:grid min-[1180px]:grid-cols-2 min-[1180px]:gap-3 min-[1180px]:space-y-0">
               <ProcessingCard loading={loading} total={o?.photos ?? 0} indexed={o?.indexed_photos ?? 0}
                               queued={o?.processing ?? 0} failed={o?.failures ?? 0} />
               <SystemCard health={health} />
@@ -87,7 +94,7 @@ export default function DashboardPage() {
           </div>
         </div>
       )}
-    </>
+    </div>
   );
 }
 
@@ -101,16 +108,16 @@ function ProcessingCard({ loading, total, indexed, queued, failed }: {
   ];
   return (
     <Card>
-      <CardHeader title="Processing" description="All events combined" />
-      <div className="space-y-4 p-5">
+      <CardHeader title="Processing" description="All events combined" className="min-[1180px]:py-2.5" />
+      <div className="space-y-4 p-5 min-[1180px]:space-y-2.5 min-[1180px]:px-4 min-[1180px]:py-3">
         {loading ? <Skeleton className="h-2 w-full" /> : (
-          <div className="flex h-2 overflow-hidden rounded-full bg-zinc-100" aria-hidden>
+          <div className="flex h-2 overflow-hidden rounded-full bg-brand-100" aria-hidden>
             {total > 0 && rows.map((r) => (
               <div key={r.label} className={r.color} style={{ width: `${(r.value / total) * 100}%` }} />
             ))}
           </div>
         )}
-        <dl className="space-y-2.5">
+        <dl className="space-y-2.5 min-[1180px]:grid min-[1180px]:grid-cols-3 min-[1180px]:gap-3 min-[1180px]:space-y-0">
           {rows.map((r) => (
             <div key={r.label} className="flex items-center justify-between text-sm">
               <dt className="flex items-center gap-2 text-muted"><span className={`h-2 w-2 rounded-full ${r.color}`} />{r.label}</dt>
@@ -134,14 +141,14 @@ function SystemCard({ health }: { health: QueryState<HealthOut> }) {
   const okish = (k: string, v: string) => (k === "storage" || k === "task_mode" ? "info" : v === "ok" ? "ok" : "bad");
   return (
     <Card>
-      <CardHeader title="System status" action={<Server className="h-4 w-4 text-muted" aria-hidden />} />
-      <div className="p-5">
+      <CardHeader title="System status" action={<Server className="h-4 w-4 text-muted" aria-hidden />} className="min-[1180px]:py-2.5" />
+      <div className="p-5 min-[1180px]:px-4 min-[1180px]:py-3">
         {health.loading && !health.data ? (
           <div className="space-y-2">{[0, 1, 2].map((i) => <Skeleton key={i} className="h-4 w-full" />)}</div>
         ) : health.error && !health.data ? (
           <ErrorState compact error={health.error} onRetry={health.reload} />
         ) : health.data ? (
-          <dl className="space-y-2.5">
+          <dl className="space-y-2.5 min-[1180px]:grid min-[1180px]:grid-cols-2 min-[1180px]:gap-x-6 min-[1180px]:gap-y-1.5 min-[1180px]:space-y-0">
             {Object.entries(health.data.checks).map(([k, v]) => {
               const s = okish(k, v);
               return (

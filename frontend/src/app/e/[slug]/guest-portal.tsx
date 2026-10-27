@@ -75,10 +75,10 @@ export function GuestPortal({ slug }: { slug: string }) {
         <div className="mx-auto max-w-md px-4 py-16">
           {notFound ? (
             <div className="text-center">
-              <div className="mx-auto mb-4 grid h-14 w-14 place-items-center rounded-2xl bg-zinc-100 text-zinc-500">
+              <div className="mx-auto mb-4 grid h-14 w-14 place-items-center rounded-2xl bg-brand-50 text-brand-700 ring-1 ring-brand-200">
                 {expired ? <Clock className="h-6 w-6" /> : <Lock className="h-6 w-6" />}
               </div>
-              <h1 className="text-xl font-semibold">{expired ? "This link has expired" : <>This event isn&apos;t available</>}</h1>
+              <h1 className="font-display text-2xl font-medium">{expired ? "This link has expired" : <>This event isn&apos;t available</>}</h1>
               <p className="mt-2 text-sm text-muted">
                 {expired
                   ? "The organiser set this link to stop working after a certain time. Ask them for a new link or QR code."
@@ -179,7 +179,7 @@ function Portal({ event, slug }: { event: PublicEventOut; slug: string }) {
     <Shell>
       {/* Hero */}
       <header className="relative">
-        <div className="relative h-56 overflow-hidden bg-brand-950 sm:h-72">
+        <div className="relative h-64 overflow-hidden bg-brand-950 sm:h-80">
           {event.cover_url ? (
             <img src={event.cover_url} alt="" className="h-full w-full object-cover opacity-90" />
           ) : (
@@ -190,8 +190,9 @@ function Portal({ event, slug }: { event: PublicEventOut; slug: string }) {
             <p className="mb-2 inline-flex items-center gap-1.5 rounded-full bg-white/15 px-2.5 py-1 text-xs font-medium backdrop-blur">
               <ImageIcon className="h-3.5 w-3.5" />{formatNumber(event.photo_count)} photos
             </p>
-            <h1 className="text-2xl font-semibold leading-tight tracking-tight sm:text-3xl">{event.name}</h1>
-            <div className="mt-1.5 flex flex-wrap gap-x-4 gap-y-1 text-sm text-white/85">
+            <h1 className="font-display text-3xl font-medium leading-tight sm:text-4xl">{event.name}</h1>
+            <span className="mt-3 block h-px w-14 bg-brand-300" aria-hidden />
+            <div className="mt-3 flex flex-wrap gap-x-4 gap-y-1 text-sm text-white/90">
               {event.event_date && <span className="inline-flex items-center gap-1.5"><CalendarDays className="h-4 w-4" />{formatDate(event.event_date, { day: "numeric", month: "long", year: "numeric" })}</span>}
               {event.venue && <span className="inline-flex items-center gap-1.5"><MapPin className="h-4 w-4" />{event.venue}</span>}
             </div>
@@ -210,14 +211,14 @@ function Portal({ event, slug }: { event: PublicEventOut; slug: string }) {
 
         {stage !== "results" && (
           <section className="mt-6 rounded-3xl border border-line bg-surface p-5 shadow-[var(--shadow-card)] sm:p-7" aria-labelledby="find-heading">
-            <h2 id="find-heading" className="text-lg font-semibold">Find your photos</h2>
+            <h2 id="find-heading" className="font-display text-2xl font-medium">Find your photos</h2>
             <ol className="mt-4 grid gap-3 sm:grid-cols-3">
               {[
                 { icon: Camera, title: "Take a selfie", text: "Or upload a clear photo of your face." },
                 { icon: ScanFace, title: "We match faces", text: "Only within this event's photos." },
                 { icon: CheckCircle2, title: "See your photos", text: "View and download them instantly." },
               ].map(({ icon: Icon, title, text }, i) => (
-                <li key={title} className="flex gap-3 rounded-2xl bg-canvas p-3 sm:flex-col sm:gap-2">
+                <li key={title} className="flex gap-3 rounded-2xl border border-line bg-canvas p-3 sm:flex-col sm:gap-2">
                   <span className="grid h-9 w-9 shrink-0 place-items-center rounded-xl bg-brand-100 text-brand-700"><Icon className="h-[18px] w-[18px]" aria-hidden /></span>
                   <div>
                     <p className="text-sm font-semibold"><span className="sr-only">Step {i + 1}: </span>{title}</p>
@@ -262,7 +263,7 @@ function Portal({ event, slug }: { event: PublicEventOut; slug: string }) {
                   {progress < 1 ? (
                     <>
                       <p className="font-semibold">Uploading your selfie… {Math.round(progress * 100)}%</p>
-                      <div className="mt-2 h-1.5 overflow-hidden rounded-full bg-zinc-200" role="progressbar"
+                      <div className="mt-2 h-1.5 overflow-hidden rounded-full bg-brand-100" role="progressbar"
                            aria-valuemin={0} aria-valuemax={100} aria-valuenow={Math.round(progress * 100)}>
                         <div className="h-full rounded-full bg-brand-600 transition-[width]" style={{ width: `${Math.round(progress * 100)}%` }} />
                       </div>
@@ -301,7 +302,7 @@ function Portal({ event, slug }: { event: PublicEventOut; slug: string }) {
               <div className="flex min-w-0 items-center gap-3">
                 {selfieUrl && <img src={selfieUrl} alt="" className="h-12 w-12 shrink-0 rounded-full object-cover ring-2 ring-brand-100" />}
                 <div className="min-w-0">
-                  <h2 id="results-heading" className="font-semibold">
+                  <h2 id="results-heading" className="font-display text-xl font-medium">
                     {result.total ? `We found ${formatNumber(result.total)} photo${result.total === 1 ? "" : "s"} of you` : "No photos found yet"}
                   </h2>
                   <p className="text-xs text-muted">Tap a photo to view it. Download saves the original, full-quality file.</p>

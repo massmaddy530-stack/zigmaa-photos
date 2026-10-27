@@ -47,7 +47,7 @@ export function LoginForm() {
     <form onSubmit={onSubmit} className="mt-8 space-y-4">
       <Field label="Username" htmlFor="username">
         <div className="relative">
-          <UserRound className="pointer-events-none absolute left-3.5 top-1/2 h-4 w-4 -translate-y-1/2 text-zinc-400" aria-hidden />
+          <UserRound className="pointer-events-none absolute left-3.5 top-1/2 h-4 w-4 -translate-y-1/2 text-muted" aria-hidden />
           <Input id="username" name="username" type="text" autoComplete="username" required autoFocus
                  autoCapitalize="none" spellCheck={false} maxLength={128}
                  value={username} onChange={(e) => setUsername(e.target.value)} className="pl-10" />
@@ -55,7 +55,7 @@ export function LoginForm() {
       </Field>
       <Field label="Password" htmlFor="password" error={error}>
         <div className="relative">
-          <LockKeyhole className="pointer-events-none absolute left-3.5 top-1/2 h-4 w-4 -translate-y-1/2 text-zinc-400" aria-hidden />
+          <LockKeyhole className="pointer-events-none absolute left-3.5 top-1/2 h-4 w-4 -translate-y-1/2 text-muted" aria-hidden />
           <Input id="password" name="password" type={show ? "text" : "password"} autoComplete="current-password"
                  required maxLength={1024} spellCheck={false}
                  value={password} onChange={(e) => setPassword(e.target.value)} className="pl-10 pr-10" />
