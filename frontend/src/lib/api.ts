@@ -1,4 +1,5 @@
 import { PUBLIC_API_BASE_URL } from "./config";
+import { browserMediaUrl } from "./image";
 import type {
   ApiErrorBody,
   EventCreate,
@@ -7,6 +8,7 @@ import type {
   EventStatusOut,
   EventUpdate,
   HealthOut,
+  MatchItem,
   MatchPage,
   MatchResponse,
   OverviewOut,
@@ -127,8 +129,18 @@ async function request<T>(url: string, opts: RequestOpts = {}, extraHeaders: Rec
 export const ADMIN_PROXY = "/api/admin";
 export const CSRF_HEADER = { "X-Requested-With": "evp" };
 
+const MEDIA_URL_FIELDS = new Set(["cover_url", "thumbnail_url", "preview_url", "original_url", "download_url"]);
+
+/** Makes loopback media links in an admin response same-origin, so the dashboard also works from a phone. */
+function withBrowserMediaUrls(value: unknown): unknown {
+  if (Array.isArray(value)) return value.map(withBrowserMediaUrls);
+  if (value === null || typeof value !== "object") return value;
+  return Object.fromEntries(Object.entries(value).map(([k, v]) =>
+    [k, MEDIA_URL_FIELDS.has(k) && typeof v === "string" ? browserMediaUrl(v) : withBrowserMediaUrls(v)]));
+}
+
 function admin<T>(path: string, opts: RequestOpts = {}): Promise<T> {
-  return request<T>(`${ADMIN_PROXY}/${path}`, opts, CSRF_HEADER);
+  return request<T>(`${ADMIN_PROXY}/${path}`, opts, CSRF_HEADER).then((data) => withBrowserMediaUrls(data) as T);
 }
 
 export const adminApi = {
@@ -224,8 +236,23 @@ export function uploadPhotos(
 // Public API: guest endpoints called directly on the backend (CORS-restricted, rate-limited).
 // ---------------------------------------------------------------------------------------------
 
+/** Guests may be on another device (phone on the LAN): make loopback media links same-origin. */
+function guestMatchItems<T extends { items: MatchItem[] }>(data: T): T {
+  return {
+    ...data,
+    items: data.items.map((m) => ({
+      ...m,
+      thumbnail_url: browserMediaUrl(m.thumbnail_url),
+      preview_url: browserMediaUrl(m.preview_url),
+      download_url: browserMediaUrl(m.download_url),
+    })),
+  };
+}
+
 export const publicApi = {
-  event: (slug: string) => request<PublicEventOut>(`${PUBLIC_API_BASE_URL}/api/v1/public/events/${encodeURIComponent(slug)}`),
+  event: (slug: string) =>
+    request<PublicEventOut>(`${PUBLIC_API_BASE_URL}/api/v1/public/events/${encodeURIComponent(slug)}`)
+      .then((e) => ({ ...e, cover_url: browserMediaUrl(e.cover_url) })),
   qrUrl: (slug: string) => `${PUBLIC_API_BASE_URL}/api/v1/public/events/${encodeURIComponent(slug)}/qr.svg`,
   /** Upload a selfie and match it; reports upload progress (0..1). `consent` is the guest's checkbox state:
    *  the backend refuses to process the selfie (400 consent_required) unless it is true. */
@@ -242,7 +269,7 @@ export const publicApi = {
       };
       xhr.onload = () => {
         const data = xhr.response as MatchResponse | ApiErrorBody | null;
-        if (xhr.status === 200 && data && "items" in data) return resolve(data);
+        if (xhr.status === 200 && data && "items" in data) return resolve(guestMatchItems(data));
         const err = data && "error" in data ? data.error : undefined;
         const ra = xhr.getResponseHeader("retry-after");
         reject(new ApiError(xhr.status, err?.code ?? `http_${xhr.status}`, err?.message ?? `Request failed (${xhr.status})`,
@@ -261,16 +288,19 @@ export const publicApi = {
     request<MatchPage>(
       `${PUBLIC_API_BASE_URL}/api/v1/public/events/${encodeURIComponent(slug)}/matches/${encodeURIComponent(token)}`,
       { query: { cursor, limit } },
-    ),
+    ).then(guestMatchItems),
 };
 
-/** Fetch /health; returns the body even when the backend reports "degraded" (HTTP 503). */
+/** Fetch backend health through the signed-in admin route; returns the body even when "degraded" (HTTP 503). */
 export async function fetchHealth(): Promise<HealthOut> {
   try {
-    const res = await fetch(`${PUBLIC_API_BASE_URL}/health`, { cache: "no-store", signal: AbortSignal.timeout(8000) });
-    const body = (await res.json()) as HealthOut;
+    const res = await fetch(`${ADMIN_PROXY}/health`, {
+      cache: "no-store", credentials: "same-origin", signal: AbortSignal.timeout(8000),
+    });
+    const body = (await res.json().catch(() => null)) as (HealthOut & Partial<ApiErrorBody>) | null;
     if (body && body.checks) return body;
-    throw await toApiError(res);
+    const e = body?.error;
+    throw new ApiError(res.status, e?.code ?? `http_${res.status}`, e?.message ?? `Request failed (${res.status})`);
   } catch (err) {
     if (err instanceof ApiError) throw err;
     throw new ApiError(0, "backend_unreachable", FRIENDLY.backend_unreachable);

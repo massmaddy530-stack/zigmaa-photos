@@ -13,10 +13,15 @@ import { Card, CardHeader, Input } from "./ui/primitives";
 import { Alert } from "./ui/states";
 import { useToast } from "./ui/toast";
 
+/** Parses absolute URLs as-is and relative ones (same-origin API) against the current page. */
+function toUrl(url: string): URL {
+  return new URL(url, typeof window !== "undefined" ? window.location.href : undefined);
+}
+
 /** True for addresses a guest's phone on mobile data can't open (localhost, LAN IPs, *.local). */
 function isNonPublicUrl(url: string): boolean {
   try {
-    const { protocol, hostname: h } = new URL(url);
+    const { protocol, hostname: h } = toUrl(url);
     return protocol !== "https:" || h === "localhost" || h.endsWith(".local") || /^127\./.test(h) || /^10\./.test(h)
       || /^192\.168\./.test(h) || /^172\.(1[6-9]|2\d|3[01])\./.test(h) || h === "[::1]";
   } catch {
@@ -26,7 +31,7 @@ function isNonPublicUrl(url: string): boolean {
 
 function hostOf(url: string): string {
   try {
-    return new URL(url).host;
+    return toUrl(url).host;
   } catch {
     return url;
   }
@@ -37,7 +42,10 @@ export function EventShare({ event, onChanged }: { event: EventOut; onChanged?: 
   const [copied, setCopied] = useState(false);
   const [confirmRotate, setConfirmRotate] = useState(false);
   const [rotating, setRotating] = useState(false);
-  const qr = publicApi.qrUrl(event.slug);
+  // The QR SVG is cached for an hour; keying it on the guest link shows a fresh QR whenever the link changes
+  // (new LAN address, domain or replaced code). The backend ignores the extra parameter.
+  const qrBase = publicApi.qrUrl(event.slug);
+  const qr = `${qrBase}${qrBase.includes("?") ? "&" : "?"}u=${encodeURIComponent(event.public_url)}`;
   const notPublic = isNonPublicUrl(event.public_url) || isNonPublicUrl(PUBLIC_API_BASE_URL);
   const expiry = expiryState(event.guest_link_expires_at);
   const [expiryInput, setExpiryInput] = useState(() => toLocalInput(event.guest_link_expires_at));

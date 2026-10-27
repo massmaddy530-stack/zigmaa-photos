@@ -92,10 +92,33 @@ export async function downloadImage(url: string, filename: string) {
   }
 }
 
+const LOOPBACK_HOSTS = new Set(["localhost", "127.0.0.1", "[::1]"]);
+
+/**
+ * Same-origin path for a signed media link on the backend's loopback address (http://localhost:8000/media/...),
+ * which other devices can't open; next.config.ts forwards /media/* to the backend. The query (exp, sig) is kept.
+ * Anything else (Supabase/R2, LAN or public hosts, relative links, non-media paths) is returned unchanged.
+ */
+export function browserMediaUrl<T extends string | null | undefined>(url: T): T {
+  if (!url) return url;
+  try {
+    const u = new URL(url);
+    if ((u.protocol === "http:" || u.protocol === "https:") && LOOPBACK_HOSTS.has(u.hostname)
+        && u.pathname.startsWith("/media/")) {
+      return `${u.pathname}${u.search}` as T;
+    }
+  } catch {
+    /* relative or unparseable: leave as is */
+  }
+  return url;
+}
+
 /** File extension of a (signed) URL's path, e.g. ".jpg" — used to name downloads of originals. */
 export function urlExtension(url: string, fallback = ".jpg"): string {
   try {
-    const m = /\.(jpe?g|png|webp)$/i.exec(new URL(url).pathname);
+    // The base only applies to relative links (same-origin /media/...); absolute URLs ignore it.
+    const base = typeof window !== "undefined" ? window.location.href : "http://localhost";
+    const m = /\.(jpe?g|png|webp)$/i.exec(new URL(url, base).pathname);
     return m ? `.${m[1].toLowerCase()}` : fallback;
   } catch {
     return fallback;
