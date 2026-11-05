@@ -56,3 +56,53 @@ export function authConfig(): AuthConfig | null {
   lastReported = "";
   return { username, passwordHash, sessionSecret, adminApiKey };
 }
+
+export interface GoogleSignInConfig {
+  clientId: string;
+  clientSecret: string;
+  redirectUri: string;
+  allowedEmails: ReadonlySet<string>;
+}
+
+let lastGoogleReported = "";
+
+/**
+ * Optional Google Sign-In settings, read on every call. Returns null (Google sign-in hidden and refused) unless all
+ * are present and valid. The redirect URI must be configured explicitly: it is never derived from the request Host.
+ * Plain http is accepted only for localhost. Problems are logged by variable name only, never by value.
+ */
+export function googleConfig(): GoogleSignInConfig | null {
+  const clientId = process.env.GOOGLE_CLIENT_ID?.trim() ?? "";
+  const clientSecret = process.env.GOOGLE_CLIENT_SECRET?.trim() ?? "";
+  const redirectUri = process.env.GOOGLE_REDIRECT_URI?.trim() ?? "";
+  const allowedEmails = new Set(
+    (process.env.ADMIN_GOOGLE_EMAILS ?? "").split(",").map((e) => e.trim().toLowerCase()).filter((e) => /^[^@\s]+@[^@\s]+$/.test(e)),
+  );
+  if (!clientId && !clientSecret && !redirectUri && !allowedEmails.size) return null; // not set up: stay silent
+
+  let redirectOk = false;
+  try {
+    const u = new URL(redirectUri);
+    const local = u.hostname === "localhost" || u.hostname === "127.0.0.1";
+    redirectOk = (u.protocol === "https:" || (u.protocol === "http:" && local)) && u.pathname === "/api/auth/google/callback"
+      && !u.search && !u.hash;
+  } catch {
+    redirectOk = false;
+  }
+  const problems = [
+    !clientId && "GOOGLE_CLIENT_ID is not set",
+    !clientSecret && "GOOGLE_CLIENT_SECRET is not set",
+    !redirectOk && "GOOGLE_REDIRECT_URI must be https://<host>/api/auth/google/callback (http only for localhost)",
+    !allowedEmails.size && "ADMIN_GOOGLE_EMAILS must list at least one email address",
+  ].filter((p): p is string => Boolean(p));
+  if (problems.length) {
+    const message = problems.join("; ");
+    if (message !== lastGoogleReported) {
+      console.error(`Google sign-in is disabled: ${message}`);
+      lastGoogleReported = message;
+    }
+    return null;
+  }
+  lastGoogleReported = "";
+  return { clientId, clientSecret, redirectUri, allowedEmails };
+}

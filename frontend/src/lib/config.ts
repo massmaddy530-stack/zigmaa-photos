@@ -1,6 +1,6 @@
 // Public (browser-visible) configuration. Never put secrets in NEXT_PUBLIC_* variables.
 // Empty = same origin as the page (requests are forwarded by the rewrites in next.config.ts); unset = localhost.
-export const PUBLIC_API_BASE_URL = (process.env.NEXT_PUBLIC_API_BASE_URL ?? "http://localhost:8000").replace(/\/$/, "");
+export const PUBLIC_API_BASE_URL = (process.env.NEXT_PUBLIC_API_BASE_URL ?? "").replace(/\/$/, "");
 
 // Client-side pre-checks mirror backend limits (the backend remains the source of truth).
 export const MAX_UPLOAD_MB = Number(process.env.NEXT_PUBLIC_MAX_UPLOAD_MB || 40);
