@@ -11,7 +11,7 @@ from sqlalchemy.ext.asyncio import async_sessionmaker
 
 from app.core.config import get_settings
 from app.db.session import build_engine
-from app.services.indexing import TransientProcessingError, index_photo
+from app.services.indexing import TransientProcessingError, index_photo, mark_photo_failed_safe
 from app.worker.celery_app import celery_app
 
 logger = logging.getLogger(__name__)
@@ -42,4 +42,21 @@ def index_photo_task(self, photo_id: str) -> str:
         raise self.retry(exc=exc, countdown=countdown)
     except SoftTimeLimitExceeded:
         logger.error("Photo %s exceeded the soft time limit", photo_id)
+        try:
+            asyncio.run(mark_photo_failed_safe(
+                uuid.UUID(photo_id),
+                f"Task exceeded the soft time limit on attempt {attempt}",
+            ))
+        except Exception:  # noqa: BLE001
+            logger.warning("mark_photo_failed_safe failed for photo %s after soft time limit", photo_id, exc_info=True)
+        raise
+    except Exception:
+        logger.exception("Photo %s task failed with unexpected error (attempt %d)", photo_id, attempt)
+        try:
+            asyncio.run(mark_photo_failed_safe(
+                uuid.UUID(photo_id),
+                f"Task crashed unexpectedly on attempt {attempt}; retry to reprocess",
+            ))
+        except Exception:  # noqa: BLE001
+            logger.error("Failed recovery update for photo %s after task crash", photo_id)
         raise

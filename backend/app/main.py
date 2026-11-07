@@ -144,11 +144,14 @@ async def lifespan(app: FastAPI):
     if not settings.face_analysis_enabled:
         logger.info("Face analysis disabled (FACE_ANALYSIS_ENABLED=false): photos get previews only; matching is off")
     elif not analyzer_available():
-        logger.warning(
-            "Face model files not found in %s; indexing and matching "
-            "will fail until installed",
-            settings.face_model_dir,
-        )
+        from app.services.face.engine import download_face_models
+        await run_in_threadpool(download_face_models, settings)
+        if not analyzer_available():
+            logger.warning(
+                "Face model files not found in %s; indexing and matching "
+                "will fail until installed",
+                settings.face_model_dir,
+            )
 
     yield
 

@@ -9,7 +9,7 @@ import uuid
 from concurrent.futures import ThreadPoolExecutor
 
 from app.core.config import get_settings
-from app.services.indexing import TransientProcessingError, index_photo
+from app.services.indexing import TransientProcessingError, index_photo, mark_photo_failed_safe
 
 logger = logging.getLogger(__name__)
 
@@ -33,6 +33,13 @@ def _thread_job(photo_id: uuid.UUID) -> None:
             time.sleep(settings.task_retry_backoff_s * (2 ** (attempt - 1)))
         except Exception:
             logger.exception("Background indexing crashed for photo %s", photo_id)
+            try:
+                asyncio.run(mark_photo_failed_safe(
+                    photo_id,
+                    f"Processing crashed unexpectedly on attempt {attempt}; retry to reprocess",
+                ))
+            except Exception:  # noqa: BLE001
+                logger.error("Failed recovery update after crash for photo %s", photo_id)
             return
 
 

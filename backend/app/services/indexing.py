@@ -18,7 +18,7 @@ from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
 from app.core.config import Settings, get_settings
 from app.models import FaceEmbedding, JobStatus, Photo, PhotoStatus, ProcessingJob, utcnow
-from app.services.face.engine import FaceModelUnavailableError, get_analyzer
+from app.services.face.engine import FaceModelUnavailableError, analyzer_available, get_analyzer
 from app.services.images import InvalidImageError, build_derivatives
 from app.services.ingest import derivative_key
 from app.services.storage import Storage, StorageError, get_storage
@@ -120,6 +120,7 @@ async def index_photo(
             error = f"Invalid image: {exc}"
         except FaceModelUnavailableError as exc:
             error = f"Face model unavailable: {exc}"
+            transient = not analyzer_available()
         except StorageError as exc:
             error, transient = f"Storage error: {exc}", True
         except MemoryError:
@@ -183,3 +184,50 @@ async def reset_for_retry(session: AsyncSession, photo_ids: list[uuid.UUID]) -> 
             reset.append(p.id)
     await session.commit()
     return reset
+
+
+async def mark_photo_failed_safe(
+    photo_id: uuid.UUID,
+    error_message: str,
+    *,
+    sessionmaker: async_sessionmaker[AsyncSession] | None = None,
+) -> None:
+    """Best-effort: mark a photo as failed and close any stuck running ProcessingJob rows.
+
+    Uses *sessionmaker* when provided (tests); otherwise builds a fresh null-pool
+    engine from DATABASE_URL (production). Swallows all exceptions — callers
+    should log the original failure before calling this.
+    """
+    from app.db.session import build_engine
+
+    engine = None
+    sm = sessionmaker
+    if sm is None:
+        engine = build_engine(null_pool=True)
+        sm = async_sessionmaker(engine, expire_on_commit=False)
+    try:
+        async with sm() as session:
+            photo = await session.get(Photo, photo_id)
+            if photo is None or photo.status != PhotoStatus.processing:
+                return
+            photo.status = PhotoStatus.failed
+            photo.error_message = error_message
+            running_jobs = (
+                await session.execute(
+                    select(ProcessingJob).where(
+                        ProcessingJob.photo_id == photo_id,
+                        ProcessingJob.status == JobStatus.running,
+                    )
+                )
+            ).scalars().all()
+            now = utcnow()
+            for job in running_jobs:
+                job.status = JobStatus.failed
+                job.error_message = error_message
+                job.finished_at = now
+            await session.commit()
+    except Exception:  # noqa: BLE001
+        logger.warning("mark_photo_failed_safe failed for photo %s", photo_id, exc_info=True)
+    finally:
+        if engine is not None:
+            await engine.dispose()
