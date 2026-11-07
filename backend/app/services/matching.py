@@ -44,6 +44,16 @@ def _area(f: DetectedFace) -> float:
     return float(max(0.0, f.bbox[2] - f.bbox[0]) * max(0.0, f.bbox[3] - f.bbox[1]))
 
 
+def choose_largest_selfie_face(faces: list[DetectedFace]) -> DetectedFace:
+    """Select only the largest detected face (by bounding box area w * h)."""
+    if not faces:
+        raise UnprocessableError(
+            "We couldn't find a face in your selfie. Face the camera in good light and try again.",
+            code="no_face_detected",
+        )
+    return max(faces, key=_area)
+
+
 def choose_selfie_faces(faces: list[DetectedFace], require_single: bool) -> list[DetectedFace]:
     """Faces to search with: up to MAX_SELFIE_FACES main faces, largest first. Small background faces are
     ignored. With ``require_single``, more main faces than that is rejected instead of truncated."""

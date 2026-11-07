@@ -17,7 +17,7 @@ from sqlalchemy.exc import DBAPIError, OperationalError
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
 from app.core.config import Settings, get_settings
-from app.models import FaceEmbedding, JobStatus, Photo, PhotoStatus, ProcessingJob, utcnow
+from app.models import EventPhoto, FaceEmbedding, JobStatus, Photo, PhotoStatus, ProcessingJob, utcnow
 from app.services.face.engine import FaceModelUnavailableError, analyzer_available, get_analyzer
 from app.services.images import InvalidImageError, build_derivatives
 from app.services.ingest import derivative_key
@@ -135,17 +135,47 @@ async def index_photo(
             if result is not None:
                 # Idempotent replace of face rows inside a single transaction.
                 await session.execute(delete(FaceEmbedding).where(FaceEmbedding.photo_id == photo.id))
+                model_name = getattr(settings, "face_model_name", "buffalo_sc")
                 session.add_all([
                     FaceEmbedding(
                         event_id=photo.event_id, photo_id=photo.id, face_index=i,
                         bbox_x1=f.bbox[0], bbox_y1=f.bbox[1], bbox_x2=f.bbox[2], bbox_y2=f.bbox[3],
-                        det_score=f.det_score, embedding=f.embedding, model_name="buffalo_l",
+                        det_score=f.det_score, embedding=f.embedding, model_name=model_name,
                     )
                     for i, f in enumerate(result.faces)
                 ])
                 photo.width, photo.height = result.width, result.height
                 photo.thumbnail_key = derivative_key(photo.event_id, photo.id, "thumbnails")
                 photo.preview_key = derivative_key(photo.event_id, photo.id, "previews")
+
+                # Generate public CDN URLs or signed URLs for event_photos
+                thumb_url = storage.signed_url(photo.thumbnail_key) if photo.thumbnail_key else None
+                prev_url = storage.signed_url(photo.preview_key) if photo.preview_key else None
+                orig_url = storage.signed_url(photo.original_key) if photo.original_key else None
+                if getattr(storage, "public_url", None):
+                    base = storage.public_url.rstrip("/")
+                    thumb_url = f"{base}/{photo.thumbnail_key}"
+                    prev_url = f"{base}/{photo.preview_key}"
+                    orig_url = f"{base}/{photo.original_key}"
+
+                photo.r2_thumbnail_url = thumb_url
+                photo.r2_preview_url = prev_url
+                photo.r2_original_url = orig_url
+
+                ev_photo = await session.get(EventPhoto, photo.id)
+                if ev_photo is None:
+                    session.add(EventPhoto(
+                        id=photo.id,
+                        event_id=photo.event_id,
+                        r2_preview_url=prev_url,
+                        r2_thumbnail_url=thumb_url,
+                        r2_original_url=orig_url,
+                    ))
+                else:
+                    ev_photo.r2_preview_url = prev_url
+                    ev_photo.r2_thumbnail_url = thumb_url
+                    ev_photo.r2_original_url = orig_url
+
                 photo.face_count = len(result.faces)
                 photo.status = PhotoStatus.indexed
                 photo.processed_at = utcnow()

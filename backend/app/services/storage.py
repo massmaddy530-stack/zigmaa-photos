@@ -51,6 +51,16 @@ class Storage(ABC):
 
         self.put_file(key, io.BytesIO(data), content_type)
 
+    def upload_file(self, file_bytes: bytes | BinaryIO, object_name: str, content_type: str = "image/jpeg") -> str:
+        """Uploads directly from in-memory bytes or BinaryIO and returns a URL."""
+        import io
+        if isinstance(file_bytes, bytes):
+            fileobj = io.BytesIO(file_bytes)
+        else:
+            fileobj = file_bytes
+        self.put_file(object_name, fileobj, content_type)
+        return self.signed_url(object_name)
+
     def size(self, key: str) -> int | None:
         """Size in bytes of a stored object, or None if it does not exist."""
         raise NotImplementedError
@@ -217,24 +227,76 @@ class S3CompatibleStorage(Storage):
         )
 
 
+def generate_variants(image_bytes: bytes) -> tuple[bytes, bytes]:
+    """On upload of an event photo, generate 2 variants in-memory using Pillow:
+    1. thumbnail (max 400x400 WebP)
+    2. preview (max 1280x720 WebP)
+    """
+    import io
+    from PIL import Image, ImageOps
+
+    with Image.open(io.BytesIO(image_bytes)) as img:
+        img = ImageOps.exif_transpose(img)
+        if img.mode != "RGB":
+            img = img.convert("RGB")
+
+        # 1. thumbnail (max 400x400 WebP)
+        thumb = img.copy()
+        thumb.thumbnail((400, 400), Image.Resampling.LANCZOS)
+        t_buf = io.BytesIO()
+        thumb.save(t_buf, format="WEBP", quality=75)
+        thumbnail_bytes = t_buf.getvalue()
+        thumb.close()
+
+        # 2. preview (max 1280x720 WebP)
+        prev = img.copy()
+        prev.thumbnail((1280, 720), Image.Resampling.LANCZOS)
+        p_buf = io.BytesIO()
+        prev.save(p_buf, format="WEBP", quality=82)
+        preview_bytes = p_buf.getvalue()
+        prev.close()
+
+    return thumbnail_bytes, preview_bytes
+
+
 class R2Storage(S3CompatibleStorage):
     label = "R2"
 
     def __init__(self, settings: Settings) -> None:
+        bucket = settings.r2_bucket or settings.r2_bucket_name
+        endpoint = settings.r2_endpoint
+        if not endpoint and settings.r2_account_id:
+            endpoint = f"https://{settings.r2_account_id}.r2.cloudflarestorage.com"
+
         missing = [n for n, v in {
             "R2_ACCESS_KEY_ID": settings.r2_access_key_id,
             "R2_SECRET_ACCESS_KEY": settings.r2_secret_access_key,
-            "R2_BUCKET": settings.r2_bucket,
-            "R2_ACCOUNT_ID or R2_ENDPOINT_URL": settings.r2_endpoint,
+            "R2_BUCKET": bucket,
+            "R2_ACCOUNT_ID or R2_ENDPOINT_URL": endpoint,
         }.items() if not v]
         if missing:
             raise RuntimeError(f"R2 storage selected but missing settings: {', '.join(missing)}")
         super().__init__(
-            endpoint=settings.r2_endpoint, region="auto",
+            endpoint=endpoint, region="auto",
             access_key_id=settings.r2_access_key_id.get_secret_value(),
             secret_access_key=settings.r2_secret_access_key.get_secret_value(),
-            bucket=settings.r2_bucket, ttl=settings.signed_url_ttl_s,
+            bucket=bucket, ttl=settings.signed_url_ttl_s,
         )
+        self.public_url = settings.r2_public_url
+
+    def upload_file(self, file_bytes: bytes | BinaryIO, object_name: str, content_type: str = "image/jpeg") -> str:
+        """Uploads directly from in-memory io.BytesIO and returns the public CDN URL using R2_PUBLIC_URL or signed URL."""
+        import io
+        if isinstance(file_bytes, bytes):
+            fileobj = io.BytesIO(file_bytes)
+        else:
+            fileobj = file_bytes
+        self.put_file(object_name, fileobj, content_type)
+        if self.public_url:
+            return f"{self.public_url.rstrip('/')}/{_validate_key(object_name)}"
+        return self.signed_url(object_name)
+
+    generate_variants = staticmethod(generate_variants)
 
 
 class SupabaseStorage(S3CompatibleStorage):

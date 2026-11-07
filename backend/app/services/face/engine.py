@@ -269,6 +269,67 @@ class BuffaloLAnalyzer:
         ]
 
 
+class BuffaloSCAnalyzer:
+    model_name = "buffalo_sc"
+
+    def __init__(self, model_dir: Path, settings: Settings) -> None:
+        import gc
+        try:
+            from insightface.app import FaceAnalysis
+        except ImportError as exc:
+            raise FaceModelUnavailableError("insightface is not installed") from exc
+
+        resolved_dir = Path(model_dir).resolve()
+        # insightface expects root directory containing 'models/<model_name>'
+        root = str(resolved_dir.parent.parent) if resolved_dir.name in ("buffalo_sc", "buffalo_l") else str(resolved_dir)
+
+        self.app = FaceAnalysis(name="buffalo_sc", root=root, providers=["CPUExecutionProvider"])
+        self.app.prepare(ctx_id=0, det_size=(settings.face_det_size, settings.face_det_size))
+        self.min_size = settings.face_min_size_px
+        self.max_side = settings.face_analysis_max_side
+        self._lock = threading.Lock()
+        gc.collect()
+
+    def analyze(self, image: Image.Image) -> list[DetectedFace]:
+        import gc
+        orig_w, orig_h = image.size
+        scale = 1.0
+        if max(orig_w, orig_h) > self.max_side:
+            scale = self.max_side / max(orig_w, orig_h)
+            new_w, new_h = max(1, int(orig_w * scale)), max(1, int(orig_h * scale))
+            proc_img = image.resize((new_w, new_h), Image.Resampling.BILINEAR)
+        else:
+            proc_img = image
+
+        img_np = np.asarray(proc_img.convert("RGB"))[:, :, ::-1]
+
+        with self._lock:
+            raw_faces = self.app.get(img_np)
+
+        results: list[DetectedFace] = []
+        for face in raw_faces:
+            bbox = face.bbox.copy()
+            kps = face.kps.copy() if hasattr(face, "kps") and face.kps is not None else np.zeros((5, 2), dtype=np.float32)
+
+            if scale != 1.0:
+                bbox /= scale
+                kps /= scale
+
+            bw, bh = bbox[2] - bbox[0], bbox[3] - bbox[1]
+            if min(bw, bh) < self.min_size:
+                continue
+
+            emb = l2_normalize(face.embedding)
+            det_score = float(face.det_score) if hasattr(face, "det_score") else 1.0
+            results.append(DetectedFace(bbox=bbox, kps=kps, det_score=det_score, embedding=emb))
+
+        del img_np
+        if proc_img is not image:
+            proc_img.close()
+        gc.collect()
+        return results
+
+
 # --------------------------------------------------------------------------- singleton
 
 _analyzer: FaceAnalyzer | None = None
@@ -291,7 +352,11 @@ def get_analyzer() -> FaceAnalyzer:
             if _analyzer is None:
                 settings = get_settings()
                 logger.info("Loading face models from %s", settings.face_model_dir)
-                _analyzer = BuffaloLAnalyzer(settings.face_model_dir, settings)
+                sc_dir = settings.face_model_dir
+                if (sc_dir / "det_500m.onnx").is_file() and (sc_dir / "w600k_mbf.onnx").is_file():
+                    _analyzer = BuffaloSCAnalyzer(sc_dir, settings)
+                else:
+                    _analyzer = BuffaloLAnalyzer(settings.face_model_dir, settings)
     return _analyzer
 
 
@@ -301,7 +366,9 @@ def analyzer_available() -> bool:
     if _analyzer is not None:
         return True
     d = get_settings().face_model_dir
-    return (d / DETECTOR_FILE).is_file() and (d / RECOGNIZER_FILE).is_file()
+    sc_ready = (d / "det_500m.onnx").is_file() and (d / "w600k_mbf.onnx").is_file()
+    l_ready = (d / DETECTOR_FILE).is_file() and (d / RECOGNIZER_FILE).is_file()
+    return sc_ready or l_ready
 
 
 # ---------------------------------------------------------------------------
@@ -398,6 +465,18 @@ def download_face_models(settings: Settings) -> bool:
     import httpx
 
     model_dir: Path = settings.face_model_dir
+
+    if settings.face_model_name == "buffalo_sc":
+        if (model_dir / "det_500m.onnx").is_file() and (model_dir / "w600k_mbf.onnx").is_file():
+            return True
+        try:
+            from insightface.app import FaceAnalysis
+            root = str(model_dir.parent.parent) if model_dir.name in ("buffalo_sc", "buffalo_l") else str(model_dir)
+            fa = FaceAnalysis(name="buffalo_sc", root=root, providers=["CPUExecutionProvider"])
+            fa.prepare(ctx_id=0, det_size=(settings.face_det_size, settings.face_det_size))
+            return True
+        except Exception as exc:
+            logger.warning("Could not download buffalo_sc via insightface: %s", exc)
 
     if _models_verified(model_dir):
         logger.info("Face models already verified in %s", model_dir)

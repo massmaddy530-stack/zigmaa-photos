@@ -258,6 +258,7 @@ class OverviewOut(BaseModel):
 
 class HealthOut(BaseModel):
     status: Literal["ok", "degraded"]
+    service: str = "zigmaa-backend"
     version: str
     checks: dict[str, str]
 

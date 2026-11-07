@@ -141,9 +141,46 @@ async def lifespan(app: FastAPI):
         settings.task_mode,
     )
 
+    # Initialize Supabase / PostgreSQL tables and extensions if needed
+    try:
+        async with get_sessionmaker()() as session:
+            if session.bind.dialect.name == "postgresql":
+                try:
+                    await session.execute(text("CREATE EXTENSION IF NOT EXISTS vector"))
+                    await session.commit()
+                except Exception as e:
+                    await session.rollback()
+                    logger.warning("Could not enable pgvector extension: %s", e)
+                try:
+                    await session.execute(text("""
+                        CREATE TABLE IF NOT EXISTS event_photos (
+                            id UUID PRIMARY KEY,
+                            event_id UUID NOT NULL REFERENCES events(id) ON DELETE CASCADE,
+                            r2_preview_url VARCHAR(1000),
+                            r2_thumbnail_url VARCHAR(1000),
+                            r2_original_url VARCHAR(1000),
+                            created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP NOT NULL
+                        )
+                    """))
+                    await session.execute(text("ALTER TABLE events ADD COLUMN IF NOT EXISTS title VARCHAR(200)"))
+                    await session.commit()
+                except Exception as e:
+                    await session.rollback()
+                    logger.warning("Error initializing event_photos / events.title: %s", e)
+    except Exception as exc:
+        logger.warning("Schema check during startup failed: %s", exc)
+
     if not settings.face_analysis_enabled:
         logger.info("Face analysis disabled (FACE_ANALYSIS_ENABLED=false): photos get previews only; matching is off")
-    elif not analyzer_available():
+    elif analyzer_available():
+        # Lazy load or initialize the model once globally at FastAPI startup lifespan, not per-request
+        try:
+            from app.services.face.engine import get_analyzer
+            await run_in_threadpool(get_analyzer)
+            logger.info("Face model initialized globally at startup")
+        except Exception as exc:
+            logger.warning("Could not pre-initialize face model at startup: %s", exc)
+    else:
         from app.services.face.engine import download_face_models
         await run_in_threadpool(download_face_models, settings)
         if not analyzer_available():
@@ -186,12 +223,21 @@ def create_app() -> FastAPI:
         selfie_limit=settings.selfie_max_bytes + 256 * 1024,
     )
 
+    origins = list(settings.cors_origins)
+    for default_origin in ["https://zigmaa-photos.vercel.app", "http://localhost:3000"]:
+        if default_origin not in origins:
+            origins.append(default_origin)
+    if hasattr(settings, "allowed_origins"):
+        for o in settings.allowed_origins:
+            if o not in origins:
+                origins.append(o)
+
     app.add_middleware(
         CORSMiddleware,
-        allow_origins=settings.cors_origins,
-        allow_credentials=False,
-        allow_methods=["GET", "POST", "PATCH", "PUT", "DELETE"],
-        allow_headers=["Authorization", "X-API-Key", "Content-Type"],
+        allow_origins=origins,
+        allow_credentials=True,
+        allow_methods=["*"],
+        allow_headers=["*"],
         max_age=600,
     )
 
@@ -199,6 +245,11 @@ def create_app() -> FastAPI:
     app.include_router(photos.router)
     app.include_router(match.admin_router)
     app.include_router(match.public_router)
+    app.include_router(match.match_selfie_router)
+
+    @app.get("/", tags=["health"])
+    async def root_health() -> dict[str, str]:
+        return {"status": "ok", "service": "zigmaa-backend"}
 
     @app.get("/health", response_model=HealthOut, tags=["health"])
     async def health() -> JSONResponse:
@@ -247,6 +298,7 @@ def create_app() -> FastAPI:
 
         body = HealthOut(
             status="ok" if healthy else "degraded",
+            service="zigmaa-backend",
             version=__version__,
             checks=checks,
         )

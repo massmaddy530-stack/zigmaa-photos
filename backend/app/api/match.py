@@ -171,3 +171,256 @@ async def public_match_page(slug: str, token: str, session: SessionDep, storage:
                             limit: Annotated[int, Query(ge=1, le=200)] = DEFAULT_PAGE) -> MatchPage:
     event = await get_public_event_or_404(session, slug)
     return await _page(session, event, token, cursor, limit, storage)
+
+
+match_selfie_router = APIRouter(tags=["selfie-matching"])
+
+
+async def _process_match_selfie(
+    session: SessionDep,
+    settings: SettingsDep,
+    storage: StorageDep,
+    event_id: uuid.UUID,
+    file: UploadFile | None,
+    selfie: UploadFile | None,
+):
+    upload = file or selfie
+    if upload is None:
+        raise AppError("Selfie file is required", code="missing_file", status_code=422)
+
+    import gc
+    import numpy as np
+    from PIL import Image
+    from sqlalchemy import text
+    from app.services.face.engine import get_analyzer, l2_normalize
+    from app.services.matching import _area
+
+    data = await _read_selfie(upload, settings)
+
+    with Image.open(io.BytesIO(data)) as raw_img:
+        if raw_img.mode != "RGB":
+            raw_img = raw_img.convert("RGB")
+        if max(raw_img.size) > 1024:
+            scale = 1024 / max(raw_img.size)
+            img = raw_img.resize((max(1, int(raw_img.width * scale)), max(1, int(raw_img.height * scale))), Image.Resampling.BILINEAR)
+        else:
+            img = raw_img.copy()
+
+    try:
+        faces = await run_in_threadpool(get_analyzer().analyze, img)
+    finally:
+        img.close()
+        gc.collect()
+
+    if not faces:
+        raise AppError("No face detected in selfie. Please upload a clear photo of your face.", code="no_face_detected", status_code=422)
+
+    largest_face = max(faces, key=_area)
+    selfie_emb = l2_normalize(largest_face.embedding)
+
+    emb_str = "[" + ",".join(f"{x:.7g}" for x in selfie_emb) + "]"
+
+    if session.bind.dialect.name == "postgresql":
+        query = text("""
+            SELECT DISTINCT p.id, p.r2_preview_url, p.r2_thumbnail_url, p.r2_original_url
+            FROM face_embeddings fe
+            JOIN event_photos p ON p.id = fe.photo_id
+            WHERE fe.event_id = :event_id
+              AND (fe.embedding <=> CAST(:selfie_embedding AS vector)) < 0.48
+            ORDER BY (fe.embedding <=> CAST(:selfie_embedding AS vector)) ASC
+            LIMIT 50;
+        """)
+        try:
+            res = await session.execute(query, {"event_id": event_id, "selfie_embedding": emb_str})
+            rows = res.fetchall()
+        except Exception:
+            alt_query = text("""
+                SELECT p.id, p.r2_preview_url, p.r2_thumbnail_url, p.r2_original_url
+                FROM (
+                    SELECT DISTINCT ON (p.id) p.id, p.r2_preview_url, p.r2_thumbnail_url, p.r2_original_url,
+                           (fe.embedding <=> CAST(:selfie_embedding AS vector)) AS dist
+                    FROM face_embeddings fe
+                    JOIN event_photos p ON p.id = fe.photo_id
+                    WHERE fe.event_id = :event_id
+                      AND (fe.embedding <=> CAST(:selfie_embedding AS vector)) < 0.48
+                    ORDER BY p.id, (fe.embedding <=> CAST(:selfie_embedding AS vector)) ASC
+                ) p
+                ORDER BY p.dist ASC
+                LIMIT 50;
+            """)
+            res = await session.execute(alt_query, {"event_id": event_id, "selfie_embedding": emb_str})
+            rows = res.fetchall()
+    else:
+        from app.models import EventPhoto, FaceEmbedding
+        stmt = (
+            select(
+                EventPhoto.id,
+                EventPhoto.r2_preview_url,
+                EventPhoto.r2_thumbnail_url,
+                EventPhoto.r2_original_url,
+                FaceEmbedding.embedding,
+            )
+            .join(FaceEmbedding, FaceEmbedding.photo_id == EventPhoto.id)
+            .where(FaceEmbedding.event_id == event_id)
+        )
+        res = await session.execute(stmt)
+        best_matches = {}
+        for row in res.all():
+            pid, prev_u, thumb_u, orig_u, emb_val = row[0], row[1], row[2], row[3], row[4]
+            dot = float(np.dot(selfie_emb, np.asarray(emb_val, dtype=np.float32)))
+            dist = 1.0 - dot
+            if dist < 0.48:
+                if pid not in best_matches or dist < best_matches[pid]["dist"]:
+                    best_matches[pid] = {
+                        "id": str(pid),
+                        "r2_preview_url": prev_u,
+                        "r2_thumbnail_url": thumb_u,
+                        "r2_original_url": orig_u,
+                        "dist": dist
+                    }
+        sorted_m = sorted(best_matches.values(), key=lambda x: x["dist"])[:50]
+        rows = [(m["id"], m["r2_preview_url"], m["r2_thumbnail_url"], m["r2_original_url"]) for m in sorted_m]
+
+    matches = [
+        {
+            "id": str(r[0]),
+            "r2_preview_url": r[1],
+            "r2_thumbnail_url": r[2],
+            "r2_original_url": r[3],
+        }
+        for r in rows
+    ]
+
+    gc.collect()
+    return {
+        "status": "ok",
+        "total": len(matches),
+        "matches": matches,
+        "photos": matches,
+    }
+
+
+@match_selfie_router.post("/match-selfie")
+@match_selfie_router.post("/api/v1/match-selfie")
+async def match_selfie_endpoint(
+    session: SessionDep,
+    settings: SettingsDep,
+    storage: StorageDep,
+    event_id: Annotated[uuid.UUID, Form()],
+    file: Annotated[UploadFile | None, File()] = None,
+    selfie: Annotated[UploadFile | None, File()] = None,
+):
+    return await _process_match_selfie(session, settings, storage, event_id, file, selfie)
+
+
+@match_selfie_router.post("/api/v1/events/{event_id}/match-selfie")
+async def match_selfie_event_endpoint(
+    event_id: uuid.UUID,
+    session: SessionDep,
+    settings: SettingsDep,
+    storage: StorageDep,
+    file: Annotated[UploadFile | None, File()] = None,
+    selfie: Annotated[UploadFile | None, File()] = None,
+):
+    return await _process_match_selfie(session, settings, storage, event_id, file, selfie)
+
+
+@match_selfie_router.post("/upload-event-photo")
+@match_selfie_router.post("/api/v1/upload-event-photo")
+async def upload_event_photo_endpoint(
+    session: SessionDep,
+    settings: SettingsDep,
+    storage: StorageDep,
+    event_id: Annotated[uuid.UUID, Form()],
+    file: Annotated[UploadFile, File()],
+):
+    import gc
+    from PIL import Image
+    from app.models import EventPhoto, FaceEmbedding, Photo, PhotoStatus, utcnow
+    from app.services.face.engine import get_analyzer, l2_normalize
+    from app.services.storage import generate_variants
+
+    content = await file.read()
+    if not content:
+        raise AppError("File is empty", code="empty_file", status_code=422)
+
+    thumb_bytes, prev_bytes = generate_variants(content)
+
+    photo_id = uuid.uuid4()
+    orig_key = f"events/{event_id}/originals/{photo_id}.jpg"
+    thumb_key = f"events/{event_id}/thumbnails/{photo_id}.webp"
+    prev_key = f"events/{event_id}/previews/{photo_id}.webp"
+
+    orig_url = storage.upload_file(content, orig_key, file.content_type or "image/jpeg")
+    thumb_url = storage.upload_file(thumb_bytes, thumb_key, "image/webp")
+    prev_url = storage.upload_file(prev_bytes, prev_key, "image/webp")
+
+    ev_photo = EventPhoto(
+        id=photo_id,
+        event_id=event_id,
+        r2_preview_url=prev_url,
+        r2_thumbnail_url=thumb_url,
+        r2_original_url=orig_url,
+        created_at=utcnow(),
+    )
+    session.add(ev_photo)
+
+    legacy_photo = Photo(
+        id=photo_id,
+        event_id=event_id,
+        original_filename=file.filename or f"{photo_id}.jpg",
+        content_hash=uuid.uuid4().hex,
+        content_type=file.content_type or "image/jpeg",
+        size_bytes=len(content),
+        original_key=orig_key,
+        thumbnail_key=thumb_key,
+        preview_key=prev_key,
+        r2_preview_url=prev_url,
+        r2_thumbnail_url=thumb_url,
+        r2_original_url=orig_url,
+        status=PhotoStatus.indexed,
+    )
+    session.add(legacy_photo)
+
+    with Image.open(io.BytesIO(content)) as raw_img:
+        if raw_img.mode != "RGB":
+            raw_img = raw_img.convert("RGB")
+        if max(raw_img.size) > 1024:
+            scale = 1024 / max(raw_img.size)
+            img = raw_img.resize((max(1, int(raw_img.width * scale)), max(1, int(raw_img.height * scale))), Image.Resampling.BILINEAR)
+        else:
+            img = raw_img.copy()
+
+    try:
+        faces = await run_in_threadpool(get_analyzer().analyze, img)
+    finally:
+        img.close()
+        gc.collect()
+
+    for i, face in enumerate(faces):
+        emb = l2_normalize(face.embedding)
+        session.add(FaceEmbedding(
+            event_id=event_id,
+            photo_id=photo_id,
+            face_index=i,
+            bbox_x1=face.bbox[0],
+            bbox_y1=face.bbox[1],
+            bbox_x2=face.bbox[2],
+            bbox_y2=face.bbox[3],
+            det_score=float(face.det_score),
+            embedding=emb,
+            model_name="buffalo_sc",
+            created_at=utcnow(),
+        ))
+
+    await session.commit()
+    gc.collect()
+
+    return {
+        "status": "ok",
+        "photo_id": str(photo_id),
+        "faces_detected": len(faces),
+        "r2_preview_url": prev_url,
+        "r2_thumbnail_url": thumb_url,
+        "r2_original_url": orig_url,
+    }

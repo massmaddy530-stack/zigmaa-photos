@@ -73,6 +73,7 @@ class Event(TimestampMixin, Base):
     # Unguessable public identifier used in guest URLs / QR codes.
     slug: Mapped[str] = mapped_column(String(32), unique=True, nullable=False)
     name: Mapped[str] = mapped_column(String(200), nullable=False)
+    title: Mapped[str | None] = mapped_column(String(200), nullable=True)
     event_date: Mapped[date | None] = mapped_column(Date)
     venue: Mapped[str | None] = mapped_column(String(300))
     description: Mapped[str | None] = mapped_column(Text)
@@ -83,6 +84,7 @@ class Event(TimestampMixin, Base):
     guest_link_expires_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
 
     photos: Mapped[list[Photo]] = relationship(back_populates="event", passive_deletes=True)
+    event_photos: Mapped[list[EventPhoto]] = relationship(back_populates="event", passive_deletes=True)
 
     __table_args__ = (Index("ix_events_status_created", "status", "created_at"),)
 
@@ -101,6 +103,9 @@ class Photo(TimestampMixin, Base):
     original_key: Mapped[str] = mapped_column(String(500), nullable=False)
     thumbnail_key: Mapped[str | None] = mapped_column(String(500))
     preview_key: Mapped[str | None] = mapped_column(String(500))
+    r2_preview_url: Mapped[str | None] = mapped_column(String(1000), nullable=True)
+    r2_thumbnail_url: Mapped[str | None] = mapped_column(String(1000), nullable=True)
+    r2_original_url: Mapped[str | None] = mapped_column(String(1000), nullable=True)
     status: Mapped[PhotoStatus] = mapped_column(_enum(PhotoStatus, "photo_status"), default=PhotoStatus.pending,
                                                 nullable=False)
     face_count: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
@@ -119,6 +124,23 @@ class Photo(TimestampMixin, Base):
     )
 
 
+class EventPhoto(TimestampMixin, Base):
+    __tablename__ = "event_photos"
+
+    id: Mapped[uuid.UUID] = mapped_column(Uuid, primary_key=True, default=uuid.uuid4)
+    event_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("events.id", ondelete="CASCADE"), nullable=False)
+    r2_preview_url: Mapped[str | None] = mapped_column(String(1000), nullable=True)
+    r2_thumbnail_url: Mapped[str | None] = mapped_column(String(1000), nullable=True)
+    r2_original_url: Mapped[str | None] = mapped_column(String(1000), nullable=True)
+
+    event: Mapped[Event] = relationship(back_populates="event_photos")
+    faces: Mapped[list[FaceEmbedding]] = relationship(
+        primaryjoin="foreign(FaceEmbedding.photo_id) == EventPhoto.id",
+        cascade="all, delete-orphan",
+        overlaps="photo,faces",
+    )
+
+
 class FaceEmbedding(Base):
     __tablename__ = "face_embeddings"
 
@@ -134,7 +156,7 @@ class FaceEmbedding(Base):
     bbox_y2: Mapped[float] = mapped_column(Float, nullable=False)
     det_score: Mapped[float] = mapped_column(Float, nullable=False)
     embedding = mapped_column(EmbeddingType(512), nullable=False)
-    model_name: Mapped[str] = mapped_column(String(50), default="buffalo_l", nullable=False)
+    model_name: Mapped[str] = mapped_column(String(50), default="buffalo_sc", nullable=False)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow, nullable=False)
 
     photo: Mapped[Photo] = relationship(back_populates="faces")

@@ -43,6 +43,7 @@ class Settings(BaseSettings):
     )
 
     # --- General -----------------------------------------------------------
+    port: int = 10000
     environment: Literal["development", "test", "production"] = "development"
     app_name: str = "Event Photo Platform"
     log_level: str = "INFO"
@@ -50,7 +51,12 @@ class Settings(BaseSettings):
     public_base_url: str = "http://localhost:8000"
     frontend_base_url: str = "http://localhost:3000"
     # NoDecode: accept comma-separated env values (pydantic-settings would otherwise require JSON).
-    cors_origins: Annotated[list[str], NoDecode] = Field(default_factory=lambda: ["http://localhost:3000"])
+    cors_origins: Annotated[list[str], NoDecode] = Field(
+        default_factory=lambda: ["https://zigmaa-photos.vercel.app", "http://localhost:3000"]
+    )
+    allowed_origins: Annotated[list[str], NoDecode] = Field(
+        default_factory=lambda: ["https://zigmaa-photos.vercel.app", "http://localhost:3000"]
+    )
 
     # --- Auth ----------------------------------------------------------------
     # Admin key: full access to dashboard endpoints. Ingest key: upload-only (camera agent).
@@ -84,6 +90,8 @@ class Settings(BaseSettings):
     r2_access_key_id: SecretStr | None = None
     r2_secret_access_key: SecretStr | None = None
     r2_bucket: str | None = None
+    r2_bucket_name: str | None = None
+    r2_public_url: str | None = None
     r2_endpoint_url: str | None = None  # defaults to https://<account>.r2.cloudflarestorage.com
     # Supabase Storage via its S3-compatible API. The S3 access keys bypass RLS: keep them server-side only.
     supabase_project_ref: str | None = None
@@ -112,11 +120,12 @@ class Settings(BaseSettings):
     # false: photos still get thumbnails/previews and are marked indexed with no faces; face detection,
     # embeddings and selfie matching are skipped and the model runtime is never loaded.
     face_analysis_enabled: bool = True
-    face_model_dir: Path = BACKEND_DIR / "models" / "buffalo_l"
-    face_det_size: int = 640
+    face_model_name: str = "buffalo_sc"
+    face_model_dir: Path = BACKEND_DIR / "models" / "buffalo_sc"
+    face_det_size: int = 320
     face_det_threshold: float = 0.5
     face_min_size_px: int = 24
-    face_analysis_max_side: int = 1920
+    face_analysis_max_side: int = 1024
     onnx_intra_op_threads: int = 2
     hf_model_repo: str | None = None
     hf_model_token: SecretStr | None = None
@@ -136,7 +145,7 @@ class Settings(BaseSettings):
     match_rate_window_s: int = 60
     trust_proxy_headers: bool = False
 
-    @field_validator("cors_origins", "allowed_image_formats", mode="before")
+    @field_validator("cors_origins", "allowed_origins", "allowed_image_formats", mode="before")
     @classmethod
     def _split_csv(cls, v: object) -> object:
         if isinstance(v, str):
@@ -144,6 +153,19 @@ class Settings(BaseSettings):
                 return json.loads(v)
             return [item.strip() for item in v.split(",") if item.strip()]
         return v
+
+    @model_validator(mode="before")
+    @classmethod
+    def _sync_aliases(cls, data: object) -> object:
+        if isinstance(data, dict):
+            bucket = data.get("r2_bucket") or data.get("R2_BUCKET") or data.get("r2_bucket_name") or data.get("R2_BUCKET_NAME")
+            if bucket:
+                data.setdefault("r2_bucket", bucket)
+                data.setdefault("r2_bucket_name", bucket)
+            allowed = data.get("allowed_origins") or data.get("ALLOWED_ORIGINS")
+            if allowed and "cors_origins" not in data and "CORS_ORIGINS" not in data:
+                data["cors_origins"] = allowed
+        return data
 
     @field_validator("database_url")
     @classmethod
