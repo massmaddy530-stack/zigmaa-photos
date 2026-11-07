@@ -11,6 +11,7 @@ from fastapi import APIRouter, Depends, File, Form, Query, Response, UploadFile,
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel, Field
 from sqlalchemy import func, select
+from sqlalchemy.ext.asyncio import AsyncSession
 from starlette.concurrency import run_in_threadpool
 
 from app.api.deps import SessionDep, SettingsDep, StorageDep
@@ -40,6 +41,20 @@ router = APIRouter(prefix="/api/v1/events/{event_id}/photos", tags=["photos"],
                               404: {"model": ErrorResponse}})
 
 _HEX64 = re.compile(r"^[0-9a-f]{64}$")
+
+
+async def _mark_unqueued_as_failed(session: AsyncSession, photo_ids: list[uuid.UUID]) -> None:
+    """Mark pending photos as failed so the default retry-failed endpoint finds them."""
+    for pid in photo_ids:
+        photo = await session.get(Photo, pid)
+        if photo is not None and photo.status == PhotoStatus.pending:
+            photo.status = PhotoStatus.failed
+            photo.error_message = "Task queue unavailable at upload time; retry to reprocess"
+    try:
+        await session.commit()
+    except Exception:  # noqa: BLE001
+        await session.rollback()
+        logger.error("Could not mark %d photos as failed after queue failure", len(photo_ids))
 
 
 @router.post(
@@ -90,8 +105,8 @@ async def upload_photos(
         try:
             await enqueue_index(to_index)
         except QueueUnavailableError:
-            # Photos are saved as "pending"; they can be re-queued with the retry endpoint.
             logger.error("Uploaded %d photos but could not queue indexing", len(to_index))
+            await _mark_unqueued_as_failed(session, to_index)
 
     body = UploadResponse(
         created=len(created),

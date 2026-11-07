@@ -118,6 +118,9 @@ class Settings(BaseSettings):
     face_min_size_px: int = 24
     face_analysis_max_side: int = 1920
     onnx_intra_op_threads: int = 2
+    hf_model_repo: str | None = None
+    hf_model_token: SecretStr | None = None
+    hf_model_revision: str = "main"
     # Cosine similarity threshold for a match. NOT a calibrated value: measure on your own data.
     match_similarity_threshold: float = 0.40
     match_max_results: int = 500

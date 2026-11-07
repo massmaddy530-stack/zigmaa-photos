@@ -82,6 +82,8 @@ def copy_objects(items: list[CopyItem], source: Storage, dest: Storage, *, apply
             report.outcomes[outcome] += 1
             if progress:
                 progress(item, outcome)
+            if apply and outcome in ("error", "hash_mismatch", "verify_failed"):
+                break
     return report
 
 
@@ -114,6 +116,15 @@ def _copy_one(item: CopyItem, source: Storage, dest: Storage, apply: bool, tmp: 
         if dest.size(item.key) != src_size:
             report.errors.append(f"{item.kind} {item.key}: size differs after upload")
             return "verify_failed"
+        if item.sha256:
+            verify_local = tmp / "verify"
+            dest.download_to(item.key, verify_local)
+            try:
+                if _sha256(verify_local) != item.sha256:
+                    report.errors.append(f"{item.kind} {item.key}: SHA-256 mismatch after upload")
+                    return "verify_failed"
+            finally:
+                verify_local.unlink(missing_ok=True)
         return "copied"
     except (StorageError, OSError, ValueError) as exc:
         report.errors.append(f"{item.kind} {item.key}: {exc if isinstance(exc, StorageError) else type(exc).__name__}")

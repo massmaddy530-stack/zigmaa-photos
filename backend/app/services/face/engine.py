@@ -10,7 +10,9 @@ only. Obtain a commercial licence from InsightFace before using them in producti
 
 from __future__ import annotations
 
+import hashlib
 import logging
+import shutil
 import threading
 from dataclasses import dataclass
 from pathlib import Path
@@ -25,6 +27,16 @@ logger = logging.getLogger(__name__)
 
 DETECTOR_FILE = "det_10g.onnx"
 RECOGNIZER_FILE = "w600k_r50.onnx"
+
+_MODEL_HASHES: dict[str, str] = {
+    DETECTOR_FILE:   "5838f7fe053675b1c7a08b633df49e7af5495cee0493c7dcf6697200b85b5b91",
+    RECOGNIZER_FILE: "4c06341c33c2ca1f86781dab0e829f88ad5b64be9fba56e56bc9ebdefc619e43",
+}
+_MODEL_SIZES: dict[str, int] = {
+    DETECTOR_FILE:   16_923_827,
+    RECOGNIZER_FILE: 174_383_860,
+}
+_MODEL_VERSION_TAG: str = _MODEL_HASHES[DETECTOR_FILE][:8]  # "5838f7fe"
 
 # ArcFace canonical 5-point template for a 112x112 crop.
 ARCFACE_DST = np.array(
@@ -140,7 +152,8 @@ class BuffaloLAnalyzer:
         except ImportError as exc:  # pragma: no cover
             raise FaceModelUnavailableError("onnxruntime is not installed") from exc
 
-        det_path, rec_path = Path(model_dir) / DETECTOR_FILE, Path(model_dir) / RECOGNIZER_FILE
+        resolved_dir = Path(model_dir).resolve()
+        det_path, rec_path = resolved_dir / DETECTOR_FILE, resolved_dir / RECOGNIZER_FILE
         missing = [p.name for p in (det_path, rec_path) if not p.is_file()]
         if missing:
             raise FaceModelUnavailableError(
@@ -260,6 +273,7 @@ class BuffaloLAnalyzer:
 
 _analyzer: FaceAnalyzer | None = None
 _analyzer_lock = threading.Lock()
+_download_lock = threading.Lock()
 
 
 def set_analyzer(analyzer: FaceAnalyzer | None) -> None:
@@ -288,3 +302,229 @@ def analyzer_available() -> bool:
         return True
     d = get_settings().face_model_dir
     return (d / DETECTOR_FILE).is_file() and (d / RECOGNIZER_FILE).is_file()
+
+
+# ---------------------------------------------------------------------------
+# Model download — versioned-directory + atomic symlink pointer strategy
+# ---------------------------------------------------------------------------
+
+
+def _sha256_file(path: Path) -> str:
+    """Return lowercase hex SHA256 of *path*, streaming in 1 MB chunks."""
+    h = hashlib.sha256()
+    with path.open("rb") as fh:
+        for chunk in iter(lambda: fh.read(1 << 20), b""):
+            h.update(chunk)
+    return h.hexdigest()
+
+
+def _models_verified(model_dir: Path) -> bool:
+    """Return True only when both ONNX files exist with the correct size and SHA256."""
+    for filename in (DETECTOR_FILE, RECOGNIZER_FILE):
+        path = model_dir / filename
+        try:
+            if not path.is_file():
+                return False
+            if path.stat().st_size != _MODEL_SIZES[filename]:
+                return False
+            if _sha256_file(path) != _MODEL_HASHES[filename]:
+                return False
+        except OSError:
+            return False
+    return True
+
+
+def _fetch_to_file(url: str, dest: Path, headers: dict[str, str]) -> None:
+    """Stream *url* to *dest* following HTTP redirects; never loads the body into RAM.
+
+    HF LFS objects redirect (302) to a presigned CDN URL; follow_redirects handles this.
+    Raises httpx.HTTPStatusError with "HTTP <status_code>" text only (no URL, no token).
+    """
+    import httpx
+
+    timeout = httpx.Timeout(300.0, connect=30.0)
+    with httpx.stream("GET", url, headers=headers, follow_redirects=True, timeout=timeout) as resp:
+        if resp.status_code >= 400:
+            raise httpx.HTTPStatusError(
+                f"HTTP {resp.status_code}", request=resp.request, response=resp
+            )
+        with dest.open("wb") as fh:
+            for chunk in resp.iter_bytes(chunk_size=1 << 20):
+                fh.write(chunk)
+
+
+def _atomic_symlink_swap(versioned_dir: Path, model_dir: Path) -> None:
+    """Point *model_dir* at *versioned_dir* via a single atomic rename(2) on Linux.
+
+    Both paths must share the same parent directory.
+    model_dir absent or a symlink: atomic single-syscall swap.
+    model_dir a real (non-symlink) directory: raises OSError — remove it manually first.
+    """
+    pending = model_dir.parent / f".{model_dir.name}_pending"
+
+    if pending.is_symlink() or pending.exists():
+        try:
+            pending.unlink()
+        except OSError:
+            pass
+
+    pending.symlink_to(versioned_dir.name)
+
+    try:
+        if model_dir.is_symlink() or not model_dir.exists():
+            pending.rename(model_dir)
+        else:
+            pending.unlink(missing_ok=True)
+            raise OSError(
+                f"{model_dir} is a real directory (not a symlink); "
+                "remove or rename it manually before activating downloaded models"
+            )
+    except OSError:
+        if pending.is_symlink() or pending.exists():
+            try:
+                pending.unlink()
+            except OSError:
+                pass
+        raise
+
+
+def download_face_models(settings: Settings) -> bool:
+    """Download ONNX models from Hugging Face and activate atomically via symlink swap.
+
+    Fast path: returns True immediately if both files are already verified.
+    HF_MODEL_TOKEN is never logged or included in any exception message.
+    Returns False on any failure; existing verified models are preserved.
+    """
+    import httpx
+
+    model_dir: Path = settings.face_model_dir
+
+    if _models_verified(model_dir):
+        logger.info("Face models already verified in %s", model_dir)
+        return True
+
+    repo: str | None = settings.hf_model_repo
+    token = settings.hf_model_token
+
+    if not repo or not token:
+        logger.warning(
+            "Face models missing or unverified and HF_MODEL_REPO / HF_MODEL_TOKEN "
+            "are not set — face analysis will be unavailable"
+        )
+        return False
+
+    with _download_lock:
+        if _models_verified(model_dir):
+            logger.info("Face models verified by concurrent thread; skipping download")
+            return True
+
+        revision: str = settings.hf_model_revision
+        base_url = f"https://huggingface.co/{repo}/resolve/{revision}"
+        auth_headers: dict[str, str] = {"Authorization": f"Bearer {token.get_secret_value()}"}
+
+        try:
+            model_dir.parent.mkdir(parents=True, exist_ok=True)
+        except OSError as exc:
+            logger.error("Cannot create face model parent directory: %s", type(exc).__name__)
+            return False
+
+        versioned_dir = model_dir.parent / f"{model_dir.name}_v{_MODEL_VERSION_TAG}"
+
+        if versioned_dir.exists():
+            is_live = (
+                model_dir.is_symlink()
+                and model_dir.resolve() == versioned_dir.resolve()
+            )
+            if is_live:
+                logger.error(
+                    "Active model directory %s failed re-verification; restart required",
+                    versioned_dir.name,
+                )
+                return False
+            if _models_verified(versioned_dir):
+                logger.info("Reusing existing verified versioned directory %s", versioned_dir.name)
+                try:
+                    _atomic_symlink_swap(versioned_dir, model_dir)
+                except OSError as exc:
+                    logger.error("Face model activation failed: %s", type(exc).__name__)
+                    return False
+                result = _models_verified(model_dir)
+                if not result:
+                    logger.error(
+                        "Face models failed final verification after activation in %s", model_dir
+                    )
+                return result
+            logger.warning(
+                "Versioned model directory %s exists but is incomplete or invalid; "
+                "remove it manually to retry",
+                versioned_dir.name,
+            )
+            return False
+
+        try:
+            versioned_dir.mkdir(parents=False, exist_ok=False)
+        except OSError as exc:
+            logger.error("Cannot create versioned model directory: %s", type(exc).__name__)
+            return False
+
+        activation_complete = False
+        try:
+            for filename in (DETECTOR_FILE, RECOGNIZER_FILE):
+                dest = versioned_dir / filename
+                url = f"{base_url}/{filename}"
+                logger.info("Downloading face model %s ...", filename)
+                try:
+                    _fetch_to_file(url, dest, auth_headers)
+                except httpx.HTTPStatusError as exc:
+                    logger.error("Failed to download face model %s: %s", filename, str(exc))
+                    return False
+                except Exception as exc:  # noqa: BLE001
+                    logger.error(
+                        "Failed to download face model %s: %s", filename, type(exc).__name__
+                    )
+                    return False
+
+            for filename in (DETECTOR_FILE, RECOGNIZER_FILE):
+                staged = versioned_dir / filename
+                expected_size = _MODEL_SIZES[filename]
+                expected_hash = _MODEL_HASHES[filename]
+                try:
+                    actual_size = staged.stat().st_size
+                except OSError as exc:
+                    logger.error("Cannot stat staged model %s: %s", filename, type(exc).__name__)
+                    return False
+                if actual_size != expected_size:
+                    logger.error(
+                        "Face model %s size mismatch: expected %d bytes, got %d",
+                        filename, expected_size, actual_size,
+                    )
+                    return False
+                actual_hash = _sha256_file(staged)
+                if actual_hash != expected_hash:
+                    logger.error("Face model %s SHA256 mismatch", filename)
+                    return False
+                logger.info("Face model %s verified (%d bytes)", filename, actual_size)
+
+            try:
+                _atomic_symlink_swap(versioned_dir, model_dir)
+                activation_complete = True
+            except OSError as exc:
+                logger.error("Face model activation failed: %s", type(exc).__name__)
+                return False
+
+            logger.info("Face models activated: %s -> %s", model_dir, versioned_dir.name)
+
+        finally:
+            if not activation_complete:
+                try:
+                    if versioned_dir.exists():
+                        shutil.rmtree(versioned_dir, ignore_errors=True)
+                except Exception:  # noqa: BLE001
+                    pass
+
+        result = _models_verified(model_dir)
+        if not result:
+            logger.error(
+                "Face models failed final verification after activation in %s", model_dir
+            )
+        return result
