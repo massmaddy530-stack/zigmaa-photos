@@ -132,23 +132,23 @@ async function applyWatermark(blob: Blob): Promise<Blob> {
         // Draw the full resolution original photo
         ctx.drawImage(photoImg, 0, 0, width, height);
 
-        // Load the transparent MADX Photos logo
+        // Load the translucent MADX photography watermark (Image 2 style)
         const logo = new Image();
         logo.crossOrigin = "anonymous";
         logo.onload = () => {
           try {
-            // Watermark size: proportional to the photo (approx 18% width, min 150px, max 520px)
-            const targetWidth = Math.max(150, Math.min(width * 0.18, 520));
-            const aspect = (logo.naturalWidth || 736) / (logo.naturalHeight || 576);
+            // Horizontal watermark size: ~24% to 28% width of the photo (min 200px, max 720px)
+            const targetWidth = Math.max(200, Math.min(width * 0.26, 720));
+            const aspect = (logo.naturalWidth || 1455) / (logo.naturalHeight || 320);
             const targetHeight = targetWidth / aspect;
 
-            // Position: right side middle corner (centered vertically on right edge)
-            const margin = Math.max(16, Math.round(width * 0.025));
+            // Position: right side middle (centered vertically on right edge with margin)
+            const margin = Math.max(20, Math.round(width * 0.03));
             const x = width - targetWidth - margin;
             const y = Math.round((height - targetHeight) / 2);
 
             ctx.save();
-            ctx.globalAlpha = 0.70;
+            ctx.globalAlpha = 0.90;
             ctx.drawImage(logo, x, y, targetWidth, targetHeight);
             ctx.restore();
 
@@ -168,7 +168,7 @@ async function applyWatermark(blob: Blob): Promise<Blob> {
           resolve(blob);
         };
 
-        logo.src = "/logo.png";
+        logo.src = "/watermark.png";
       } catch {
         resolve(blob);
       }
