@@ -175,12 +175,15 @@ async def serialize_matches(session: AsyncSession, event_id: uuid.UUID, results:
             p = photos.get(pid)
             if p is None:
                 continue
+            thumb = getattr(p, "r2_thumbnail_url", None) or (storage.signed_url(p.thumbnail_key) if p.thumbnail_key else None)
+            prev = getattr(p, "r2_preview_url", None) or (storage.signed_url(p.preview_key) if p.preview_key else None)
+            orig = getattr(p, "r2_original_url", None) or storage.signed_url(p.original_key)
             items.append(MatchItem(
                 photo_id=pid, similarity=round(sim, 4), width=p.width, height=p.height,
-                thumbnail_url=storage.signed_url(p.thumbnail_key) if p.thumbnail_key else None,
-                preview_url=storage.signed_url(p.preview_key) if p.preview_key else None,
+                thumbnail_url=thumb,
+                preview_url=prev,
                 # Original quality, fetched only when the guest taps Download (the grid uses thumbnails).
-                download_url=storage.signed_url(p.original_key),
+                download_url=orig,
             ))
         return items
 

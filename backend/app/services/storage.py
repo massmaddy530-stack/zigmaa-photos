@@ -284,6 +284,11 @@ class R2Storage(S3CompatibleStorage):
         )
         self.public_url = settings.r2_public_url
 
+    def signed_url(self, key: str, expires_in: int | None = None) -> str:
+        if self.public_url:
+            return f"{self.public_url.rstrip('/')}/{_validate_key(key)}"
+        return super().signed_url(key, expires_in)
+
     def upload_file(self, file_bytes: bytes | BinaryIO, object_name: str, content_type: str = "image/jpeg") -> str:
         """Uploads directly from in-memory io.BytesIO and returns the public CDN URL using R2_PUBLIC_URL or signed URL."""
         import io
