@@ -1,8 +1,9 @@
 "use client";
 
-import { ExternalLink, ImageIcon, RotateCcw, ScanFace, Search, Trash2, UploadCloud } from "lucide-react";
+import { Download, ExternalLink, ImageIcon, RotateCcw, ScanFace, Search, Trash2, UploadCloud } from "lucide-react";
 import { useCallback, useEffect, useState } from "react";
 import { adminApi, errorMessage } from "@/lib/api";
+import { downloadImage } from "@/lib/image";
 import { cn, formatBytes, formatDateTime, formatNumber } from "@/lib/format";
 import { useDebounced, useQuery } from "@/lib/hooks";
 import type { PhotoDetailOut, PhotoOut, PhotoStatus } from "@/lib/types";
@@ -239,10 +240,15 @@ function PhotoDetailPanel({ eventId, photoId, onLoaded, onDeleted, onRetried }: 
           <Button size="sm" variant="outline" onClick={retry} loading={busy === "retry"} icon={<RotateCcw className="h-4 w-4" />}>Retry</Button>
         )}
         {p.original_url && (
-          <a href={p.original_url} target="_blank" rel="noopener noreferrer"
-             className="inline-flex h-8 items-center gap-2 rounded-xl border border-line px-3 text-sm font-medium hover:bg-canvas">
-            <ExternalLink className="h-4 w-4" />Original
-          </a>
+          <>
+            <Button size="sm" variant="outline" onClick={() => downloadImage(p.original_url!, p.original_filename || "photo.jpg")} icon={<Download className="h-4 w-4" />}>
+              Download
+            </Button>
+            <a href={p.original_url} target="_blank" rel="noopener noreferrer"
+               className="inline-flex h-8 items-center gap-2 rounded-xl border border-line px-3 text-sm font-medium hover:bg-canvas">
+              <ExternalLink className="h-4 w-4" />Original
+            </a>
+          </>
         )}
         <Button size="sm" variant="ghost" className="text-red-600 hover:bg-red-50 hover:text-red-700" onClick={() => setConfirm(true)}
                 icon={<Trash2 className="h-4 w-4" />}>Delete</Button>

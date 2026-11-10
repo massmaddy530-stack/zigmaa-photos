@@ -7,8 +7,12 @@ const geistMono = Geist_Mono({ variable: "--font-geist-mono", subsets: ["latin"]
 const playfair = Playfair_Display({ variable: "--font-playfair", subsets: ["latin"], display: "swap" });
 
 export const metadata: Metadata = {
-  title: { default: "Everframe — AI event photo sharing", template: "%s · Everframe" },
+  title: { default: "MADX Photos — AI event photo sharing", template: "%s · MADX Photos" },
   description: "Deliver every guest their event photos with a selfie.",
+  icons: {
+    icon: "/favicon.ico",
+    apple: "/apple-icon.png",
+  },
 };
 
 export const viewport: Viewport = {

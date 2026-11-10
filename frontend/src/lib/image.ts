@@ -104,7 +104,88 @@ export class DownloadError extends Error {
 }
 
 /**
- * Download a (possibly cross-origin) image. Falls back to opening it in a new tab if CORS blocks the fetch.
+ * Overlays the MADX transparent logo in the right side middle of the photo
+ * before saving to the user's device.
+ */
+async function applyWatermark(blob: Blob): Promise<Blob> {
+  if (typeof window === "undefined" || typeof document === "undefined") return blob;
+
+  return new Promise((resolve) => {
+    const photoImg = new Image();
+    const objectUrl = URL.createObjectURL(blob);
+
+    photoImg.onload = () => {
+      URL.revokeObjectURL(objectUrl);
+      try {
+        const canvas = document.createElement("canvas");
+        const width = photoImg.naturalWidth || photoImg.width;
+        const height = photoImg.naturalHeight || photoImg.height;
+        canvas.width = width;
+        canvas.height = height;
+
+        const ctx = canvas.getContext("2d");
+        if (!ctx) {
+          resolve(blob);
+          return;
+        }
+
+        // Draw the full resolution original photo
+        ctx.drawImage(photoImg, 0, 0, width, height);
+
+        // Load the transparent MADX Photos logo
+        const logo = new Image();
+        logo.crossOrigin = "anonymous";
+        logo.onload = () => {
+          try {
+            // Watermark size: proportional to the photo (approx 18% width, min 150px, max 520px)
+            const targetWidth = Math.max(150, Math.min(width * 0.18, 520));
+            const aspect = (logo.naturalWidth || 736) / (logo.naturalHeight || 576);
+            const targetHeight = targetWidth / aspect;
+
+            // Position: right side middle corner (centered vertically on right edge)
+            const margin = Math.max(16, Math.round(width * 0.025));
+            const x = width - targetWidth - margin;
+            const y = Math.round((height - targetHeight) / 2);
+
+            ctx.save();
+            ctx.globalAlpha = 0.70;
+            ctx.drawImage(logo, x, y, targetWidth, targetHeight);
+            ctx.restore();
+
+            canvas.toBlob(
+              (watermarkedBlob) => {
+                resolve(watermarkedBlob || blob);
+              },
+              "image/jpeg",
+              0.95
+            );
+          } catch {
+            resolve(blob);
+          }
+        };
+
+        logo.onerror = () => {
+          resolve(blob);
+        };
+
+        logo.src = "/logo.png";
+      } catch {
+        resolve(blob);
+      }
+    };
+
+    photoImg.onerror = () => {
+      URL.revokeObjectURL(objectUrl);
+      resolve(blob);
+    };
+
+    photoImg.src = objectUrl;
+  });
+}
+
+/**
+ * Download an event photo with the MADX transparent watermark embedded on the right middle edge.
+ * Falls back to opening it in a new tab if CORS blocks the fetch.
  * Throws DownloadError when offline, when the link has expired, or when the transfer is interrupted.
  */
 export async function downloadImage(url: string, filename: string) {
@@ -122,8 +203,9 @@ export async function downloadImage(url: string, filename: string) {
   if (res.status === 403) throw new DownloadError("This download link has expired. Start a new search to refresh it.", true);
   if (!res.ok) throw new DownloadError(`Download failed (${res.status}). Please try again.`);
   try {
-    const blob = await res.blob(); // throws if the connection drops mid-transfer
-    const href = URL.createObjectURL(blob);
+    const rawBlob = await res.blob();
+    const finalBlob = await applyWatermark(rawBlob);
+    const href = URL.createObjectURL(finalBlob);
     const a = document.createElement("a");
     a.href = href;
     a.download = filename;

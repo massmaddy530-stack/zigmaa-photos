@@ -6,19 +6,18 @@
   /* Headings only (20px and up); body text and controls stay in the sans face. */
   --font-display: var(--font-playfair), Georgia, "Times New Roman", serif;
 
-  /* Brand: champagne gold. 400 is the champagne accent (decorative, or behind espresso text: 6.1:1).
-     500 is the focus ring on ivory (3.1:1). 600+ carry white text (600: 5.0:1) or read as gold text (700: 5.7:1). */
-  --color-brand-50: #fbf8f1;
-  --color-brand-100: #f4ecdd;
-  --color-brand-200: #e9dbc0;
-  --color-brand-300: #dcc59b;
-  --color-brand-400: #c5a46d;
-  --color-brand-500: #a8864f;
-  --color-brand-600: #8a6a38;
-  --color-brand-700: #7a5c2e;
-  --color-brand-800: #5e4623;
-  --color-brand-900: #47351b;
-  --color-brand-950: #2a2016;
+  /* Brand: MADX metallic gold palette matching the official logo */
+  --color-brand-50: #fdfaf2;
+  --color-brand-100: #f9f1d8;
+  --color-brand-200: #f2e1b1;
+  --color-brand-300: #e8cd82;
+  --color-brand-400: #d8b248;
+  --color-brand-500: #c59b27;
+  --color-brand-600: #a77d18;
+  --color-brand-700: #855f15;
+  --color-brand-800: #6a4b16;
+  --color-brand-900: #543b16;
+  --color-brand-950: #2f1e07;
 
   /* Surfaces: ivory canvas, white cards, warm beige lines, espresso text */
   --color-canvas: #f8f5ef;

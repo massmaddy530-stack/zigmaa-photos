@@ -86,7 +86,7 @@ function EventDetailInner() {
   return (
     <>
       <PageHeader
-        breadcrumb={<Link href="/dashboard/events" className="inline-flex items-center gap-1 hover:text-ink"><ChevronLeft className="h-4 w-4" />Events</Link>}
+        breadcrumb={<Link href="/dashboard" className="inline-flex items-center gap-1 hover:text-ink"><ChevronLeft className="h-4 w-4" />Dashboard</Link>}
         title={<span className="flex flex-wrap items-center gap-3"><span className="min-w-0 break-words">{ev.name}</span><EventStatusBadge status={ev.status} /></span>}
         description={
           <span className="flex flex-wrap gap-x-4 gap-y-1">

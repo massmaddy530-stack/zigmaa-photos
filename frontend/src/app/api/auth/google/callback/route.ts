@@ -71,9 +71,9 @@ export async function GET(req: NextRequest) {
 
   const next = escapeHtml(safeNextPath(tx.next));
   const html = `<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="robots" content="noindex">`
-    + `<meta http-equiv="refresh" content="0;url=${next}"><title>Signing in · Everframe</title></head>`
+    + `<meta http-equiv="refresh" content="0;url=${next}"><title>Signing in · MADX Photos</title></head>`
     + `<body style="font-family:system-ui,sans-serif;background:#f8f5ef;color:#302820;padding:2rem">`
-    + `<p>Signed in. <a href="${next}" style="color:#7a5c2e">Continue to Everframe</a></p></body></html>`;
+    + `<p>Signed in. <a href="${next}" style="color:#7a5c2e">Continue to MADX Photos</a></p></body></html>`;
   const res = new NextResponse(html, { status: 200, headers: { "Content-Type": "text/html; charset=utf-8", ...NO_STORE } });
   res.cookies.delete(LEGACY_SESSION_COOKIE);
   res.cookies.set(SESSION_COOKIE, await createSessionToken(auth, SESSION_MAX_AGE_S), {
