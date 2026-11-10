@@ -184,24 +184,38 @@ async function applyWatermark(blob: Blob): Promise<Blob> {
 }
 
 /**
- * Download an event photo with the MADX transparent watermark embedded on the right middle edge.
- * Falls back to opening it in a new tab if CORS blocks the fetch.
+ * Download an event photo with the MADX transparent watermark embedded on the right side below middle.
+ * Automatically proxies through /api/download if cross-origin storage (e.g. Cloudflare R2) restricts CORS,
+ * guaranteeing watermark embedding and direct download to local storage.
  * Throws DownloadError when offline, when the link has expired, or when the transfer is interrupted.
  */
 export async function downloadImage(url: string, filename: string) {
   if (typeof navigator !== "undefined" && navigator.onLine === false) {
     throw new DownloadError("You're offline. Reconnect and tap Download again.");
   }
+
   let res: Response;
   try {
     res = await fetch(url, { mode: "cors" });
+    if (!res.ok && res.status !== 403) {
+      throw new Error(`Direct fetch status ${res.status}`);
+    }
   } catch {
-    if (navigator.onLine === false) throw new DownloadError("Your connection dropped. Reconnect and tap Download again.");
-    window.open(url, "_blank", "noopener,noreferrer"); // e.g. storage without CORS: let the browser download it
-    return;
+    // If CORS or direct fetch fails, fetch through our same-origin proxy route
+    try {
+      const proxyUrl = `/api/download?url=${encodeURIComponent(url)}`;
+      res = await fetch(proxyUrl);
+    } catch {
+      if (typeof navigator !== "undefined" && navigator.onLine === false) {
+        throw new DownloadError("Your connection dropped. Reconnect and tap Download again.");
+      }
+      throw new DownloadError("Download failed. Please check your connection and tap Download again.");
+    }
   }
+
   if (res.status === 403) throw new DownloadError("This download link has expired. Start a new search to refresh it.", true);
   if (!res.ok) throw new DownloadError(`Download failed (${res.status}). Please try again.`);
+
   try {
     const rawBlob = await res.blob();
     const finalBlob = await applyWatermark(rawBlob);
