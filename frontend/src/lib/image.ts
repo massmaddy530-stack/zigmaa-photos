@@ -137,18 +137,19 @@ async function applyWatermark(blob: Blob): Promise<Blob> {
         logo.crossOrigin = "anonymous";
         logo.onload = () => {
           try {
-            // Watermark size: proportional to the photo (approx 18% to 22% width, min 160px, max 540px)
-            const targetWidth = Math.max(160, Math.min(width * 0.20, 540));
+            // Smaller, elegant watermark sizing (~12% to 14% width, min 110px, max 320px)
+            const targetWidth = Math.max(110, Math.min(width * 0.13, 320));
             const aspect = (logo.naturalWidth || 736) / (logo.naturalHeight || 570);
             const targetHeight = targetWidth / aspect;
 
-            // Position: right side, just below middle (between middle and bottom)
-            const margin = Math.max(20, Math.round(width * 0.035));
+            // Position: right side, below middle (between middle and bottom)
+            const margin = Math.max(16, Math.round(width * 0.03));
             const x = width - targetWidth - margin;
-            // 0.68 positions it below middle, not most bottom (middle of middle and bottom)
             const y = Math.round((height - targetHeight) * 0.68);
 
             ctx.save();
+            // 40% transparency (0.40 opacity) for a truly translucent watermark overlay
+            ctx.globalAlpha = 0.40;
             ctx.drawImage(logo, x, y, targetWidth, targetHeight);
             ctx.restore();
 
