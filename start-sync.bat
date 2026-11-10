@@ -17,12 +17,8 @@ if not exist "%AGENT_DIR%\.venv\Scripts\python.exe" (
     exit /b 1
 )
 
-set /p EV_INPUT="Paste Event ID or Event URL: "
-if "%EV_INPUT%"=="" (
-    echo [ERROR] Event ID cannot be empty!
-    pause
-    exit /b 1
-)
+set /p EV_INPUT="Paste Event ID or Event URL (Press Enter for 100b1ef3-ccf3-4c24-8aca-16df4f6f6a63): "
+if "%EV_INPUT%"=="" set EV_INPUT=100b1ef3-ccf3-4c24-8aca-16df4f6f6a63
 
 :: Pass the raw input directly to Python so it can auto-resolve UUID or slug
 set EVENT_ID=%EV_INPUT%
@@ -35,7 +31,7 @@ if not exist "%FOLDER_INPUT%" (
     mkdir "%FOLDER_INPUT%" 2>nul
 )
 
-set API_URL=https://zigmaa-photos.vercel.app
+set API_URL=https://zigmaa-photos-backend.onrender.com
 set INGEST_KEY=HbwzKQUT3Jeg63DZz6xwsc9NkJ8SAOSH9KOP_e8AJIk
 
 set CAMERA_SOURCE=folder
