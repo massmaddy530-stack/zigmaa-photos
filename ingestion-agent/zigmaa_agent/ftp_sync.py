@@ -20,7 +20,10 @@ from pyftpdlib.handlers import FTPHandler
 from pyftpdlib.servers import FTPServer
 
 from zigmaa_agent.agent import Agent
+from zigmaa_agent.capture import Spool, SpoolLock
 from zigmaa_agent.config import load_config
+from zigmaa_agent.sources import build_source
+from zigmaa_agent.uploader import Uploader
 
 logger = logging.getLogger("zigmaa_agent.ftp_sync")
 
@@ -151,12 +154,26 @@ def main():
 
     # Start Ingestion Agent in main thread
     logger.info("Starting Ingestion Agent for event %s...", cfg.event_id)
-    agent = Agent(cfg)
+    spool = Spool(cfg.event_spool)
+    lock = SpoolLock(cfg.event_spool)
+    try:
+        lock.acquire()
+    except Exception as exc:
+        logger.warning("Spool lock note: %s", exc)
+
+    source = build_source(cfg, spool)
+    uploader = Uploader(cfg, spool)
+    agent = Agent(cfg, source, uploader, spool)
     try:
         agent.run()
     except KeyboardInterrupt:
         logger.info("Stopping agent and FTP receiver...")
+    finally:
         server.close_all()
+        try:
+            lock.release()
+        except Exception:
+            pass
 
 
 if __name__ == "__main__":
