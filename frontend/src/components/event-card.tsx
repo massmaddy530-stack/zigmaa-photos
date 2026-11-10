@@ -2,7 +2,6 @@ import Link from "next/link";
 import { CalendarDays, ImageIcon, MapPin, ScanFace } from "lucide-react";
 import { cn, formatDate, formatNumber } from "@/lib/format";
 import type { EventOut } from "@/lib/types";
-import { EventStatusBadge } from "./status-badges";
 import { Card, ProgressBar, Skeleton } from "./ui/primitives";
 
 export function processingSummary(e: EventOut) {
@@ -33,7 +32,6 @@ export function EventCard({ event, compact }: { event: EventOut; compact?: boole
       <Card className="overflow-hidden transition-[box-shadow,border-color] group-hover:border-brand-200 group-hover:shadow-[var(--shadow-pop)] group-focus-visible:ring-2 group-focus-visible:ring-brand-500">
         <div className={cn("relative aspect-[16/9] overflow-hidden bg-canvas", compact && "min-[1180px]:aspect-[3/1]")}>
           <CoverImage src={event.cover_url} name={event.name} />
-          <div className="absolute left-3 top-3"><EventStatusBadge status={event.status} /></div>
         </div>
         <div className={cn("space-y-3 p-4",
           compact && "min-[1180px]:grid min-[1180px]:grid-cols-[auto_minmax(0,1fr)] min-[1180px]:items-center min-[1180px]:gap-x-3 min-[1180px]:gap-y-1.5 min-[1180px]:space-y-0 min-[1180px]:px-3 min-[1180px]:py-2.5")}>

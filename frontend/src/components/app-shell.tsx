@@ -2,11 +2,10 @@
 
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { LogOut, Plus } from "lucide-react";
+import { LogOut } from "lucide-react";
 import { useState, type ReactNode } from "react";
 import { CSRF_HEADER } from "@/lib/api";
 import { cn } from "@/lib/format";
-import { ButtonLink } from "./ui/button";
 
 export function Logo({ className }: { className?: string; admin?: boolean }) {
   return (
@@ -48,9 +47,6 @@ export function AppShell({ children }: { children: ReactNode }) {
             <Logo />
           </Link>
           <div className="flex items-center gap-3">
-            <ButtonLink href="/dashboard/events/new" icon={<Plus className="h-4 w-4" />}>
-              New event
-            </ButtonLink>
             <SignOut />
           </div>
         </div>
