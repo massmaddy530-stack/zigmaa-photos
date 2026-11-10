@@ -59,6 +59,7 @@ echo ---------------------------------------------------
 echo.
 
 cd /d "%AGENT_DIR%"
+set PYTHONPATH=%AGENT_DIR%
 "%AGENT_DIR%\.venv\Scripts\python.exe" -m zigmaa_agent.ftp_sync
 
 pause
