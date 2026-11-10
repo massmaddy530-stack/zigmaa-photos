@@ -163,10 +163,14 @@ async def lifespan(app: FastAPI):
                         )
                     """))
                     await session.execute(text("ALTER TABLE events ADD COLUMN IF NOT EXISTS title VARCHAR(200)"))
+                    await session.execute(text("ALTER TABLE photos ADD COLUMN IF NOT EXISTS r2_preview_url VARCHAR(1000)"))
+                    await session.execute(text("ALTER TABLE photos ADD COLUMN IF NOT EXISTS r2_thumbnail_url VARCHAR(1000)"))
+                    await session.execute(text("ALTER TABLE photos ADD COLUMN IF NOT EXISTS r2_original_url VARCHAR(1000)"))
                     await session.commit()
+                    logger.info("Database schema initialized: event_photos, events.title, photos.r2_*")
                 except Exception as e:
                     await session.rollback()
-                    logger.warning("Error initializing event_photos / events.title: %s", e)
+                    logger.warning("Error initializing event_photos / events.title / photos.r2_*: %s", e)
     except Exception as exc:
         logger.warning("Schema check during startup failed: %s", exc)
 
