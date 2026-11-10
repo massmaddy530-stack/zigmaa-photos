@@ -203,7 +203,11 @@ async def get_photo(event_id: uuid.UUID, photo_id: uuid.UUID, session: SessionDe
         select(ProcessingJob).where(ProcessingJob.photo_id == photo.id)
         .order_by(ProcessingJob.created_at.desc()).limit(10))).scalars().all()
     base = photo_out(photo, storage)
-    orig_url = getattr(photo, "r2_original_url", None) or storage.signed_url(photo.original_key)
+    orig_url = getattr(photo, "r2_original_url", None)
+    if orig_url and "localhost" in orig_url:
+        orig_url = None
+    if not orig_url and photo.original_key:
+        orig_url = storage.signed_url(photo.original_key)
     return PhotoDetailOut(
         **base.model_dump(),
         original_url=orig_url,

@@ -3,6 +3,7 @@
 import { CheckCircle2, Copy, FolderUp, Loader2, RotateCcw, Square, UploadCloud, XCircle } from "lucide-react";
 import { useCallback, useEffect, useRef, useState, type DragEvent } from "react";
 import { ApiError, errorMessage, uploadPhotos } from "@/lib/api";
+import { optimizePhotoForUpload } from "@/lib/image";
 import {
   ACCEPTED_IMAGE_EXTENSIONS,
   ACCEPTED_IMAGE_TYPES,
@@ -147,9 +148,12 @@ export function UploadPanel({ eventId, disabled, onUploaded }: {
     if (created || restored) onUploaded();
   }, [eventId, onUploaded, patch, toast]);
 
-  function addFiles(list: FileList | File[] | null) {
+  async function addFiles(list: FileList | File[] | null) {
     if (!list || disabled) return;
-    const added: UploadItem[] = Array.from(list).map((file) => {
+    const rawFiles = Array.from(list);
+    // Optimize photos larger than 3.5MB so they never exceed Vercel's 4.5MB payload limit
+    const optimizedFiles = await Promise.all(rawFiles.map((file) => optimizePhotoForUpload(file)));
+    const added: UploadItem[] = optimizedFiles.map((file) => {
       const problem = preValidate(file);
       return { id: nextId++, file, status: problem ? "rejected" : "queued", progress: 0, message: problem ?? undefined };
     });

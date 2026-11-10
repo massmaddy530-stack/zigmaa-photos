@@ -40,6 +40,50 @@ export async function normalizeImage(file: Blob): Promise<Blob> {
   }
 }
 
+/**
+ * Optimizes an image file for uploading through serverless/Vercel proxies:
+ * If the file exceeds maxMb (e.g. 3.5 MB), resizes it down to maxSide (2560px) JPEG at 0.88 quality.
+ * Files <= maxMb that are already JPEG, PNG or WebP are preserved bit-for-bit.
+ */
+export async function optimizePhotoForUpload(
+  file: File,
+  maxMb = 3.5,
+  maxSide = 2560,
+  quality = 0.88,
+): Promise<File> {
+  if (
+    file.size <= maxMb * 1024 * 1024 &&
+    (file.type === "image/jpeg" || file.type === "image/png" || file.type === "image/webp")
+  ) {
+    return file;
+  }
+  if (typeof window === "undefined" || !("createImageBitmap" in window)) {
+    return file;
+  }
+  try {
+    const bitmap = await createImageBitmap(file, { imageOrientation: "from-image" });
+    try {
+      const scale = Math.min(1, maxSide / Math.max(bitmap.width, bitmap.height));
+      const w = Math.max(1, Math.round(bitmap.width * scale));
+      const h = Math.max(1, Math.round(bitmap.height * scale));
+      const canvas = document.createElement("canvas");
+      canvas.width = w;
+      canvas.height = h;
+      const ctx = canvas.getContext("2d");
+      if (!ctx) return file;
+      ctx.drawImage(bitmap, 0, 0, w, h);
+      const blob = await new Promise<Blob | null>((resolve) => canvas.toBlob(resolve, "image/jpeg", quality));
+      if (!blob || blob.size >= file.size) return file;
+      const baseName = file.name.replace(/\.[^/.]+$/, "");
+      return new File([blob], `${baseName}.jpg`, { type: "image/jpeg", lastModified: file.lastModified });
+    } finally {
+      bitmap.close();
+    }
+  } catch {
+    return file;
+  }
+}
+
 /** Grab the current camera frame as a JPEG (un-mirrored, bounded size). */
 export async function captureVideoFrame(video: HTMLVideoElement): Promise<Blob> {
   const { w, h } = fit(video.videoWidth, video.videoHeight);

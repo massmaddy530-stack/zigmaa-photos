@@ -162,10 +162,31 @@ class Settings(BaseSettings):
             if bucket:
                 data.setdefault("r2_bucket", bucket)
                 data.setdefault("r2_bucket_name", bucket)
+                has_key = data.get("r2_access_key_id") or data.get("R2_ACCESS_KEY_ID")
+                backend = data.get("storage_backend") or data.get("STORAGE_BACKEND")
+                if has_key and not backend:
+                    data["storage_backend"] = "r2"
             allowed = data.get("allowed_origins") or data.get("ALLOWED_ORIGINS")
             if allowed and "cors_origins" not in data and "CORS_ORIGINS" not in data:
                 data["cors_origins"] = allowed
         return data
+
+    @field_validator("r2_account_id", mode="before")
+    @classmethod
+    def _strip_account_id(cls, v: object) -> object:
+        if isinstance(v, str):
+            return v.strip().strip('"').strip("'")
+        return v
+
+    @field_validator("r2_public_url", mode="before")
+    @classmethod
+    def _sanitize_r2_public_url(cls, v: object) -> object:
+        if isinstance(v, str) and v.strip():
+            url = v.strip().rstrip("/").strip('"').strip("'")
+            if not url.startswith("http://") and not url.startswith("https://"):
+                url = f"https://{url}"
+            return url
+        return v
 
     @field_validator("database_url")
     @classmethod
@@ -190,9 +211,17 @@ class Settings(BaseSettings):
     @property
     def r2_endpoint(self) -> str | None:
         if self.r2_endpoint_url:
-            return self.r2_endpoint_url
+            url = self.r2_endpoint_url.strip().strip('"').strip("'")
+            if not url.startswith("http://") and not url.startswith("https://"):
+                url = f"https://{url}"
+            return url.rstrip("/")
         if self.r2_account_id:
-            return f"https://{self.r2_account_id}.r2.cloudflarestorage.com"
+            acct = self.r2_account_id.strip().strip('"').strip("'")
+            if acct.startswith("http://") or acct.startswith("https://"):
+                return acct.rstrip("/")
+            if ".r2.cloudflarestorage.com" in acct:
+                return f"https://{acct.rstrip('/')}"
+            return f"https://{acct}.r2.cloudflarestorage.com"
         return None
 
     @property

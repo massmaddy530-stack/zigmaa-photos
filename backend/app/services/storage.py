@@ -338,8 +338,12 @@ def set_storage(storage: Storage | None) -> None:
 @lru_cache
 def _build() -> Storage:
     s = get_settings()
-    if s.storage_backend == "r2":
-        return R2Storage(s)
+    has_r2 = bool((s.r2_bucket or s.r2_bucket_name) and s.r2_access_key_id and s.r2_secret_access_key)
+    if s.storage_backend == "r2" or (s.storage_backend == "local" and has_r2):
+        try:
+            return R2Storage(s)
+        except Exception as e:
+            logger.warning("Failed to initialize R2 storage, falling back to local: %s", e)
     if s.storage_backend == "supabase":
         return SupabaseStorage(s)
     return LocalStorage(s.local_storage_dir, s.public_base_url, s.signing_secret.get_secret_value(),

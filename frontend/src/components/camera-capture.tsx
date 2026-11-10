@@ -6,6 +6,7 @@ import { usePathname } from "next/navigation";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { ACCEPTED_IMAGE_TYPES, MAX_UPLOAD_MB } from "@/lib/config";
 import { cn, formatBytes, formatNumber } from "@/lib/format";
+import { optimizePhotoForUpload } from "@/lib/image";
 import { CaptureBuffer, UploadQueue, type PendingCapture, type QueueItem, type QueueItemStatus, type QueueSnapshot } from "@/lib/upload-queue";
 import { LiveCamera, liveCameraSupported } from "./live-camera";
 import { Button, buttonClass } from "./ui/button";
@@ -83,21 +84,25 @@ export function CameraCapture({ eventId, disabled }: { eventId: string; disabled
     return () => window.removeEventListener("beforeunload", warn);
   }, [notSafe]);
 
-  const onCapture = useCallback((file: File) => {
+  const onCapture = useCallback(async (file: File) => {
     const buffer = bufferRef.current;
     if (!buffer) return;
-    if (buffer.push(file) === null) {
+    const readyFile = await optimizePhotoForUpload(file);
+    if (buffer.push(readyFile) === null) {
       // The shutter is disabled while full, so this only happens in a race; keep the photo rather than drop it.
-      buffer.push(file, { bypassLimit: true });
+      buffer.push(readyFile, { bypassLimit: true });
     }
   }, []);
 
   const onCameraError = useCallback((message: string) => toast.error("Camera problem", message), [toast]);
 
-  function addPicked(list: FileList | null) {
+  async function addPicked(list: FileList | null) {
     const buffer = bufferRef.current;
     if (!list || !buffer || disabled) return;
-    for (const file of Array.from(list)) buffer.push(file, { bypassLimit: true }); // already on disk, not in memory
+    for (const file of Array.from(list)) {
+      const readyFile = await optimizePhotoForUpload(file);
+      buffer.push(readyFile, { bypassLimit: true }); // already on disk, not in memory
+    }
   }
 
   if (initError) {

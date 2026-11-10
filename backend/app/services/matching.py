@@ -175,9 +175,23 @@ async def serialize_matches(session: AsyncSession, event_id: uuid.UUID, results:
             p = photos.get(pid)
             if p is None:
                 continue
-            thumb = getattr(p, "r2_thumbnail_url", None) or (storage.signed_url(p.thumbnail_key) if p.thumbnail_key else None)
-            prev = getattr(p, "r2_preview_url", None) or (storage.signed_url(p.preview_key) if p.preview_key else None)
-            orig = getattr(p, "r2_original_url", None) or storage.signed_url(p.original_key)
+            thumb = getattr(p, "r2_thumbnail_url", None)
+            if thumb and "localhost" in thumb:
+                thumb = None
+            if not thumb and p.thumbnail_key:
+                thumb = storage.signed_url(p.thumbnail_key)
+
+            prev = getattr(p, "r2_preview_url", None)
+            if prev and "localhost" in prev:
+                prev = None
+            if not prev and p.preview_key:
+                prev = storage.signed_url(p.preview_key)
+
+            orig = getattr(p, "r2_original_url", None)
+            if orig and "localhost" in orig:
+                orig = None
+            if not orig and p.original_key:
+                orig = storage.signed_url(p.original_key)
             items.append(MatchItem(
                 photo_id=pid, similarity=round(sim, 4), width=p.width, height=p.height,
                 thumbnail_url=thumb,

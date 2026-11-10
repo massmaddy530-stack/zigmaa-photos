@@ -159,9 +159,15 @@ async def lifespan(app: FastAPI):
                             r2_preview_url VARCHAR(1000),
                             r2_thumbnail_url VARCHAR(1000),
                             r2_original_url VARCHAR(1000),
-                            created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP NOT NULL
+                            created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP NOT NULL,
+                            updated_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP NOT NULL
                         )
                     """))
+                    await session.execute(text("ALTER TABLE event_photos ADD COLUMN IF NOT EXISTS created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP NOT NULL"))
+                    await session.execute(text("ALTER TABLE event_photos ADD COLUMN IF NOT EXISTS updated_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP NOT NULL"))
+                    await session.execute(text("ALTER TABLE event_photos ADD COLUMN IF NOT EXISTS r2_preview_url VARCHAR(1000)"))
+                    await session.execute(text("ALTER TABLE event_photos ADD COLUMN IF NOT EXISTS r2_thumbnail_url VARCHAR(1000)"))
+                    await session.execute(text("ALTER TABLE event_photos ADD COLUMN IF NOT EXISTS r2_original_url VARCHAR(1000)"))
                     await session.execute(text("ALTER TABLE events ADD COLUMN IF NOT EXISTS title VARCHAR(200)"))
                     await session.execute(text("ALTER TABLE photos ADD COLUMN IF NOT EXISTS r2_preview_url VARCHAR(1000)"))
                     await session.execute(text("ALTER TABLE photos ADD COLUMN IF NOT EXISTS r2_thumbnail_url VARCHAR(1000)"))
@@ -171,6 +177,14 @@ async def lifespan(app: FastAPI):
                 except Exception as e:
                     await session.rollback()
                     logger.warning("Error initializing event_photos / events.title / photos.r2_*: %s", e)
+
+            # Ensure all Base tables exist
+            try:
+                from app.models import Base
+                async with session.bind.begin() as conn:
+                    await conn.run_sync(Base.metadata.create_all)
+            except Exception as e:
+                logger.warning("Base.metadata.create_all: %s", e)
     except Exception as exc:
         logger.warning("Schema check during startup failed: %s", exc)
 

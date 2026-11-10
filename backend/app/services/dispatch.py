@@ -25,22 +25,32 @@ def _thread_job(photo_id: uuid.UUID) -> None:
 
     settings = get_settings()
     max_attempts = settings.task_max_retries + 1
+    last_err: str | None = None
     for attempt in range(1, max_attempts + 1):
         try:
             asyncio.run(run_index_isolated(photo_id, attempt, max_attempts, None))
             return
-        except TransientProcessingError:
-            time.sleep(settings.task_retry_backoff_s * (2 ** (attempt - 1)))
-        except Exception:
-            logger.exception("Background indexing crashed for photo %s", photo_id)
+        except TransientProcessingError as exc:
+            last_err = str(exc)
+            time.sleep(min(2.0 * (attempt), 8.0))
+        except Exception as exc:
+            logger.exception("Background indexing crashed for photo %s: %s", photo_id, exc)
             try:
                 asyncio.run(mark_photo_failed_safe(
                     photo_id,
-                    f"Processing crashed unexpectedly on attempt {attempt}; retry to reprocess",
+                    f"Processing error on attempt {attempt}: {type(exc).__name__}: {exc}",
                 ))
             except Exception:  # noqa: BLE001
                 logger.error("Failed recovery update after crash for photo %s", photo_id)
             return
+
+    try:
+        asyncio.run(mark_photo_failed_safe(
+            photo_id,
+            f"Processing failed after {max_attempts} attempts: {last_err or 'unknown error'}",
+        ))
+    except Exception:
+        pass
 
 
 async def enqueue_index(photo_ids: list[uuid.UUID]) -> None:

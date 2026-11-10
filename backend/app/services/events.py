@@ -97,12 +97,16 @@ def event_out(event: Event, storage: Storage, counts: PhotoCounts | None = None)
 
 def photo_out(photo: Photo, storage: Storage, *, with_preview: bool = True) -> PhotoOut:
     thumb = getattr(photo, "r2_thumbnail_url", None)
+    if thumb and "localhost" in thumb:
+        thumb = None
     if not thumb and photo.thumbnail_key:
         thumb = storage.signed_url(photo.thumbnail_key)
 
     prev = None
     if with_preview:
         prev = getattr(photo, "r2_preview_url", None)
+        if prev and "localhost" in prev:
+            prev = None
         if not prev and photo.preview_key:
             prev = storage.signed_url(photo.preview_key)
 

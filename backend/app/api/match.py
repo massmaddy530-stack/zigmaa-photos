@@ -222,9 +222,13 @@ async def _process_match_selfie(
 
     if session.bind.dialect.name == "postgresql":
         query = text("""
-            SELECT DISTINCT p.id, p.r2_preview_url, p.r2_thumbnail_url, p.r2_original_url
+            SELECT DISTINCT p.id,
+                   COALESCE(p.r2_preview_url, ep.r2_preview_url) AS r2_preview_url,
+                   COALESCE(p.r2_thumbnail_url, ep.r2_thumbnail_url) AS r2_thumbnail_url,
+                   COALESCE(p.r2_original_url, ep.r2_original_url) AS r2_original_url
             FROM face_embeddings fe
-            JOIN event_photos p ON p.id = fe.photo_id
+            JOIN photos p ON p.id = fe.photo_id
+            LEFT JOIN event_photos ep ON ep.id = fe.photo_id
             WHERE fe.event_id = :event_id
               AND (fe.embedding <=> CAST(:selfie_embedding AS vector)) < 0.48
             ORDER BY (fe.embedding <=> CAST(:selfie_embedding AS vector)) ASC
@@ -237,10 +241,14 @@ async def _process_match_selfie(
             alt_query = text("""
                 SELECT p.id, p.r2_preview_url, p.r2_thumbnail_url, p.r2_original_url
                 FROM (
-                    SELECT DISTINCT ON (p.id) p.id, p.r2_preview_url, p.r2_thumbnail_url, p.r2_original_url,
+                    SELECT DISTINCT ON (p.id) p.id,
+                           COALESCE(p.r2_preview_url, ep.r2_preview_url) AS r2_preview_url,
+                           COALESCE(p.r2_thumbnail_url, ep.r2_thumbnail_url) AS r2_thumbnail_url,
+                           COALESCE(p.r2_original_url, ep.r2_original_url) AS r2_original_url,
                            (fe.embedding <=> CAST(:selfie_embedding AS vector)) AS dist
                     FROM face_embeddings fe
-                    JOIN event_photos p ON p.id = fe.photo_id
+                    JOIN photos p ON p.id = fe.photo_id
+                    LEFT JOIN event_photos ep ON ep.id = fe.photo_id
                     WHERE fe.event_id = :event_id
                       AND (fe.embedding <=> CAST(:selfie_embedding AS vector)) < 0.48
                     ORDER BY p.id, (fe.embedding <=> CAST(:selfie_embedding AS vector)) ASC
@@ -251,16 +259,18 @@ async def _process_match_selfie(
             res = await session.execute(alt_query, {"event_id": event_id, "selfie_embedding": emb_str})
             rows = res.fetchall()
     else:
-        from app.models import EventPhoto, FaceEmbedding
+        from sqlalchemy import func
+        from app.models import EventPhoto, FaceEmbedding, Photo
         stmt = (
             select(
-                EventPhoto.id,
-                EventPhoto.r2_preview_url,
-                EventPhoto.r2_thumbnail_url,
-                EventPhoto.r2_original_url,
+                Photo.id,
+                func.coalesce(Photo.r2_preview_url, EventPhoto.r2_preview_url),
+                func.coalesce(Photo.r2_thumbnail_url, EventPhoto.r2_thumbnail_url),
+                func.coalesce(Photo.r2_original_url, EventPhoto.r2_original_url),
                 FaceEmbedding.embedding,
             )
-            .join(FaceEmbedding, FaceEmbedding.photo_id == EventPhoto.id)
+            .join(FaceEmbedding, FaceEmbedding.photo_id == Photo.id)
+            .outerjoin(EventPhoto, EventPhoto.id == Photo.id)
             .where(FaceEmbedding.event_id == event_id)
         )
         res = await session.execute(stmt)

@@ -127,7 +127,7 @@ async def index_photo(
             error, transient = "Out of memory while processing image", True
         except Exception as exc:  # unexpected: record, do not retry blindly
             logger.exception("Unexpected failure processing photo %s", photo_id)
-            error = f"Processing failed: {type(exc).__name__}"
+            error = f"Processing failed: {type(exc).__name__}: {exc}"
 
         duration = int((time.perf_counter() - started) * 1000)
         try:
@@ -162,24 +162,30 @@ async def index_photo(
                 photo.r2_preview_url = prev_url
                 photo.r2_original_url = orig_url
 
-                ev_photo = await session.get(EventPhoto, photo.id)
-                if ev_photo is None:
-                    session.add(EventPhoto(
-                        id=photo.id,
-                        event_id=photo.event_id,
-                        r2_preview_url=prev_url,
-                        r2_thumbnail_url=thumb_url,
-                        r2_original_url=orig_url,
-                    ))
-                else:
-                    ev_photo.r2_preview_url = prev_url
-                    ev_photo.r2_thumbnail_url = thumb_url
-                    ev_photo.r2_original_url = orig_url
+                try:
+                    ev_photo = await session.get(EventPhoto, photo.id)
+                    if ev_photo is None:
+                        session.add(EventPhoto(
+                            id=photo.id,
+                            event_id=photo.event_id,
+                            r2_preview_url=prev_url,
+                            r2_thumbnail_url=thumb_url,
+                            r2_original_url=orig_url,
+                        ))
+                    else:
+                        ev_photo.r2_preview_url = prev_url
+                        ev_photo.r2_thumbnail_url = thumb_url
+                        ev_photo.r2_original_url = orig_url
+                except Exception as ev_err:
+                    logger.warning("EventPhoto sync failed (non-fatal): %s", ev_err)
 
                 photo.face_count = len(result.faces)
                 photo.status = PhotoStatus.indexed
                 photo.processed_at = utcnow()
                 job.status = JobStatus.succeeded
+                job.finished_at = utcnow()
+                job.duration_ms = duration
+                await session.commit()
             else:
                 will_retry = transient and attempt < max_attempts
                 photo.status = PhotoStatus.pending if will_retry else PhotoStatus.failed
@@ -187,12 +193,17 @@ async def index_photo(
                                        if will_retry else error)
                 job.status = JobStatus.failed
                 job.error_message = error
-            job.finished_at = utcnow()
-            job.duration_ms = duration
-            await session.commit()
+                job.finished_at = utcnow()
+                job.duration_ms = duration
+                await session.commit()
+                if will_retry:
+                    raise TransientProcessingError(error or "transient failure")
         except (OperationalError, DBAPIError) as exc:
             await session.rollback()
-            logger.error("Database error saving results for photo %s: %s", photo_id, type(exc).__name__)
+            logger.exception("Database error saving results for photo %s: %s", photo_id, exc)
+            if attempt < max_attempts:
+                raise TransientProcessingError(f"database error: {exc}") from exc
+            raise
             if attempt < max_attempts:
                 raise TransientProcessingError("database error") from exc
             raise
