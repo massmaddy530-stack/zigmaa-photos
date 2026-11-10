@@ -132,23 +132,23 @@ async function applyWatermark(blob: Blob): Promise<Blob> {
         // Draw the full resolution original photo
         ctx.drawImage(photoImg, 0, 0, width, height);
 
-        // Load the translucent MADX photography watermark (Image 2 style)
+        // Load the translucent uncropped MADX photography watermark (round logo on top of text)
         const logo = new Image();
         logo.crossOrigin = "anonymous";
         logo.onload = () => {
           try {
-            // Horizontal watermark size: ~24% to 28% width of the photo (min 200px, max 720px)
-            const targetWidth = Math.max(200, Math.min(width * 0.26, 720));
-            const aspect = (logo.naturalWidth || 1455) / (logo.naturalHeight || 320);
+            // Watermark size: proportional to the photo (approx 18% to 22% width, min 160px, max 540px)
+            const targetWidth = Math.max(160, Math.min(width * 0.20, 540));
+            const aspect = (logo.naturalWidth || 736) / (logo.naturalHeight || 570);
             const targetHeight = targetWidth / aspect;
 
-            // Position: right side middle (centered vertically on right edge with margin)
-            const margin = Math.max(20, Math.round(width * 0.03));
+            // Position: right side, just below middle (between middle and bottom)
+            const margin = Math.max(20, Math.round(width * 0.035));
             const x = width - targetWidth - margin;
-            const y = Math.round((height - targetHeight) / 2);
+            // 0.68 positions it below middle, not most bottom (middle of middle and bottom)
+            const y = Math.round((height - targetHeight) * 0.68);
 
             ctx.save();
-            ctx.globalAlpha = 0.90;
             ctx.drawImage(logo, x, y, targetWidth, targetHeight);
             ctx.restore();
 
