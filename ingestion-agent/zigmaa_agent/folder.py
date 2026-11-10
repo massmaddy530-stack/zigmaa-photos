@@ -298,9 +298,27 @@ class FolderSource:
             self.stats.skipped_duplicate += 1
             logger.info("skipped %s: identical to a photo already taken from this folder", path.name)
             return None
+
+        # Optimize photos > 3.5 MB to avoid Vercel 4.5 MB payload limits (fast upload, keeps original untouched on disk)
+        upload_data = data
+        upload_suffix = suffix
+        if len(data) > 3_500_000:
+            try:
+                with Image.open(io.BytesIO(data)) as im:
+                    im.thumbnail((2560, 2560), Image.Resampling.LANCZOS)
+                    out = io.BytesIO()
+                    if im.mode in ("RGBA", "P"):
+                        im = im.convert("RGB")
+                    im.save(out, format="JPEG", quality=88, optimize=True)
+                    upload_data = out.getvalue()
+                    upload_suffix = ".jpg"
+                    logger.info("Optimized %s: %.1f MB -> %.1f MB for fast sync", path.name, len(data) / (1024*1024), len(upload_data) / (1024*1024))
+            except Exception as opt_err:
+                logger.debug("Photo optimization skipped for %s: %s", path.name, opt_err)
+
         # Spool first, then record: a crash in between can at worst produce a copy the server de-duplicates,
         # never a lost photo.
-        still = self.spool.save(data, self.name, mock=False, suffix=suffix, label=path.stem)
+        still = self.spool.save(upload_data, self.name, mock=False, suffix=upload_suffix, label=path.stem)
         self._hashes.add(digest)
         self._decide(key, path, size, mtime_ns, digest, "spooled")
         self.stats.files_spooled += 1

@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import logging
 import os
+import re
 import socket
 import sys
 import threading
@@ -22,6 +23,36 @@ from zigmaa_agent.agent import Agent
 from zigmaa_agent.config import load_config
 
 logger = logging.getLogger("zigmaa_agent.ftp_sync")
+
+
+def resolve_event_id(raw_input: str, api_base: str) -> str:
+    """Extract UUID from raw input or resolve from guest slug."""
+    raw = raw_input.strip()
+    # 1. Direct UUID match (36 chars)
+    uuid_match = re.search(r"[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}", raw, re.I)
+    if uuid_match:
+        return uuid_match.group(0)
+
+    # 2. Guest URL or slug
+    slug_match = re.search(r"/e/([A-Za-z0-9_-]+)", raw)
+    slug = slug_match.group(1) if slug_match else raw.strip("/").split("/")[-1]
+    if "dashboard" in raw:
+        return raw
+
+    # Try resolving via public events resolve API
+    try:
+        import httpx
+        url = f"{api_base.rstrip('/')}/api/v1/public/events/{slug}/resolve"
+        resp = httpx.get(url, timeout=8)
+        if resp.status_code == 200:
+            data = resp.json()
+            if "id" in data:
+                logger.info("Resolved event '%s' -> %s", data.get("name", slug), data["id"])
+                return data["id"]
+    except Exception as e:
+        logger.debug("Could not resolve slug '%s': %s", slug, e)
+
+    return raw
 
 
 def get_local_ip() -> str:
@@ -91,10 +122,25 @@ def main():
         datefmt="%H:%M:%S",
     )
 
+    api_url = os.environ.get("API_BASE_URL", "https://zigmaa-photos.vercel.app")
+    raw_ev = os.environ.get("EVENT_ID", "")
+    if raw_ev:
+        resolved_ev = resolve_event_id(raw_ev, api_url)
+        os.environ["EVENT_ID"] = resolved_ev
+
     try:
         cfg = load_config()
     except Exception as e:
         logger.error("Configuration error: %s", e)
+        if "/e/" in raw_ev or (raw_ev and len(raw_ev) < 25):
+            print("\n" + "!" * 65)
+            print("  [HINT] You entered the GUEST QR link (/e/...)")
+            print("  Please enter the DASHBOARD event link instead:")
+            print("  1. Go to: https://zigmaa-photos.vercel.app/dashboard/events")
+            print("  2. Click on your event")
+            print("  3. Copy the URL from your browser address bar:")
+            print("     https://zigmaa-photos.vercel.app/dashboard/events/<UUID>")
+            print("!" * 65 + "\n")
         sys.exit(1)
 
     watch_folder = cfg.watch_folder or Path("C:/EventPhotos")
@@ -115,3 +161,4 @@ def main():
 
 if __name__ == "__main__":
     main()
+

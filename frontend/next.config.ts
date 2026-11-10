@@ -25,6 +25,8 @@ const nextConfig: NextConfig = {
   async rewrites() {
     return [
       { source: "/api/v1/public/:path*", destination: `${backend}/api/v1/public/:path*` },
+      { source: "/api/v1/events/:id/photos", destination: `${backend}/api/v1/events/:id/photos` },
+      { source: "/api/v1/events/:id/photos/:path*", destination: `${backend}/api/v1/events/:id/photos/:path*` },
       { source: "/media/:path*", destination: `${backend}/media/:path*` },
       // No /health rewrite: the dashboard reads health through the signed-in /api/admin/health route.
     ];

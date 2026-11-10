@@ -24,9 +24,8 @@ if "%EV_INPUT%"=="" (
     exit /b 1
 )
 
-:: Extract UUID if user pasted a full URL like https://.../dashboard/events/<uuid>
+:: Pass the raw input directly to Python so it can auto-resolve UUID or slug
 set EVENT_ID=%EV_INPUT%
-for %%A in (%EV_INPUT:/= %) do set EVENT_ID=%%A
 
 set /p FOLDER_INPUT="Enter Folder to watch (Press Enter for C:\EventPhotos): "
 if "%FOLDER_INPUT%"=="" set FOLDER_INPUT=C:\EventPhotos
@@ -36,7 +35,7 @@ if not exist "%FOLDER_INPUT%" (
     mkdir "%FOLDER_INPUT%" 2>nul
 )
 
-set API_URL=https://zigmaa-photos.onrender.com
+set API_URL=https://zigmaa-photos.vercel.app
 set INGEST_KEY=HbwzKQUT3Jeg63DZz6xwsc9NkJ8SAOSH9KOP_e8AJIk
 
 set CAMERA_SOURCE=folder

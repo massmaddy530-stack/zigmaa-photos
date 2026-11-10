@@ -134,6 +134,12 @@ async def public_event(slug: str, session: SessionDep, storage: StorageDep) -> P
     )
 
 
+@public_router.get("/{slug}/resolve")
+async def resolve_public_event(slug: str, session: SessionDep) -> dict[str, str]:
+    event = await get_public_event_or_404(session, slug, allow_expired=True)
+    return {"id": str(event.id), "slug": event.slug, "name": event.name}
+
+
 @public_router.get("/{slug}/qr.svg", response_class=Response, responses={200: {"content": {"image/svg+xml": {}}}})
 async def public_event_qr(slug: str, session: SessionDep) -> Response:
     # The QR only encodes the public link, so it is served even after expiry (the dashboard still shows it);
