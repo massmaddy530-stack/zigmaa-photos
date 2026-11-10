@@ -1,41 +1,69 @@
 import type { Metadata } from "next";
 import { Suspense } from "react";
-import { Logo } from "@/components/app-shell";
 import { LoginForm } from "./login-form";
 
-export const metadata: Metadata = { title: { absolute: "Sign in · MADX Photos" }, robots: { index: false } };
+export const metadata: Metadata = {
+  title: { absolute: "Sign in · MADX Moments" },
+  robots: { index: false },
+};
 
 export default async function LoginPage() {
   return (
-    <div className="grid min-h-dvh lg:grid-cols-2">
-      <div className="flex flex-col px-6 py-8 sm:px-12 lg:py-6">
-        <Logo />
-        <div className="mx-auto flex w-full max-w-sm flex-1 flex-col justify-center py-12 lg:py-4">
-          <h1 className="font-display text-3xl font-medium">Sign in to your studio</h1>
-          <span className="mt-3 block h-px w-12 bg-brand-400 lg:mt-2" aria-hidden />
-          <p className="mt-2 text-sm text-muted">Sign in with your admin username and password.</p>
-          <div className="mt-6">
+    <div className="grid min-h-dvh bg-[#f8f4ec] lg:grid-cols-2">
+      {/* Left Column: Form Card with Brand Title */}
+      <div className="flex flex-col justify-center px-4 py-8 sm:px-10 lg:px-12 xl:px-16">
+        <div className="mx-auto w-full max-w-md rounded-3xl border border-[#e8dfd1] bg-[#faf6ee]/95 p-6 shadow-xl sm:p-10 backdrop-blur-sm">
+          {/* Header Branding: Medallion + MADX MOMENTS */}
+          <div className="mb-6 flex items-center gap-4 border-b border-[#e8dfd1]/80 pb-5">
+            <img
+              src="/login-medallion.png"
+              alt="MADX Emblem"
+              className="h-12 w-12 shrink-0 rounded-full object-contain drop-shadow"
+            />
+            <div className="h-9 w-px bg-[#d5cbbe]" aria-hidden />
+            <div className="min-w-0">
+              <div className="font-display text-base font-semibold tracking-[0.2em] text-[#241d16] sm:text-lg">
+                MADX MOMENTS
+              </div>
+              <div className="font-display text-[11px] italic tracking-wide text-[#7d7061] sm:text-xs">
+                Capturing Moments, Creating Memories
+              </div>
+            </div>
+          </div>
+
+          {/* Heading & Subtitle */}
+          <div className="text-center">
+            <h1 className="font-display text-2xl font-semibold tracking-tight text-[#1c1610] sm:text-3xl">
+              Sign in to your studio
+            </h1>
+            <p className="mt-1.5 text-xs text-[#786b5b] sm:text-sm">
+              Sign in with your admin username and password.
+            </p>
+
+            {/* Golden Diamond Divider */}
+            <div className="my-5 flex items-center justify-center gap-3">
+              <span className="h-px w-14 bg-gradient-to-r from-transparent to-[#cba34f]" aria-hidden />
+              <span className="text-[10px] text-[#b88c30]" aria-hidden>◆</span>
+              <span className="h-px w-14 bg-gradient-to-l from-transparent to-[#cba34f]" aria-hidden />
+            </div>
+          </div>
+
+          {/* Form */}
+          <div className="mt-4">
             <Suspense>
               <LoginForm />
             </Suspense>
           </div>
         </div>
       </div>
-      <div className="relative hidden overflow-hidden bg-brand-950 lg:block">
-        <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_top_right,_var(--color-brand-500)_0%,_transparent_55%),radial-gradient(ellipse_at_bottom_left,_var(--color-brand-700)_0%,_transparent_50%)] opacity-70" />
-        <div className="relative flex h-full flex-col justify-end p-10 text-white xl:p-12">
-          <div className="mb-8 grid w-full max-w-[max(8rem,min(28rem,calc(80dvh_-_15rem)))] grid-cols-3 gap-3 opacity-90" aria-hidden>
-            {Array.from({ length: 9 }).map((_, i) => (
-              <div key={i} className="aspect-square rounded-2xl bg-white/10 ring-1 ring-white/15 backdrop-blur-sm" />
-            ))}
-          </div>
-          <p className="font-display text-2xl font-medium leading-snug xl:text-3xl">
-            Every guest, every photo &mdash; delivered in seconds with a single selfie.
-          </p>
-          <p className="mt-2 text-sm text-white/70">
-            Upload event photos, let AI index the faces, and share one QR code.
-          </p>
-        </div>
+
+      {/* Right Column: High-Res Velvet Silk & Gold MADX Photography Hero Image */}
+      <div className="relative hidden h-full w-full overflow-hidden bg-[#180a0a] lg:block">
+        <img
+          src="/login-hero.jpg"
+          alt="MADX Moments — Every Moment Tells a Story"
+          className="h-full w-full object-cover object-left"
+        />
       </div>
     </div>
   );
