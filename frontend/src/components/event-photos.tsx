@@ -22,7 +22,7 @@ export function EventPhotos({ eventId, refreshKey, pollWhileProcessing, onChange
   refreshKey: string;
   pollWhileProcessing: boolean;
   onChanged: () => void;
-  onGoUpload: () => void;
+  onGoUpload?: () => void;
 }) {
   const [status, setStatus] = useState<PhotoStatus | "">("");
   const [faces, setFaces] = useState<"" | "yes" | "no">("");
@@ -79,8 +79,8 @@ export function EventPhotos({ eventId, refreshKey, pollWhileProcessing, onChange
             <EmptyState icon={<Search className="h-5 w-5" />} title="No photos match these filters" />
           ) : (
             <EmptyState icon={<ImageIcon className="h-5 w-5" />} title="No photos yet"
-              description="Upload photos from the shoot. They'll be processed and indexed automatically."
-              action={<Button onClick={onGoUpload} icon={<UploadCloud className="h-4 w-4" />}>Upload photos</Button>} />
+              description="Photos synced from the camera or watch folder will appear here automatically."
+              action={onGoUpload ? <Button onClick={onGoUpload} icon={<UploadCloud className="h-4 w-4" />}>Upload photos</Button> : undefined} />
           )}
         </Card>
       ) : (

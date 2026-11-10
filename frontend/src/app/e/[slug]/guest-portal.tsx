@@ -11,7 +11,6 @@ import {
   RotateCcw,
   ScanFace,
   SearchX,
-  ShieldCheck,
   WifiOff,
 } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
@@ -22,7 +21,7 @@ import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/primitives";
 import { Alert, ErrorState } from "@/components/ui/states";
 import { ApiError, errorMessage, publicApi } from "@/lib/api";
-import { cn, formatDate, formatNumber } from "@/lib/format";
+import { formatDate, formatNumber } from "@/lib/format";
 import { useQuery } from "@/lib/hooks";
 import type { MatchResponse, PublicEventOut } from "@/lib/types";
 
@@ -112,7 +111,6 @@ function Shell({ children }: { children: React.ReactNode }) {
       {children}
       <footer className="mx-auto flex max-w-5xl flex-col items-center gap-2 px-4 pb-10 pt-6 text-center text-xs text-muted">
         <Logo className="scale-90 opacity-80" />
-        <p>Face matching is automated and can make mistakes. Only photos where your face is detected are shown to you.</p>
       </footer>
     </div>
   );
@@ -283,10 +281,7 @@ function Portal({ event, slug }: { event: PublicEventOut; slug: string }) {
                   <input type="checkbox" checked={consent} onChange={(e) => setConsent(e.target.checked)}
                          className="mt-0.5 h-5 w-5 shrink-0 accent-[var(--color-brand-600)]" />
                   <span className="text-sm leading-relaxed text-ink/85">
-                    I agree that my selfie will be used <strong>once</strong> to create a temporary facial template and compare it with
-                    photos from this event. My selfie is <strong>not stored</strong>, and my search results expire after about 15 minutes.
-                    If another person is in my selfie, photos of them may also appear in my results; for only my own photos, I&apos;ll
-                    take the selfie alone.
+                    I agree to use my selfie to find my event photos. Selfies are processed in memory and never stored.
                   </span>
                 </label>
                 <SelfieCapture onCapture={search} disabled={!consent || !event.matching_available} />
@@ -325,16 +320,6 @@ function Portal({ event, slug }: { event: PublicEventOut; slug: string }) {
             )}
           </section>
         )}
-
-        <section className="mt-8 rounded-3xl bg-surface/60 p-5 text-sm text-muted ring-1 ring-line">
-          <p className="flex items-center gap-2 font-semibold text-ink"><ShieldCheck className="h-4 w-4 text-brand-600" />Your privacy</p>
-          <ul className={cn("mt-2 list-disc space-y-1 pl-5")}>
-            <li>Your selfie is processed in memory for this search only and is never saved.</li>
-            <li>You only see photos where your face was detected, never the full gallery.</li>
-            <li>Results and image links expire automatically after a short time.</li>
-            <li>Matching is automated and may miss photos or, rarely, show someone who looks similar. Please check each photo before downloading.</li>
-          </ul>
-        </section>
       </main>
     </Shell>
   );

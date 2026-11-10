@@ -2,27 +2,23 @@
 
 import Link from "next/link";
 import { useParams, usePathname, useRouter, useSearchParams } from "next/navigation";
-import { CalendarDays, Camera, ChevronLeft, ExternalLink, Images, MapPin, ScanSearch, Settings, Share2, UploadCloud } from "lucide-react";
+import { CalendarDays, Camera, ChevronLeft, ExternalLink, Images, MapPin, Settings, Share2 } from "lucide-react";
 import { Suspense, useCallback, useEffect, useState } from "react";
 import { PageHeader } from "@/components/app-shell";
 import { EventPhotos } from "@/components/event-photos";
 import { EventSettings } from "@/components/event-settings";
 import { EventShare } from "@/components/event-share";
-import { FindPerson } from "@/components/find-person";
 import { ProcessingPanel } from "@/components/processing-panel";
 import { EventStatusBadge } from "@/components/status-badges";
 import { Card, Skeleton } from "@/components/ui/primitives";
 import { ErrorState, EmptyState } from "@/components/ui/states";
-import { UploadPanel } from "@/components/upload-panel";
 import { adminApi, ApiError } from "@/lib/api";
 import { cn, formatDate } from "@/lib/format";
 import { useQuery } from "@/lib/hooks";
 
 const TABS = [
   { id: "photos", label: "Photos", icon: Images },
-  { id: "upload", label: "Upload", icon: UploadCloud },
   { id: "share", label: "Share", icon: Share2 },
-  { id: "find", label: "Find a person", icon: ScanSearch },
   { id: "settings", label: "Settings", icon: Settings },
 ] as const;
 type TabId = (typeof TABS)[number]["id"];
@@ -131,11 +127,9 @@ function EventDetailInner() {
       <div role="tabpanel">
         {tab === "photos" && (
           <EventPhotos eventId={id} refreshKey={refreshKey} pollWhileProcessing={false}
-                       onChanged={refreshAll} onGoUpload={() => setTab("upload")} />
+                       onChanged={refreshAll} />
         )}
-        {tab === "upload" && <UploadPanel eventId={id} disabled={ev.status !== "active"} onUploaded={refreshAll} />}
         {tab === "share" && <EventShare event={ev} onChanged={(e) => event.setData(e)} />}
-        {tab === "find" && <FindPerson eventId={id} indexedCount={c?.indexed ?? ev.counts.indexed} />}
         {tab === "settings" && <EventSettings event={ev} onSaved={(e) => { event.setData(e); void status.reload(); }} />}
       </div>
       {processing && <span className="sr-only" aria-live="polite">Photos are being processed</span>}

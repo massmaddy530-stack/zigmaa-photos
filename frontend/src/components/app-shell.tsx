@@ -14,19 +14,13 @@ const NAV = [
 ];
 
 /** `admin` shows the admin dashboard's brand (Everframe); public pages keep the default name. */
-export function Logo({ className, admin }: { className?: string; admin?: boolean }) {
+export function Logo({ className }: { className?: string; admin?: boolean }) {
   return (
     <span className={cn("flex items-center gap-2.5", className)}>
       <span className="grid h-8 w-8 place-items-center rounded-full bg-ink text-brand-300 ring-1 ring-brand-400/60 shadow-sm">
         <ScanFace className="h-[17px] w-[17px]" aria-hidden />
       </span>
-      {admin ? (
-        <span className="font-display text-[19px] font-medium leading-none text-ink">Everframe</span>
-      ) : (
-        <span className="font-display text-[19px] font-medium leading-none text-ink">
-          ZigMaa<span className="text-brand-700"> Photos</span>
-        </span>
-      )}
+      <span className="font-display text-[19px] font-medium leading-none text-ink">Everframe</span>
     </span>
   );
 }
@@ -81,13 +75,7 @@ export function AppShell({ children }: { children: ReactNode }) {
         New event
       </ButtonLink>
       <NavLinks onNavigate={onNavigate} />
-      <div className="mt-auto space-y-3">
-        <div className="rounded-2xl border border-brand-200/70 bg-brand-50/60 p-4">
-          <p className="font-display text-base font-medium text-ink">Share with guests</p>
-          <p className="mt-1 text-xs leading-relaxed text-muted">
-            Open an event and use its QR code. Guests find their photos with a selfie — no app or account needed.
-          </p>
-        </div>
+      <div className="mt-auto">
         <SignOut />
       </div>
     </div>

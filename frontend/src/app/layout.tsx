@@ -7,7 +7,7 @@ const geistMono = Geist_Mono({ variable: "--font-geist-mono", subsets: ["latin"]
 const playfair = Playfair_Display({ variable: "--font-playfair", subsets: ["latin"], display: "swap" });
 
 export const metadata: Metadata = {
-  title: { default: "ZigMaa Photos — AI event photo sharing", template: "%s · ZigMaa Photos" },
+  title: { default: "Everframe — AI event photo sharing", template: "%s · Everframe" },
   description: "Deliver every guest their event photos with a selfie.",
 };
 

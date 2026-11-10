@@ -1,9 +1,8 @@
 "use client";
 
-import { Check, Clock, Copy, Download, ExternalLink, Printer, QrCode, RefreshCw, ShieldCheck } from "lucide-react";
+import { Check, Clock, Copy, Download, ExternalLink, Printer, QrCode, RefreshCw } from "lucide-react";
 import { useState } from "react";
 import { adminApi, errorMessage, publicApi } from "@/lib/api";
-import { PUBLIC_API_BASE_URL } from "@/lib/config";
 import { formatDateTime } from "@/lib/format";
 import { expiryState, fromLocalInput, toLocalInput } from "@/lib/link-expiry";
 import type { EventOut } from "@/lib/types";
@@ -12,30 +11,6 @@ import { ConfirmDialog } from "./ui/modal";
 import { Card, CardHeader, Input } from "./ui/primitives";
 import { Alert } from "./ui/states";
 import { useToast } from "./ui/toast";
-
-/** Parses absolute URLs as-is and relative ones (same-origin API) against the current page. */
-function toUrl(url: string): URL {
-  return new URL(url, typeof window !== "undefined" ? window.location.href : undefined);
-}
-
-/** True for addresses a guest's phone on mobile data can't open (localhost, LAN IPs, *.local). */
-function isNonPublicUrl(url: string): boolean {
-  try {
-    const { protocol, hostname: h } = toUrl(url);
-    return protocol !== "https:" || h === "localhost" || h.endsWith(".local") || /^127\./.test(h) || /^10\./.test(h)
-      || /^192\.168\./.test(h) || /^172\.(1[6-9]|2\d|3[01])\./.test(h) || h === "[::1]";
-  } catch {
-    return true;
-  }
-}
-
-function hostOf(url: string): string {
-  try {
-    return toUrl(url).host;
-  } catch {
-    return url;
-  }
-}
 
 export function EventShare({ event, onChanged }: { event: EventOut; onChanged?: (e: EventOut) => void }) {
   const toast = useToast();
@@ -46,7 +21,6 @@ export function EventShare({ event, onChanged }: { event: EventOut; onChanged?: 
   // (new LAN address, domain or replaced code). The backend ignores the extra parameter.
   const qrBase = publicApi.qrUrl(event.slug);
   const qr = `${qrBase}${qrBase.includes("?") ? "&" : "?"}u=${encodeURIComponent(event.public_url)}`;
-  const notPublic = isNonPublicUrl(event.public_url) || isNonPublicUrl(PUBLIC_API_BASE_URL);
   const expiry = expiryState(event.guest_link_expires_at);
   const [expiryInput, setExpiryInput] = useState(() => toLocalInput(event.guest_link_expires_at));
   const [savingExpiry, setSavingExpiry] = useState(false);
@@ -132,13 +106,6 @@ export function EventShare({ event, onChanged }: { event: EventOut; onChanged?: 
               Guests see &ldquo;This link has expired&rdquo;. Set a later expiry or remove it below to re-open the link.
             </Alert>
           )}
-          {notPublic && (
-            <Alert tone="warning" title="Guests' phones can't open this link yet">
-              The link or API uses a local address ({hostOf(event.public_url)}) or plain HTTP. It only works on this
-              computer or your local network, not on guests&apos; mobile data. Deploy the app on public HTTPS and set
-              FRONTEND_BASE_URL / PUBLIC_BASE_URL (backend) and NEXT_PUBLIC_API_BASE_URL (frontend) before printing QR codes.
-            </Alert>
-          )}
           <div className="flex flex-col gap-2 sm:flex-row">
             <Input readOnly value={event.public_url} aria-label="Guest link" onFocus={(e) => e.currentTarget.select()} className="font-mono text-xs" />
             <div className="flex gap-2">
@@ -150,15 +117,6 @@ export function EventShare({ event, onChanged }: { event: EventOut; onChanged?: 
                 <ExternalLink className="h-4 w-4" />Open
               </a>
             </div>
-          </div>
-          <div className="rounded-2xl bg-canvas p-4">
-            <p className="flex items-center gap-2 text-sm font-semibold text-ink"><ShieldCheck className="h-4 w-4 text-brand-600" />How guest access works</p>
-            <ul className="mt-2 list-disc space-y-1 pl-5 text-sm text-muted">
-              <li>The link contains an unguessable event code. There is no public list of events or photos.</li>
-              <li>Guests only ever see photos where <em>their</em> face is detected. They cannot browse the full gallery.</li>
-              <li>Each guest must consent before their selfie is processed. Selfies are processed in memory and not stored.</li>
-              <li>Searches are rate-limited, and image links expire after a few minutes.</li>
-            </ul>
           </div>
           <div className="flex flex-col gap-2 rounded-2xl border border-line p-4 sm:flex-row sm:items-center sm:justify-between">
             <p className="text-sm text-muted">Link shared by mistake? Replace it. The current link and printed QR codes stop working.</p>
