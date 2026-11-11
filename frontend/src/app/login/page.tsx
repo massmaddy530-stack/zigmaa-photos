@@ -13,21 +13,13 @@ export default async function LoginPage() {
       {/* Left Half: Clean Solid Ivory / White */}
       <div className="flex h-full w-full flex-col justify-center px-6 py-6 sm:px-10 lg:px-12 xl:px-16 overflow-hidden">
         <div className="mx-auto w-full max-w-[430px] lg:max-w-[450px]">
-          {/* Header Branding: Medallion + MADX PHOTOS */}
-          <div className="mb-4 flex items-center gap-3.5 border-b border-[#e8dfd1]/80 pb-3 sm:mb-5 sm:pb-3.5">
-            <img
-              src="/login-medallion.png"
-              alt="MADX Emblem"
-              className="h-11 w-11 shrink-0 rounded-full object-contain drop-shadow-md sm:h-12 sm:w-12"
-            />
-            <div className="h-8 w-px bg-[#d5cbbe]" aria-hidden="true" />
-            <div className="min-w-0">
-              <div className="font-display text-base font-semibold tracking-[0.22em] text-[#241d16] sm:text-lg">
-                MADX PHOTOS
-              </div>
-              <div className="font-display text-xs italic tracking-wide text-[#7d7061] sm:text-[13px]">
-                Capturing Moments, Creating Memories
-              </div>
+          {/* Header Branding: Clean MADX PHOTOS Title (No profile photo, no divider line) */}
+          <div className="mb-6 text-center sm:mb-7">
+            <div className="font-display text-xl font-bold tracking-[0.25em] text-[#1c150c] sm:text-2xl">
+              MADX PHOTOS
+            </div>
+            <div className="font-display text-xs italic tracking-wider text-[#7a6c5b] sm:text-[13px] mt-0.5">
+              Capturing Moments, Creating Memories
             </div>
           </div>
 
