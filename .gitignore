@@ -24,3 +24,12 @@ node_modules/
 .next/
 out/
 *.tsbuildinfo
+
+# PyInstaller & Standalone builds
+build/
+dist/
+*.spec
+*.exe
+MADX_Photos_Report.html
+generate_report.py
+
