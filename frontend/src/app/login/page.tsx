@@ -9,12 +9,9 @@ export const metadata: Metadata = {
 
 export default async function LoginPage() {
   return (
-    <div className="grid h-dvh max-h-dvh w-full overflow-hidden bg-[#faf5ed] lg:grid-cols-[46%_54%]">
-      {/* Left Half: Clean Luxury Ivory Half with Subtle Wedding Photo Texture */}
-      <div 
-        className="flex h-full w-full flex-col justify-center px-6 py-6 sm:px-10 lg:px-12 xl:px-16 overflow-hidden bg-cover bg-center bg-no-repeat"
-        style={{ backgroundImage: "url('/login-left-bg.jpg')" }}
-      >
+    <div className="grid h-dvh max-h-dvh w-full overflow-hidden bg-[#fdfbf7] lg:grid-cols-[46%_54%]">
+      {/* Left Half: Clean Solid Ivory / White */}
+      <div className="flex h-full w-full flex-col justify-center px-6 py-6 sm:px-10 lg:px-12 xl:px-16 overflow-hidden">
         <div className="mx-auto w-full max-w-[430px] lg:max-w-[450px]">
           {/* Header Branding: Medallion + MADX PHOTOS */}
           <div className="mb-4 flex items-center gap-3.5 border-b border-[#e8dfd1]/80 pb-3 sm:mb-5 sm:pb-3.5">
@@ -34,7 +31,7 @@ export default async function LoginPage() {
             </div>
           </div>
 
-          {/* Heading & Subtitle - Centered like mockup */}
+          {/* Heading & Subtitle - Centered */}
           <div className="text-center">
             <h1 className="font-display text-3xl font-semibold tracking-tight text-[#1c150c] sm:text-[34px]">
               Sign in to your studio
