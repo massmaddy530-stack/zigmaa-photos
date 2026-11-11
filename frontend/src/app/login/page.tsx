@@ -3,7 +3,7 @@ import { Suspense } from "react";
 import { LoginForm } from "./login-form";
 
 export const metadata: Metadata = {
-  title: { absolute: "Sign in · MADX Moments" },
+  title: { absolute: "Sign in · MADX Photos" },
   robots: { index: false },
 };
 
@@ -13,17 +13,17 @@ export default async function LoginPage() {
       {/* Left Half: Clean White / Ivory Half */}
       <div className="flex h-full w-full flex-col justify-center px-6 py-6 sm:px-10 lg:px-12 xl:px-16 overflow-hidden">
         <div className="mx-auto w-full max-w-[430px] lg:max-w-[450px]">
-          {/* Header Branding: Medallion + MADX MOMENTS */}
+          {/* Header Branding: Medallion + MADX PHOTOS */}
           <div className="mb-4 flex items-center gap-3.5 border-b border-[#e8dfd1]/80 pb-3 sm:mb-5 sm:pb-3.5">
             <img
               src="/login-medallion.png"
               alt="MADX Emblem"
-              className="h-11 w-11 shrink-0 rounded-full object-contain drop-shadow sm:h-12 sm:w-12"
+              className="h-11 w-11 shrink-0 rounded-full object-contain drop-shadow-md sm:h-12 sm:w-12"
             />
             <div className="h-8 w-px bg-[#d5cbbe]" aria-hidden />
             <div className="min-w-0">
               <div className="font-display text-base font-semibold tracking-[0.22em] text-[#241d16] sm:text-lg">
-                MADX MOMENTS
+                MADX PHOTOS
               </div>
               <div className="font-display text-xs italic tracking-wide text-[#7d7061] sm:text-[13px]">
                 Capturing Moments, Creating Memories
@@ -61,7 +61,7 @@ export default async function LoginPage() {
       <div className="relative hidden h-full w-full overflow-hidden bg-[#18080a] lg:block">
         <img
           src="/login-hero.jpg"
-          alt="MADX Moments — Every Moment Tells a Story"
+          alt="MADX Photos — Every Moment Tells a Story"
           className="h-full w-full object-cover object-left"
         />
       </div>
