@@ -28,12 +28,20 @@ function fieldErrorsFrom(err: unknown): FieldErrors {
   return out;
 }
 
-export function EventForm({ initial, submitLabel, onSubmit, footerExtra, withCover = true }: {
+export function EventForm({ initial, submitLabel, onSubmit, footerExtra, withCover = true, onValuesChange }: {
   initial?: Partial<EventOut>;
   submitLabel: string;
   onSubmit: (values: EventFormValues) => Promise<void>;
   footerExtra?: ReactNode;
   withCover?: boolean;
+  onValuesChange?: (values: {
+    name: string;
+    date: string;
+    venue: string;
+    description: string;
+    cover: File | null;
+    preview: string | null;
+  }) => void;
 }) {
   const [name, setName] = useState(initial?.name ?? "");
   const [date, setDate] = useState(initial?.event_date ?? "");
@@ -52,6 +60,10 @@ export function EventForm({ initial, submitLabel, onSubmit, footerExtra, withCov
     setPreview(url);
     return () => URL.revokeObjectURL(url);
   }, [cover]);
+
+  useEffect(() => {
+    onValuesChange?.({ name, date, venue, description, cover, preview });
+  }, [name, date, venue, description, cover, preview, onValuesChange]);
 
   function pickCover(f: File | undefined) {
     if (!f) return;
