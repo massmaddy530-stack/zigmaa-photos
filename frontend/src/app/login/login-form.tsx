@@ -73,7 +73,7 @@ export function LoginForm() {
             autoCapitalize="none"
             spellCheck={false}
             maxLength={128}
-            placeholder="eg : muthu subash"
+            placeholder="Enter your username"
             value={username}
             onChange={(e) => setUsername(e.target.value)}
             className="w-full rounded-2xl border border-[#d8ccba] bg-white py-3 sm:py-3.5 pl-11 pr-4 text-sm sm:text-base text-[#261f17] placeholder:text-[#9e8f7e] shadow-[0_2px_8px_rgba(0,0,0,0.03)] transition-all focus:border-[#c59b27] focus:bg-white focus:outline-none focus:ring-2 focus:ring-[#c59b27]/25"
