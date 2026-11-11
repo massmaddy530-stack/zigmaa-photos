@@ -9,9 +9,12 @@ export const metadata: Metadata = {
 
 export default async function LoginPage() {
   return (
-    <div className="grid h-dvh max-h-dvh w-full overflow-hidden bg-[#fdfbf7] lg:grid-cols-[46%_54%]">
-      {/* Left Half: Clean White / Ivory Half */}
-      <div className="flex h-full w-full flex-col justify-center px-6 py-6 sm:px-10 lg:px-12 xl:px-16 overflow-hidden">
+    <div className="grid h-dvh max-h-dvh w-full overflow-hidden bg-[#faf5ed] lg:grid-cols-[46%_54%]">
+      {/* Left Half: Clean Luxury Ivory Half with Subtle Wedding Photo Texture */}
+      <div 
+        className="flex h-full w-full flex-col justify-center px-6 py-6 sm:px-10 lg:px-12 xl:px-16 overflow-hidden bg-cover bg-center bg-no-repeat"
+        style={{ backgroundImage: "url('/login-left-bg.jpg')" }}
+      >
         <div className="mx-auto w-full max-w-[430px] lg:max-w-[450px]">
           {/* Header Branding: Medallion + MADX PHOTOS */}
           <div className="mb-4 flex items-center gap-3.5 border-b border-[#e8dfd1]/80 pb-3 sm:mb-5 sm:pb-3.5">
@@ -20,7 +23,7 @@ export default async function LoginPage() {
               alt="MADX Emblem"
               className="h-11 w-11 shrink-0 rounded-full object-contain drop-shadow-md sm:h-12 sm:w-12"
             />
-            <div className="h-8 w-px bg-[#d5cbbe]" aria-hidden />
+            <div className="h-8 w-px bg-[#d5cbbe]" aria-hidden="true" />
             <div className="min-w-0">
               <div className="font-display text-base font-semibold tracking-[0.22em] text-[#241d16] sm:text-lg">
                 MADX PHOTOS
@@ -31,20 +34,20 @@ export default async function LoginPage() {
             </div>
           </div>
 
-          {/* Heading & Subtitle */}
-          <div>
-            <h1 className="font-display text-3xl font-medium tracking-tight text-[#1c1610] sm:text-[34px]">
+          {/* Heading & Subtitle - Centered like mockup */}
+          <div className="text-center">
+            <h1 className="font-display text-3xl font-semibold tracking-tight text-[#1c150c] sm:text-[34px]">
               Sign in to your studio
             </h1>
-            <p className="mt-1 text-sm text-[#786b5b] sm:text-[15px]">
+            <p className="mt-1 text-sm text-[#7a6c5b] sm:text-[15px]">
               Sign in with your admin username and password.
             </p>
 
             {/* Golden Diamond Divider */}
             <div className="my-4 flex items-center justify-center gap-3.5 sm:my-5">
-              <span className="h-px w-14 bg-gradient-to-r from-transparent to-[#cba34f]" aria-hidden />
-              <span className="text-xs text-[#b88c30]" aria-hidden>◆</span>
-              <span className="h-px w-14 bg-gradient-to-l from-transparent to-[#cba34f]" aria-hidden />
+              <span className="h-px w-16 bg-gradient-to-r from-transparent via-[#d6a847] to-[#b38421]" aria-hidden="true" />
+              <span className="text-xs text-[#b88c30]" aria-hidden="true">◆</span>
+              <span className="h-px w-16 bg-gradient-to-l from-transparent via-[#d6a847] to-[#b38421]" aria-hidden="true" />
             </div>
           </div>
 
