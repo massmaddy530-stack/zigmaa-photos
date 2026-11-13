@@ -18,26 +18,6 @@ import { useToast } from "@/components/ui/toast";
 import { adminApi, errorMessage } from "@/lib/api";
 import type { WatermarkConfig } from "@/lib/image";
 
-const POS_PRESETS = [
-  { id: "top_left", label: "TL", title: "Top Left", x: 5, y: 5 },
-  { id: "top_center", label: "TC", title: "Top Center", x: 50, y: 5 },
-  { id: "top_right", label: "TR", title: "Top Right", x: 95, y: 5 },
-  { id: "center_left", label: "ML", title: "Mid Left", x: 5, y: 50 },
-  { id: "center", label: "C", title: "Center", x: 50, y: 50 },
-  { id: "center_right", label: "MR", title: "Mid Right", x: 95, y: 50 },
-  { id: "bottom_left", label: "BL", title: "Bottom Left", x: 5, y: 95 },
-  { id: "bottom_center", label: "BC", title: "Bottom Center", x: 50, y: 95 },
-  { id: "bottom_right", label: "BR", title: "Bottom Right", x: 95, y: 95 },
-] as const;
-
-const SIZE_PRESETS = [
-  { label: "Small", value: 10 },
-  { label: "Standard", value: 14 },
-  { label: "Medium", value: 20 },
-  { label: "Large", value: 28 },
-  { label: "Full Width", value: 50 },
-];
-
 const COLOR_OPTIONS = [
   { id: "original", label: "Original", bg: "bg-gradient-to-tr from-amber-400 via-rose-400 to-indigo-500" },
   { id: "white", label: "White", bg: "bg-white border border-[#d5cbbe]" },
@@ -68,30 +48,31 @@ export default function NewEventPage() {
     templatePreview: null,
   });
 
-  // Watermark customization state (MADX defaults: right side below middle, 14% size, 40% opacity)
+  // Watermark customization state (MADX defaults: bottom-right corner, 14% size, 40% opacity)
   const [wm, setWm] = useState<WatermarkConfig>({
     imageUrl: null,
-    xPercent: 95,
-    yPercent: 68,
+    xPercent: 88,
+    yPercent: 88,
     sizePercent: 14,
     opacity: 0.40,
     color: "original",
   });
 
-  // Handle clicking on the preview image to position watermark
+  // Handle clicking anywhere on the preview image to accurately place watermark
   function handlePreviewClick(e: React.MouseEvent<HTMLDivElement>) {
     if (!previewRef.current) return;
     const rect = previewRef.current.getBoundingClientRect();
-    const x = Math.max(5, Math.min(95, Math.round(((e.clientX - rect.left) / rect.width) * 100)));
-    const y = Math.max(5, Math.min(95, Math.round(((e.clientY - rect.top) / rect.height) * 100)));
+    if (rect.width <= 0 || rect.height <= 0) return;
+    const x = Math.max(0, Math.min(100, Math.round(((e.clientX - rect.left) / rect.width) * 100)));
+    const y = Math.max(0, Math.min(100, Math.round(((e.clientY - rect.top) / rect.height) * 100)));
     setWm((prev) => ({ ...prev, xPercent: x, yPercent: y }));
   }
 
   function resetDefaults() {
     setWm({
       imageUrl: live.templatePreview || null,
-      xPercent: 95,
-      yPercent: 68,
+      xPercent: 88,
+      yPercent: 88,
       sizePercent: 14,
       opacity: 0.40,
       color: "original",
@@ -224,129 +205,92 @@ export default function NewEventPage() {
 
             {/* Interactive Preview Canvas */}
             <div className="p-5 pb-0">
-              <div
-                ref={previewRef}
-                onClick={handlePreviewClick}
-                className="relative aspect-[16/10] w-full overflow-hidden rounded-2xl border border-line bg-black/10 shadow-inner cursor-crosshair select-none group"
-              >
-                {/* Background Cover Image (User uploaded or Default AI Marriage Couple) */}
-                <img
-                  src={coverSrc}
-                  alt="Event Cover Preview"
-                  className="h-full w-full object-cover transition-opacity duration-300"
-                />
-
-                {/* Badge indicator on top-left */}
-                <div className="absolute top-3 left-3 flex items-center gap-2">
-                  <span className="inline-flex items-center gap-1.5 rounded-full bg-black/70 border border-white/20 px-2.5 py-1 text-[11px] font-medium text-white backdrop-blur-md shadow-sm">
-                    {live.preview ? "Custom Cover Image" : "Default AI Couple Photo"}
-                  </span>
-                  {live.templatePreview && (
-                    <span className="inline-flex items-center gap-1.5 rounded-full bg-[#dfa843]/85 border border-[#dfa843] px-2.5 py-1 text-[11px] font-semibold text-[#1c1305] backdrop-blur-md shadow-sm">
-                      <Sparkles className="h-3 w-3" /> Custom Watermark
-                    </span>
-                  )}
-                </div>
-
-                {/* Click to move watermark hint pill */}
-                <div className="absolute bottom-3 left-3 rounded-md bg-black/65 border border-white/10 px-2.5 py-1 text-[11px] font-medium text-white/90 backdrop-blur-sm pointer-events-none flex items-center gap-1.5">
-                  <Move className="h-3 w-3 text-brand-300" />
-                  <span>Click anywhere on photo to reposition watermark</span>
-                </div>
-
-                {/* Live Watermark Overlay Layer */}
+              <div className="relative rounded-2xl border border-line bg-[#161009]/95 p-3 flex items-center justify-center min-h-[320px] max-h-[560px] overflow-hidden shadow-inner">
                 <div
-                  style={{
-                    position: "absolute",
-                    left: `${wm.xPercent}%`,
-                    top: `${wm.yPercent}%`,
-                    transform: `translate(${wm.xPercent! >= 80 ? "-100%" : wm.xPercent! <= 20 ? "0%" : "-50%"}, ${wm.yPercent! >= 80 ? "-100%" : wm.yPercent! <= 20 ? "0%" : "-50%"})`,
-                    width: `${wm.sizePercent}%`,
-                    opacity: wm.opacity,
-                    pointerEvents: "none",
-                    transition: "opacity 0.15s ease, filter 0.15s ease",
-                  }}
+                  ref={previewRef}
+                  onClick={handlePreviewClick}
+                  className="relative inline-block max-h-[530px] max-w-full cursor-crosshair select-none group"
                 >
+                  {/* Background Cover Image (User uploaded or Default AI Marriage Couple) */}
                   <img
-                    src={watermarkSrc}
-                    alt="Watermark Overlay"
-                    style={{
-                      width: "100%",
-                      height: "auto",
-                      filter: getFilterCss(wm.color),
-                    }}
+                    src={coverSrc}
+                    alt="Event Cover Preview"
+                    className="max-h-[530px] w-auto max-w-full rounded-xl object-contain block shadow-xl transition-opacity duration-300"
                   />
+
+                  {/* Badge indicator on top-left of photo */}
+                  <div className="absolute top-3 left-3 flex items-center gap-2 pointer-events-none">
+                    <span className="inline-flex items-center gap-1.5 rounded-full bg-black/75 border border-white/20 px-2.5 py-1 text-[11px] font-medium text-white backdrop-blur-md shadow-md">
+                      {live.preview ? "Custom Cover Image" : "Default AI Couple Photo"}
+                    </span>
+                    {live.templatePreview && (
+                      <span className="inline-flex items-center gap-1.5 rounded-full bg-[#dfa843]/90 border border-[#dfa843] px-2.5 py-1 text-[11px] font-semibold text-[#1c1305] backdrop-blur-md shadow-md">
+                        <Sparkles className="h-3 w-3" /> Custom Watermark
+                      </span>
+                    )}
+                  </div>
+
+                  {/* Click hint pill */}
+                  <div className="absolute bottom-3 left-3 rounded-md bg-black/75 border border-white/15 px-2.5 py-1 text-[11px] font-medium text-white/90 backdrop-blur-md pointer-events-none flex items-center gap-1.5 shadow-md">
+                    <Move className="h-3 w-3 text-brand-300" />
+                    <span>Click anywhere on photo to place watermark</span>
+                  </div>
+
+                  {/* Live Watermark Overlay Layer */}
+                  <div
+                    style={{
+                      position: "absolute",
+                      left: `${wm.xPercent}%`,
+                      top: `${wm.yPercent}%`,
+                      transform: `translate(-${wm.xPercent}%, -${wm.yPercent}%)`,
+                      width: `${wm.sizePercent}%`,
+                      opacity: wm.opacity,
+                      pointerEvents: "none",
+                      transition: "opacity 0.15s ease, filter 0.15s ease",
+                    }}
+                  >
+                    <img
+                      src={watermarkSrc}
+                      alt="Watermark Overlay"
+                      style={{
+                        width: "100%",
+                        height: "auto",
+                        display: "block",
+                        filter: getFilterCss(wm.color),
+                      }}
+                    />
+                  </div>
                 </div>
               </div>
             </div>
 
             {/* Customization Controls Panel */}
             <div className="p-5 space-y-5">
-              {/* Position Controls (place move panra option) */}
+              {/* Position Controls */}
               <div>
                 <div className="mb-2 flex items-center justify-between">
                   <label className="text-xs font-semibold uppercase tracking-wider text-muted flex items-center gap-1.5">
                     <Move className="h-3.5 w-3.5 text-brand-600" />
                     <span>Watermark Position</span>
                   </label>
-                  <span className="text-xs font-mono text-muted">
+                  <span className="text-xs font-mono font-medium text-ink">
                     X: {wm.xPercent}% · Y: {wm.yPercent}%
                   </span>
                 </div>
 
-                <div className="flex flex-wrap items-center gap-3">
-                  {/* 3x3 Mini Grid Presets */}
-                  <div className="grid grid-cols-3 gap-1 rounded-xl border border-line bg-canvas p-1.5">
-                    {POS_PRESETS.map((p) => {
-                      const isActive =
-                        Math.abs((wm.xPercent ?? 95) - p.x) <= 8 &&
-                        Math.abs((wm.yPercent ?? 68) - p.y) <= 8;
-                      return (
-                        <button
-                          key={p.id}
-                          type="button"
-                          title={p.title}
-                          onClick={() => setWm((prev) => ({ ...prev, xPercent: p.x, yPercent: p.y }))}
-                          className={`h-7 w-8 rounded-md text-[10px] font-bold transition-all ${
-                            isActive
-                              ? "bg-brand-500 text-ink shadow-sm ring-1 ring-brand-600"
-                              : "bg-surface text-muted hover:bg-white hover:text-ink"
-                          }`}
-                        >
-                          {p.label}
-                        </button>
-                      );
-                    })}
-                  </div>
-
-                  {/* MADX Signature Default Preset Button */}
-                  <button
-                    type="button"
-                    onClick={() => setWm((prev) => ({ ...prev, xPercent: 95, yPercent: 68 }))}
-                    className={`h-11 px-3.5 rounded-xl border text-xs font-semibold transition-all flex items-center gap-2 ${
-                      wm.xPercent === 95 && wm.yPercent === 68
-                        ? "border-[#dfa843] bg-brand-50 text-brand-900 shadow-sm ring-1 ring-[#dfa843]"
-                        : "border-line bg-surface text-muted hover:bg-canvas hover:text-ink"
-                    }`}
-                  >
-                    <span className="h-2 w-2 rounded-full bg-[#dfa843]" />
-                    <span>MADX Signature (Right Below Mid)</span>
-                  </button>
-                </div>
-
-                {/* Fine-Tuning Coordinate Sliders */}
-                <div className="mt-3 grid gap-3 sm:grid-cols-2">
+                {/* Coordinate Sliders */}
+                <div className="grid gap-3 sm:grid-cols-2">
                   <div className="flex items-center gap-2">
                     <span className="text-xs text-muted w-14">Horiz (X):</span>
                     <input
                       type="range"
                       min={0}
                       max={100}
-                      value={wm.xPercent ?? 95}
+                      value={wm.xPercent ?? 88}
                       onChange={(e) => setWm((prev) => ({ ...prev, xPercent: Number(e.target.value) }))}
                       className="w-full accent-brand-500 cursor-pointer h-1.5 bg-line rounded-lg"
                     />
-                    <span className="text-xs font-mono text-ink w-8 text-right">{wm.xPercent}%</span>
+                    <span className="text-xs font-mono text-ink w-9 text-right">{wm.xPercent}%</span>
                   </div>
                   <div className="flex items-center gap-2">
                     <span className="text-xs text-muted w-14">Vert (Y):</span>
@@ -354,16 +298,16 @@ export default function NewEventPage() {
                       type="range"
                       min={0}
                       max={100}
-                      value={wm.yPercent ?? 68}
+                      value={wm.yPercent ?? 88}
                       onChange={(e) => setWm((prev) => ({ ...prev, yPercent: Number(e.target.value) }))}
                       className="w-full accent-brand-500 cursor-pointer h-1.5 bg-line rounded-lg"
                     />
-                    <span className="text-xs font-mono text-ink w-8 text-right">{wm.yPercent}%</span>
+                    <span className="text-xs font-mono text-ink w-9 text-right">{wm.yPercent}%</span>
                   </div>
                 </div>
               </div>
 
-              {/* Size & Scale Controls (size change panra option) */}
+              {/* Size & Scale Controls */}
               <div className="pt-2 border-t border-line/60">
                 <div className="mb-2 flex items-center justify-between">
                   <label className="text-xs font-semibold uppercase tracking-wider text-muted flex items-center gap-1.5">
@@ -373,38 +317,20 @@ export default function NewEventPage() {
                   <span className="text-xs font-mono font-medium text-ink">{wm.sizePercent}% of photo width</span>
                 </div>
 
-                <div className="flex flex-col gap-2.5">
-                  <div className="flex items-center gap-3">
-                    <input
-                      type="range"
-                      min={6}
-                      max={60}
-                      step={1}
-                      value={wm.sizePercent ?? 14}
-                      onChange={(e) => setWm((prev) => ({ ...prev, sizePercent: Number(e.target.value) }))}
-                      className="w-full accent-brand-500 cursor-pointer h-2 bg-line rounded-lg"
-                    />
-                  </div>
-                  <div className="flex flex-wrap gap-1.5">
-                    {SIZE_PRESETS.map((s) => (
-                      <button
-                        key={s.label}
-                        type="button"
-                        onClick={() => setWm((prev) => ({ ...prev, sizePercent: s.value }))}
-                        className={`rounded-lg px-2.5 py-1 text-xs font-medium transition-colors ${
-                          wm.sizePercent === s.value
-                            ? "bg-brand-500 text-ink shadow-sm"
-                            : "border border-line bg-surface text-muted hover:bg-canvas hover:text-ink"
-                        }`}
-                      >
-                        {s.label} ({s.value}%)
-                      </button>
-                    ))}
-                  </div>
+                <div className="flex items-center gap-3">
+                  <input
+                    type="range"
+                    min={5}
+                    max={60}
+                    step={1}
+                    value={wm.sizePercent ?? 14}
+                    onChange={(e) => setWm((prev) => ({ ...prev, sizePercent: Number(e.target.value) }))}
+                    className="w-full accent-brand-500 cursor-pointer h-2 bg-line rounded-lg"
+                  />
                 </div>
               </div>
 
-              {/* Color & Opacity Controls (colour change pannra option) */}
+              {/* Color & Opacity Controls */}
               <div className="pt-2 border-t border-line/60 grid gap-4 sm:grid-cols-2">
                 {/* Color Scheme */}
                 <div>
@@ -453,11 +379,6 @@ export default function NewEventPage() {
                     onChange={(e) => setWm((prev) => ({ ...prev, opacity: Number(e.target.value) }))}
                     className="w-full accent-brand-500 cursor-pointer h-2 bg-line rounded-lg mt-2"
                   />
-                  <div className="mt-1.5 flex justify-between text-[10px] text-muted">
-                    <span>10% (Subtle)</span>
-                    <span>40% (Standard)</span>
-                    <span>100% (Solid)</span>
-                  </div>
                 </div>
               </div>
             </div>

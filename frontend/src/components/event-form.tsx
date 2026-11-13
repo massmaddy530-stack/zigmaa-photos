@@ -161,10 +161,10 @@ export function EventForm({ initial, submitLabel, onSubmit, footerExtra, withCov
             <input ref={fileRef} id="ev-cover" type="file" accept={ACCEPTED_IMAGE_TYPES.join(",")} className="sr-only"
                    onChange={(e) => { pickCover(e.target.files?.[0]); e.target.value = ""; }} />
             {preview ? (
-              <div className="relative aspect-[16/7] overflow-hidden rounded-xl border border-line">
-                <img src={preview} alt="Cover preview" className="h-full w-full object-cover" />
+              <div className="relative overflow-hidden rounded-xl border border-line bg-canvas/60 p-2 flex items-center justify-center min-h-[160px] max-h-[380px]">
+                <img src={preview} alt="Cover preview" className="max-h-[360px] w-auto max-w-full rounded-lg object-contain block mx-auto shadow-sm" />
                 <button type="button" onClick={() => setCover(null)} aria-label="Remove cover"
-                        className="absolute right-2 top-2 grid h-8 w-8 place-items-center rounded-full bg-black/60 text-white hover:bg-black/75">
+                        className="absolute right-3 top-3 grid h-8 w-8 place-items-center rounded-full bg-black/65 text-white hover:bg-black/85 backdrop-blur-sm transition-colors shadow-md">
                   <X className="h-4 w-4" />
                 </button>
               </div>

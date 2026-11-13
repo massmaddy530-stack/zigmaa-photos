@@ -179,31 +179,12 @@ export async function applyWatermark(blob: Blob, customConfig?: WatermarkConfig)
             const targetHeight = Math.max(20, Math.round(targetWidth / aspect));
 
             // Position calculation
-            const xPct = config?.xPercent ?? 95;
-            const yPct = config?.yPercent ?? 68;
+            const xPct = config?.xPercent ?? 88;
+            const yPct = config?.yPercent ?? 88;
 
-            let x: number;
-            let y: number;
-
-            // Margin padding for edge attachments
-            const marginX = Math.max(16, Math.round(width * 0.03));
-            const marginY = Math.max(16, Math.round(height * 0.03));
-
-            if (xPct >= 80) {
-              x = Math.round(width * (xPct / 100)) - targetWidth - (xPct >= 95 ? marginX : 0);
-            } else if (xPct <= 20) {
-              x = Math.round(width * (xPct / 100)) + (xPct <= 5 ? marginX : 0);
-            } else {
-              x = Math.round(width * (xPct / 100) - targetWidth / 2);
-            }
-
-            if (yPct >= 80) {
-              y = Math.round(height * (yPct / 100)) - targetHeight - (yPct >= 95 ? marginY : 0);
-            } else if (yPct <= 20) {
-              y = Math.round(height * (yPct / 100)) + (yPct <= 5 ? marginY : 0);
-            } else {
-              y = Math.round((height - targetHeight) * (yPct / 100));
-            }
+            // Mathematical match with preview (0% = left edge, 100% = right edge, 50% = center)
+            let x = Math.round((width - targetWidth) * (Math.max(0, Math.min(100, xPct)) / 100));
+            let y = Math.round((height - targetHeight) * (Math.max(0, Math.min(100, yPct)) / 100));
 
             // Bound checks
             x = Math.max(0, Math.min(x, width - targetWidth));
