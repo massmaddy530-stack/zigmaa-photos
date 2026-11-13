@@ -71,12 +71,34 @@ let lastGoogleReported = "";
  * are present and valid. The redirect URI must be configured explicitly: it is never derived from the request Host.
  * Plain http is accepted only for localhost. Problems are logged by variable name only, never by value.
  */
-export function googleConfig(): GoogleSignInConfig | null {
+export function googleConfig(reqHost?: string | null): GoogleSignInConfig | null {
   const clientId = process.env.GOOGLE_CLIENT_ID?.trim() ?? "";
   const clientSecret = process.env.GOOGLE_CLIENT_SECRET?.trim() ?? "";
-  const redirectUri = process.env.GOOGLE_REDIRECT_URI?.trim() ?? "";
+  let redirectUri = process.env.GOOGLE_REDIRECT_URI?.trim() ?? "";
+
+  const isReqLocal = !reqHost || reqHost.includes("localhost") || reqHost.includes("127.0.0.1");
+
+  // Auto-detect production redirect URI on Vercel or local host if not explicitly configured or if localhost URI used on remote host
+  if (!redirectUri || (!isReqLocal && redirectUri.includes("localhost"))) {
+    if (reqHost && !isReqLocal) {
+      redirectUri = `https://${reqHost}/api/auth/google/callback`;
+    } else if (process.env.VERCEL_PROJECT_PRODUCTION_URL) {
+      redirectUri = `https://${process.env.VERCEL_PROJECT_PRODUCTION_URL}/api/auth/google/callback`;
+    } else if (process.env.VERCEL_URL) {
+      redirectUri = `https://${process.env.VERCEL_URL}/api/auth/google/callback`;
+    } else if (process.env.NODE_ENV === "production" || !isReqLocal) {
+      redirectUri = "https://zigmaa-photos.vercel.app/api/auth/google/callback";
+    } else {
+      redirectUri = "http://localhost:3001/api/auth/google/callback";
+    }
+  }
+
+  const emailsStr = process.env.ADMIN_GOOGLE_EMAILS?.trim() ?? "";
   const allowedEmails = new Set(
-    (process.env.ADMIN_GOOGLE_EMAILS ?? "").split(",").map((e) => e.trim().toLowerCase()).filter((e) => /^[^@\s]+@[^@\s]+$/.test(e)),
+    emailsStr
+      .split(",")
+      .map((e) => e.trim().toLowerCase())
+      .filter((e) => /^[^@\s]+@[^@\s]+$/.test(e)),
   );
   if (!clientId && !clientSecret && !redirectUri && !allowedEmails.size) return null; // not set up: stay silent
 

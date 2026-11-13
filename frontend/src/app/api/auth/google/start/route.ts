@@ -8,7 +8,7 @@ export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
 export async function GET(req: NextRequest) {
-  const google = googleConfig();
+  const google = googleConfig(req.headers.get("host"));
   const auth = authConfig();
   if (!google || !auth) {
     // Same-origin relative redirect: the login page shows a generic "Google sign-in unavailable" message.

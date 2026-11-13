@@ -38,7 +38,7 @@ function escapeHtml(s: string): string {
 }
 
 export async function GET(req: NextRequest) {
-  const google = googleConfig();
+  const google = googleConfig(req.headers.get("host"));
   const auth = authConfig();
   if (!google || !auth) return fail("not_configured", "google_unavailable");
 
