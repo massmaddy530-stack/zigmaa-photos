@@ -162,12 +162,27 @@ export function updateUserPassword(email: string, newPasswordHash: string): bool
 export function updateUserProfile(email: string, updates: Partial<StoredUser>): boolean {
   const map = initMemoryMap();
   const norm = email.trim().toLowerCase();
-  const user = map.get(norm);
-  if (user) {
-    Object.assign(user, updates);
-    map.set(norm, user);
-    persistToFile(map);
-    return true;
+  let user = map.get(norm);
+  if (!user) {
+    user = {
+      id: `usr_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`,
+      email: norm,
+      passwordHash: "",
+      name: updates.name || "Studio Admin",
+      role: "admin",
+      createdAt: Date.now(),
+    };
   }
-  return false;
+
+  // If email is changing, update the map key
+  const newEmail = updates.email?.trim().toLowerCase();
+  if (newEmail && newEmail !== norm) {
+    map.delete(norm);
+    user.email = newEmail;
+  }
+
+  Object.assign(user, updates);
+  map.set(user.email.toLowerCase(), user);
+  persistToFile(map);
+  return true;
 }

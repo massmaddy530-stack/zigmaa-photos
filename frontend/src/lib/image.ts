@@ -284,10 +284,22 @@ export async function downloadImage(url: string, filename: string, config?: Wate
   }
 
   let res: Response;
+  const isCrossOriginStorage =
+    url.includes("r2.dev") ||
+    url.includes("amazonaws.com") ||
+    url.includes("cloudflarestorage.com") ||
+    (typeof window !== "undefined" && !url.startsWith(window.location.origin) && !url.startsWith("/"));
+
   try {
-    res = await fetch(url, { mode: "cors" });
+    if (isCrossOriginStorage) {
+      // Fetch directly through same-origin serverless download proxy to avoid CORS rejection
+      const proxyUrl = `/api/download?url=${encodeURIComponent(url)}`;
+      res = await fetch(proxyUrl);
+    } else {
+      res = await fetch(url, { mode: "cors" });
+    }
     if (!res.ok && res.status !== 403) {
-      throw new Error(`Direct fetch status ${res.status}`);
+      throw new Error(`Fetch status ${res.status}`);
     }
   } catch {
     // If CORS or direct fetch fails, fetch through our same-origin proxy route

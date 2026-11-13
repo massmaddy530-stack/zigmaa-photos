@@ -3,12 +3,15 @@
 import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import {
+  Check,
   ChevronDown,
-  HelpCircle,
+  Clock,
+  ExternalLink,
+  Headphones,
   LifeBuoy,
   LogOut,
   Mail,
-  MessageSquare,
+  Phone,
   ShieldCheck,
   User,
   X,
@@ -36,6 +39,15 @@ export function ProfileMenu() {
   const [dropdownOpen, setDropdownOpen] = useState(false);
   const [helpOpen, setHelpOpen] = useState(false);
   const [signingOut, setSigningOut] = useState(false);
+  const [copiedField, setCopiedField] = useState<string | null>(null);
+
+  function handleCopy(text: string, field: string) {
+    if (typeof navigator !== "undefined" && navigator.clipboard) {
+      navigator.clipboard.writeText(text);
+      setCopiedField(field);
+      setTimeout(() => setCopiedField(null), 2000);
+    }
+  }
 
   // Fetch current user profile
   useEffect(() => {
@@ -205,85 +217,145 @@ export function ProfileMenu() {
       )}
 
       {/* ========================================================
-          HELP & SUPPORT MODAL (ONLY in center popup)
+          HELP & SUPPORT MODAL (Matching User's Specified Design)
       ======================================================== */}
       {helpOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4 backdrop-blur-sm animate-in fade-in">
-          <div className="relative w-full max-w-md rounded-2xl bg-white p-6 shadow-2xl">
-            <button
-              type="button"
-              onClick={() => setHelpOpen(false)}
-              className="absolute right-4 top-4 rounded-lg p-1.5 text-slate-400 hover:bg-slate-100 hover:text-slate-700"
-            >
-              <X className="h-5 w-5" />
-            </button>
-
-            <div className="mb-4">
-              <div className="flex items-center gap-2">
-                <div className="flex h-8 w-8 items-center justify-center rounded-xl bg-red-100 text-[#e50914]">
-                  <HelpCircle className="h-4 w-4" />
-                </div>
-                <div>
-                  <h2 className="text-xl font-bold text-[#0f172a]">Help & Support</h2>
-                  <p className="text-xs text-[#64748b]">Zigmaa Photos Studio Care</p>
-                </div>
-              </div>
-            </div>
-
-            <div className="space-y-3">
-              {/* Email Support Card */}
-              <div className="rounded-xl border border-slate-100 bg-slate-50 p-3.5">
-                <div className="flex items-center gap-3">
-                  <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-[#e50914]/10 text-[#e50914]">
-                    <Mail className="h-4 w-4" />
+          <div className="relative w-full max-w-[480px] overflow-hidden rounded-3xl bg-white shadow-2xl animate-in zoom-in-95">
+            {/* Gradient Header matching Zigmaa Photos red theme */}
+            <div className="bg-gradient-to-r from-[#e50914] via-[#ee202c] to-[#ff3b4e] p-6 text-white relative">
+              <div className="flex items-start justify-between">
+                <div className="flex items-center gap-3.5">
+                  <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-white/20 text-white shadow-inner backdrop-blur-sm">
+                    <Headphones className="h-6 w-6" />
                   </div>
                   <div>
-                    <p className="text-xs font-bold text-slate-800">Email Tech Support</p>
-                    <a
-                      href="mailto:massmaddy530@gmail.com"
-                      className="text-xs font-medium text-[#e50914] hover:underline"
-                    >
-                      massmaddy530@gmail.com
-                    </a>
-                  </div>
-                </div>
-              </div>
-
-              {/* Quick Guide Card */}
-              <div className="rounded-xl border border-slate-100 bg-slate-50 p-3.5">
-                <div className="flex items-center gap-3">
-                  <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-blue-50 text-blue-600">
-                    <MessageSquare className="h-4 w-4" />
-                  </div>
-                  <div>
-                    <p className="text-xs font-bold text-slate-800">Studio Workflow Tips</p>
-                    <p className="text-[11px] text-slate-500">
-                      • Upload cover image & custom watermark in Event creation.
-                      <br />• AI Face Search automatically matches guest selfies.
-                      <br />• Manage all photo settings directly in your dashboard.
+                    <h2 className="text-xl font-bold tracking-tight text-white leading-tight">Help & Support</h2>
+                    <p className="text-xs text-white/90 mt-0.5 font-normal">
+                      We&apos;re here to assist you with your Zigmaa Photos workspace
                     </p>
                   </div>
                 </div>
-              </div>
-
-              {/* Status */}
-              <div className="flex items-center justify-between rounded-xl bg-emerald-50 px-3.5 py-2.5 border border-emerald-100">
-                <div className="flex items-center gap-2">
-                  <span className="h-2 w-2 rounded-full bg-emerald-500 animate-pulse" />
-                  <span className="text-xs font-medium text-emerald-800">All Systems Operational</span>
-                </div>
-                <span className="text-[10px] font-semibold text-emerald-700">v2.4 Active</span>
+                <button
+                  type="button"
+                  onClick={() => setHelpOpen(false)}
+                  className="rounded-xl p-1 text-white/80 hover:bg-white/20 hover:text-white transition-colors"
+                  aria-label="Close"
+                >
+                  <X className="h-5 w-5" />
+                </button>
               </div>
             </div>
 
-            <div className="mt-5 text-right">
-              <button
-                type="button"
-                onClick={() => setHelpOpen(false)}
-                className="w-full rounded-xl bg-[#0f172a] py-2.5 text-xs font-semibold text-white hover:bg-slate-800 transition-colors"
+            {/* Modal Body */}
+            <div className="p-6 space-y-3.5 bg-white">
+              <p className="text-[10px] font-bold tracking-wider text-[#94a3b8] uppercase">
+                Choose your preferred way to contact us
+              </p>
+
+              {/* Call Support Card */}
+              <div className="flex items-center justify-between gap-3 rounded-2xl border border-slate-200/80 bg-white p-3.5 shadow-sm transition-all hover:border-red-200 hover:shadow-md">
+                <div className="flex items-center gap-3.5 min-w-0">
+                  <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl bg-red-50 text-[#e50914]">
+                    <Phone className="h-5 w-5" />
+                  </div>
+                  <div className="min-w-0">
+                    <p className="text-xs font-medium text-[#64748b]">Call Support</p>
+                    <a
+                      href="tel:+918870235207"
+                      className="text-sm font-bold text-[#0f172a] hover:text-[#e50914] transition-colors tracking-wide"
+                    >
+                      +91 8870235207
+                    </a>
+                  </div>
+                </div>
+                <div className="flex items-center gap-2">
+                  <span className="inline-flex items-center rounded-full bg-emerald-50 px-2.5 py-0.5 text-[10px] font-bold text-emerald-600 border border-emerald-200/80">
+                    AVAILABLE
+                  </span>
+                  <button
+                    type="button"
+                    onClick={() => handleCopy("+91 8870235207", "phone")}
+                    className="rounded-lg px-2.5 py-1 text-xs font-semibold text-[#64748b] hover:bg-slate-100 hover:text-[#e50914] transition-colors"
+                  >
+                    {copiedField === "phone" ? (
+                      <span className="inline-flex items-center gap-1 text-emerald-600">
+                        <Check className="h-3.5 w-3.5" /> Copied
+                      </span>
+                    ) : (
+                      "Copy"
+                    )}
+                  </button>
+                </div>
+              </div>
+
+              {/* Email Support Card */}
+              <div className="flex items-center justify-between gap-3 rounded-2xl border border-slate-200/80 bg-white p-3.5 shadow-sm transition-all hover:border-red-200 hover:shadow-md">
+                <div className="flex items-center gap-3.5 min-w-0">
+                  <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl bg-red-50 text-[#e50914]">
+                    <Mail className="h-5 w-5" />
+                  </div>
+                  <div className="min-w-0 truncate">
+                    <p className="text-xs font-medium text-[#64748b]">Email Support</p>
+                    <a
+                      href="mailto:support@zigmaatech.com"
+                      className="text-sm font-bold text-[#0f172a] hover:text-[#e50914] transition-colors truncate block"
+                    >
+                      support@zigmaatech.com
+                    </a>
+                  </div>
+                </div>
+                <div className="flex items-center gap-2 shrink-0">
+                  <span className="inline-flex items-center rounded-full bg-emerald-50 px-2.5 py-0.5 text-[10px] font-bold text-emerald-600 border border-emerald-200/80">
+                    AVAILABLE
+                  </span>
+                  <button
+                    type="button"
+                    onClick={() => handleCopy("support@zigmaatech.com", "email")}
+                    className="rounded-lg px-2.5 py-1 text-xs font-semibold text-[#64748b] hover:bg-slate-100 hover:text-[#e50914] transition-colors"
+                  >
+                    {copiedField === "email" ? (
+                      <span className="inline-flex items-center gap-1 text-emerald-600">
+                        <Check className="h-3.5 w-3.5" /> Copied
+                      </span>
+                    ) : (
+                      "Copy"
+                    )}
+                  </button>
+                </div>
+              </div>
+
+              {/* Official Website Card */}
+              <a
+                href="https://zigmaatech.com"
+                target="_blank"
+                rel="noopener noreferrer"
+                className="flex items-center gap-2.5 rounded-2xl border border-slate-200/70 bg-slate-50/70 p-3 text-xs text-[#334155] transition-all hover:bg-slate-100/80 hover:border-slate-300 group"
               >
-                Close Support
-              </button>
+                <ShieldCheck className="h-4 w-4 text-[#e50914]" />
+                <span className="font-normal text-[#64748b]">Official Website:</span>
+                <span className="font-bold text-[#0f172a] group-hover:underline">zigmaatech.com</span>
+                <ExternalLink className="h-3.5 w-3.5 text-[#94a3b8] ml-auto group-hover:text-[#0f172a] transition-colors" />
+              </a>
+
+              {/* Support Operating Hours Card */}
+              <div className="flex items-center gap-2.5 rounded-2xl border border-amber-200/80 bg-[#fffbeb] p-3 text-xs text-amber-900">
+                <Clock className="h-4 w-4 shrink-0 text-amber-600" />
+                <span>
+                  <span className="font-semibold">Support operating hours:</span> Mon – Sat, 9:00 AM – 6:00 PM IST
+                </span>
+              </div>
+
+              {/* Modal Footer */}
+              <div className="pt-2 flex justify-end">
+                <button
+                  type="button"
+                  onClick={() => setHelpOpen(false)}
+                  className="rounded-xl border border-slate-200 bg-white px-5 py-2 text-xs font-semibold text-slate-700 shadow-sm transition-all hover:bg-slate-50 hover:border-slate-300"
+                >
+                  Close
+                </button>
+              </div>
             </div>
           </div>
         </div>

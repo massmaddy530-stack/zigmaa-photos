@@ -75,7 +75,7 @@ export default function SettingsPage() {
     fetchProfile();
   }, []);
 
-  // Handle local photo upload
+  // Handle local photo upload with high-quality, lightweight canvas optimization
   function handlePhotoUpload(e: ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0];
     if (!file) return;
@@ -85,16 +85,42 @@ export default function SettingsPage() {
       return;
     }
 
-    if (file.size > 5 * 1024 * 1024) {
-      setError("Image size must be less than 5MB.");
+    if (file.size > 10 * 1024 * 1024) {
+      setError("Image size must be less than 10MB.");
       return;
     }
 
     const reader = new FileReader();
     reader.onload = (event) => {
-      const dataUrl = event.target?.result as string;
-      setAvatarPreview(dataUrl);
-      setError(null);
+      const rawResult = event.target?.result as string;
+      const img = new window.Image();
+      img.onload = () => {
+        try {
+          const canvas = document.createElement("canvas");
+          const size = 160;
+          canvas.width = size;
+          canvas.height = size;
+          const ctx = canvas.getContext("2d");
+          if (!ctx) {
+            setAvatarPreview(rawResult);
+            return;
+          }
+          // Center-crop square avatar
+          const minSide = Math.min(img.width, img.height);
+          const startX = (img.width - minSide) / 2;
+          const startY = (img.height - minSide) / 2;
+          ctx.drawImage(img, startX, startY, minSide, minSide, 0, 0, size, size);
+          const optimized = canvas.toDataURL("image/jpeg", 0.85);
+          setAvatarPreview(optimized);
+          setError(null);
+        } catch {
+          setAvatarPreview(rawResult);
+        }
+      };
+      img.onerror = () => {
+        setAvatarPreview(rawResult);
+      };
+      img.src = rawResult;
     };
     reader.readAsDataURL(file);
   }
