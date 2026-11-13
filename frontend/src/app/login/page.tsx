@@ -14,24 +14,16 @@ export default async function LoginPage() {
       {/* Left Column: Sign-in / Reset / Sign-up Forms (Strictly 1-page fit, no scroll) */}
       <div className="flex h-full w-full flex-col justify-center px-6 sm:px-10 lg:px-12 overflow-hidden bg-white">
         <div className="mx-auto w-full max-w-[380px]">
-          {/* Brand Header: Crisp Red Wolf Badge + Typography */}
-          <div className="mb-4 flex items-center justify-center gap-3">
-            <div className="relative flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl bg-[#e50914] p-1.5 shadow-md shadow-red-500/25">
-              <img
-                src="/zigma_logo.webp"
-                alt="Zigmaa Wolf"
-                className="h-full w-full object-contain"
-              />
-            </div>
-            <div>
-              <div className="flex items-center gap-1.5 font-display text-xl font-bold tracking-tight text-[#0f172a]">
-                <span>ZIGMAA</span>
-                <span className="text-[#e50914]">PHOTOS</span>
-              </div>
-              <p className="text-[11px] font-medium tracking-wide text-[#64748b]">
-                Event Photo Management Platform
-              </p>
-            </div>
+          {/* Brand Header: User's cropped official logo */}
+          <div className="mb-2 text-center">
+            <img
+              src="/zigmaa-logo.png"
+              alt="Zigmaa Photos"
+              className="mx-auto h-14 sm:h-16 w-auto object-contain"
+            />
+            <p className="mt-1 text-[11px] font-medium tracking-wide text-[#64748b]">
+              Event Photo Management Platform
+            </p>
           </div>
 
           {/* Dynamic In-place Form (Sign in to your studio / Reset password / Create account) */}
