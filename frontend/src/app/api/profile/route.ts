@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { checkCredentials, hashPassword, saveDynamicPasswordHash } from "@/lib/auth/password";
 import { verifySessionToken } from "@/lib/auth/session";
+import { updateUserPassword, updateUserProfile } from "@/lib/auth/user-store";
 import { authConfig, cookieSecure, SESSION_COOKIE, SESSION_MAX_AGE_S } from "@/lib/server-config";
 import { promises as fs } from "node:fs";
 import path from "node:path";
@@ -74,7 +75,7 @@ export async function PATCH(req: NextRequest) {
         );
       }
 
-      const validCurrent = await checkCredentials(config.username, currentPassword, config);
+      const validCurrent = await checkCredentials(currentProfile.email || config.username, currentPassword, config);
       if (!validCurrent) {
         return NextResponse.json(
           { ok: false, error: "Current password is incorrect." },
@@ -92,6 +93,9 @@ export async function PATCH(req: NextRequest) {
       const newHash = await hashPassword(newPassword);
       process.env.ADMIN_PASSWORD_HASH = newHash;
       saveDynamicPasswordHash(newHash);
+      if (currentProfile.email) {
+        updateUserPassword(currentProfile.email, newHash);
+      }
 
       // Update .env.local file
       try {
@@ -112,6 +116,13 @@ export async function PATCH(req: NextRequest) {
       email: email !== undefined ? email : currentProfile.email,
       picture: picture !== undefined ? picture : currentProfile.picture,
     };
+
+    if (currentProfile.email) {
+      updateUserProfile(currentProfile.email, {
+        name: updatedProfile.name,
+        picture: updatedProfile.picture,
+      });
+    }
 
     const res = NextResponse.json({
       ok: true,

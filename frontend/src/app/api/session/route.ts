@@ -6,6 +6,7 @@ import { checkCredentials, MAX_PASSWORD_LENGTH, PasswordHashFormatError } from "
 import { loginLimiter } from "@/lib/auth/rate-limit";
 import { clientIp, hasCsrfHeader, isSameOrigin } from "@/lib/auth/request";
 import { createSessionToken } from "@/lib/auth/session";
+import { findUserByEmail } from "@/lib/auth/user-store";
 import {
   authConfig,
   cookieSecure,
@@ -45,14 +46,19 @@ export async function POST(req: NextRequest) {
   try {
     const text = await req.text();
     if (text.length > MAX_BODY_BYTES) return errorJson(413, "payload_too_large", "Request body is too large.");
-    const body = JSON.parse(text) as { username?: unknown; password?: unknown };
-    username = typeof body?.username === "string" ? body.username.trim() : "";
+    const body = JSON.parse(text) as { username?: unknown; email?: unknown; password?: unknown };
+    username =
+      typeof body?.email === "string" && body.email.trim()
+        ? body.email.trim()
+        : typeof body?.username === "string"
+        ? body.username.trim()
+        : "";
     password = typeof body?.password === "string" ? body.password : "";
   } catch {
     return errorJson(400, "bad_request", "Invalid request body");
   }
   if (!username || !password || username.length > MAX_USERNAME_LENGTH || password.length > MAX_PASSWORD_LENGTH) {
-    return errorJson(422, "validation_error", "Enter your username and password.");
+    return errorJson(422, "validation_error", "Enter your email and password.");
   }
 
   let valid: boolean;
@@ -81,10 +87,11 @@ export async function POST(req: NextRequest) {
     maxAge: SESSION_MAX_AGE_S,
   });
 
+  const storedUser = findUserByEmail(username);
   const profile = {
-    name: "Studio Admin",
-    email: "massmaddy530@gmail.com",
-    picture: "",
+    name: storedUser?.name || (username.toLowerCase() === "admin" ? "Studio Admin" : username.split("@")[0]),
+    email: storedUser?.email || (username.includes("@") ? username : "massmaddy530@gmail.com"),
+    picture: storedUser?.picture || "",
     provider: "password",
   };
   res.cookies.set("evp_profile", encodeURIComponent(JSON.stringify(profile)), {

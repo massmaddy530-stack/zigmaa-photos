@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { generateOtp } from "@/lib/auth/otp-store";
+import { isEmailRegistered } from "@/lib/auth/user-store";
 import { sendOtpEmail } from "@/lib/email/mailer";
 
 export const runtime = "nodejs";
@@ -14,6 +15,14 @@ export async function POST(req: NextRequest) {
       return NextResponse.json(
         { ok: false, error: "Please enter a valid email address." },
         { status: 400 }
+      );
+    }
+
+    // Verify account exists before dispatching OTP
+    if (!isEmailRegistered(email)) {
+      return NextResponse.json(
+        { ok: false, error: "No account found with this email address. Please sign up first." },
+        { status: 404 }
       );
     }
 

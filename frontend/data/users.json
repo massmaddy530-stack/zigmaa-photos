@@ -1,0 +1,34 @@
+[
+  {
+    "id": "admin-seed-1",
+    "email": "massmaddy530@gmail.com",
+    "name": "Mass Maddy (Studio Admin)",
+    "passwordHash": "scrypt$16384$8$5$WHyZeot7L8+sJHzOxUuu4w==$O44VqRiQDMR/jO/74TIFjkQybd14EMvLhGkMA8VJFmc=",
+    "role": "admin",
+    "createdAt": 1700000000000
+  },
+  {
+    "id": "admin-seed-2",
+    "email": "madhavansep28@gmail.com",
+    "name": "Madhavan R (Studio Admin)",
+    "passwordHash": "scrypt$16384$8$5$3lDOiyOND/ViqEfjFqZchw==$+2i86f3jGATMexT03gB5QPp68Zjceb7w4QxlI1O125c=",
+    "role": "admin",
+    "createdAt": 1700000000000
+  },
+  {
+    "id": "admin-seed-3",
+    "email": "zigmaatech@gmail.com",
+    "name": "Zigmaa Tech",
+    "passwordHash": "scrypt$16384$8$5$3lDOiyOND/ViqEfjFqZchw==$+2i86f3jGATMexT03gB5QPp68Zjceb7w4QxlI1O125c=",
+    "role": "admin",
+    "createdAt": 1700000000000
+  },
+  {
+    "id": "admin-seed-4",
+    "email": "admin",
+    "name": "Studio Administrator",
+    "passwordHash": "scrypt$16384$8$5$3lDOiyOND/ViqEfjFqZchw==$+2i86f3jGATMexT03gB5QPp68Zjceb7w4QxlI1O125c=",
+    "role": "admin",
+    "createdAt": 1700000000000
+  }
+]

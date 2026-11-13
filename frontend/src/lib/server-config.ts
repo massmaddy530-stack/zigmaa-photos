@@ -13,7 +13,10 @@ export const LEGACY_SESSION_COOKIE = "evp_admin";
 export const SESSION_MAX_AGE_S = 60 * 60 * 12;
 
 export function cookieSecure(): boolean {
-  return process.env.NODE_ENV === "production" && process.env.COOKIE_SECURE !== "false";
+  if (process.env.COOKIE_SECURE === "false") return false;
+  if (process.env.COOKIE_SECURE === "true") return true;
+  if (process.env.VERCEL) return true;
+  return process.env.NODE_ENV === "production";
 }
 
 export interface AuthConfig {
@@ -76,19 +79,21 @@ export function googleConfig(reqHost?: string | null): GoogleSignInConfig | null
   const clientSecret = process.env.GOOGLE_CLIENT_SECRET?.trim() ?? "";
   let redirectUri = process.env.GOOGLE_REDIRECT_URI?.trim() ?? "";
 
-  void reqHost;
-
   // Auto-detect production redirect URI on Vercel if not explicitly configured or if localhost URI used on Vercel
   if (!redirectUri || ((process.env.VERCEL || process.env.NODE_ENV === "production") && redirectUri.includes("localhost"))) {
     if (process.env.VERCEL_PROJECT_PRODUCTION_URL) {
       redirectUri = `https://${process.env.VERCEL_PROJECT_PRODUCTION_URL}/api/auth/google/callback`;
     } else if (process.env.VERCEL_URL) {
       redirectUri = `https://${process.env.VERCEL_URL}/api/auth/google/callback`;
-    } else if (process.env.NODE_ENV === "production") {
+    } else if (process.env.NODE_ENV === "production" || process.env.VERCEL) {
       redirectUri = "https://zigmaa-photos.vercel.app/api/auth/google/callback";
     } else {
       redirectUri = "http://localhost:3001/api/auth/google/callback";
     }
+  }
+
+  if (reqHost && (reqHost.startsWith("localhost") || reqHost.startsWith("127.0.0.1"))) {
+    redirectUri = `http://${reqHost}/api/auth/google/callback`;
   }
 
   const emailsStr = process.env.ADMIN_GOOGLE_EMAILS?.trim() ?? "";

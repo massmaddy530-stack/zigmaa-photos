@@ -4,6 +4,7 @@ import { createHash, randomBytes, scrypt, timingSafeEqual } from "node:crypto";
 import { existsSync, readFileSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+import { findUserByEmail } from "./user-store";
 
 // OWASP-equivalent scrypt cost (N=2^14, r=8, p=5), about 16 MiB per check.
 // Keep in sync with scripts/hash-password.mjs.
@@ -116,58 +117,86 @@ export async function checkCredentials(
   password: string,
   admin: { username: string; passwordHash: string },
 ): Promise<boolean> {
-  // Always verify primary password hash first (throws PasswordHashFormatError if malformed)
-  let passwordOk = await verifyPassword(password, admin.passwordHash);
+  // Always verify primary password hash first (throws PasswordHashFormatError if malformed, no timing leak)
+  const passwordOk = await verifyPassword(password, admin.passwordHash);
 
-  // Exact match for configured admin username (timing-safe)
-  let usernameOk = timingSafeEqual(digest(username), digest(admin.username));
+  // Exact match for configured admin username (timing-safe, case-sensitive)
+  const usernameOk = timingSafeEqual(digest(username), digest(admin.username));
 
-  // If not exact match, allow email aliases for the studio admin
-  if (!usernameOk) {
-    const normUser = username.trim().toLowerCase();
-    const studioEmails = new Set([
-      "massmaddy530@gmail.com",
-      "madhavansep28@gmail.com",
-      "zigmaatech@gmail.com",
-      ...(process.env.ADMIN_GOOGLE_EMAILS || "")
-        .split(",")
-        .map((e) => e.trim().toLowerCase())
-        .filter(Boolean),
-    ]);
-    if (studioEmails.has(normUser)) {
-      usernameOk = true;
-    }
-  }
-
-  // Check dynamically updated hash (from OTP reset or settings) if primary hash didn't match
-  if (!passwordOk) {
+  // If exact match with admin username
+  if (usernameOk) {
+    if (passwordOk) return true;
     const dynHash = getDynamicPasswordHash();
     if (dynHash && dynHash !== admin.passwordHash) {
       try {
-        if (await verifyPassword(password, dynHash)) {
-          passwordOk = true;
-        }
+        if (await verifyPassword(password, dynHash)) return true;
       } catch {
         // ignore
       }
     }
-  }
-
-  // Check known studio admin hashes (Admin12345678!, Maddy@2002) if not yet matched
-  if (!passwordOk) {
     for (const h of KNOWN_ADMIN_HASHES) {
       if (h !== admin.passwordHash) {
         try {
-          if (await verifyPassword(password, h)) {
-            passwordOk = true;
-            break;
-          }
+          if (await verifyPassword(password, h)) return true;
         } catch {
           // ignore
         }
       }
     }
+    return false;
   }
 
-  return passwordOk && usernameOk;
+  // Not exact admin username. Check studio admin email aliases:
+  const normUser = username.trim().toLowerCase();
+  const studioEmails = new Set([
+    "massmaddy530@gmail.com",
+    "madhavansep28@gmail.com",
+    "zigmaatech@gmail.com",
+    ...(process.env.ADMIN_GOOGLE_EMAILS || "")
+      .split(",")
+      .map((e) => e.trim().toLowerCase())
+      .filter(Boolean),
+  ]);
+
+  if (studioEmails.has(normUser)) {
+    if (passwordOk) return true;
+    const dynHash = getDynamicPasswordHash();
+    if (dynHash && dynHash !== admin.passwordHash) {
+      try {
+        if (await verifyPassword(password, dynHash)) return true;
+      } catch {
+        // ignore
+      }
+    }
+    for (const h of KNOWN_ADMIN_HASHES) {
+      if (h !== admin.passwordHash) {
+        try {
+          if (await verifyPassword(password, h)) return true;
+        } catch {
+          // ignore
+        }
+      }
+    }
+    const storedAdmin = findUserByEmail(normUser);
+    if (storedAdmin) {
+      try {
+        if (await verifyPassword(password, storedAdmin.passwordHash)) return true;
+      } catch {
+        // ignore
+      }
+    }
+    return false;
+  }
+
+  // Otherwise, registered user in user-store
+  const storedUser = findUserByEmail(normUser);
+  if (storedUser) {
+    try {
+      return await verifyPassword(password, storedUser.passwordHash);
+    } catch {
+      return false;
+    }
+  }
+
+  return false;
 }

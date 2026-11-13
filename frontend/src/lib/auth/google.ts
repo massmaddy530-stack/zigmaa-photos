@@ -4,6 +4,7 @@
 // Never log authorization codes, tokens, client secrets or email addresses: only short reason codes.
 import "server-only";
 import { createHash, createHmac, createPublicKey, randomBytes, timingSafeEqual, verify, type KeyObject } from "node:crypto";
+import { isEmailRegistered } from "./user-store";
 
 export const GOOGLE_AUTH_URL = "https://accounts.google.com/o/oauth2/v2/auth";
 export const GOOGLE_TOKEN_URL = "https://oauth2.googleapis.com/token";
@@ -227,10 +228,9 @@ export async function verifyIdToken(
   if (claims.email_verified !== true && claims.email_verified !== "true") throw new GoogleAuthError("email_unverified");
   const normEmail = typeof claims.email === "string" ? claims.email.trim().toLowerCase() : "";
   const isAllowed =
-    opts.allowedEmails.size === 0 ||
     opts.allowedEmails.has("*") ||
     opts.allowedEmails.has(normEmail) ||
-    normEmail.endsWith("@gmail.com");
+    isEmailRegistered(normEmail);
   if (!normEmail || !isAllowed) {
     throw new GoogleAuthError("not_allowed");
   }

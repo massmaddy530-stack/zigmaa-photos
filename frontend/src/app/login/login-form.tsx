@@ -1,7 +1,7 @@
 "use client";
 
 import { useRouter, useSearchParams } from "next/navigation";
-import { CheckCircle2, Eye, EyeOff, Lock, User } from "lucide-react";
+import { CheckCircle2, Eye, EyeOff, Lock, Mail } from "lucide-react";
 import { useState, type FormEvent } from "react";
 import { ApiError, CSRF_HEADER, errorMessage, toApiError } from "@/lib/api";
 
@@ -171,10 +171,35 @@ export function LoginForm() {
       setSignUpError("Passwords do not match.");
       return;
     }
+    if (signUpPassword.length < 8) {
+      setSignUpError("Password must be at least 8 characters long.");
+      return;
+    }
     setSignUpBusy(true);
-    await new Promise((r) => setTimeout(r, 600));
-    setSignUpBusy(false);
-    setSignUpSent(true);
+    try {
+      const res = await fetch("/api/auth/signup", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          firstName,
+          lastName,
+          companyName,
+          email: signUpEmail,
+          contactNumber,
+          password: signUpPassword,
+        }),
+      });
+      const data = await res.json();
+      if (!res.ok || !data.ok) {
+        throw new Error(data.error || "Failed to create account.");
+      }
+      // Successful registration & auto-login!
+      router.replace(next);
+      router.refresh();
+    } catch (err: unknown) {
+      setSignUpError(err instanceof Error ? err.message : "Registration failed.");
+      setSignUpBusy(false);
+    }
   }
 
   return (
@@ -197,7 +222,7 @@ export function LoginForm() {
               Sign in to your studio
             </h1>
             <p className="text-xs text-[#64748b]">
-              Sign in with your admin username and password.
+              Sign in with your email address and password.
             </p>
           </div>
 
@@ -211,32 +236,34 @@ export function LoginForm() {
             <div className="rounded-xl border border-amber-200 bg-amber-50 p-2 text-center text-xs font-medium text-amber-800">
               {googleError === "google_unavailable"
                 ? "Google Sign-in is not configured on this server."
+                : googleError === "not_registered"
+                ? "This Google account is not registered. Please sign up first."
                 : "Google Sign-in failed. Please sign in with your email."}
             </div>
           )}
 
           <form onSubmit={onLoginSubmit} className="space-y-3">
-            {/* Username Field with User icon */}
+            {/* Email Field with Mail icon */}
             <div>
               <label
                 htmlFor="login-email"
                 className="flex items-center gap-1.5 text-xs font-semibold text-[#1e293b] mb-1"
               >
-                <User className="h-3.5 w-3.5 text-[#64748b]" />
-                <span>Username</span>
+                <Mail className="h-3.5 w-3.5 text-[#64748b]" />
+                <span>Email</span>
               </label>
               <div className="relative">
                 <div className="pointer-events-none absolute inset-y-0 left-0 flex items-center pl-3.5 text-[#94a3b8]">
-                  <User className="h-4 w-4" />
+                  <Mail className="h-4 w-4" />
                 </div>
                 <input
                   id="login-email"
-                  name="username"
+                  name="email"
                   type="text"
-                  autoComplete="username"
+                  autoComplete="email"
                   required
                   autoFocus
-                  placeholder="admin"
+                  placeholder="Enter your email address"
                   value={username}
                   onChange={(e) => setUsername(e.target.value)}
                   className="w-full rounded-2xl border border-[#e2e8f0] bg-white pl-10 pr-3.5 py-2.5 text-sm text-[#0f172a] placeholder:text-[#94a3b8] shadow-sm transition-all focus:border-[#e50914] focus:outline-none focus:ring-1 focus:ring-[#e50914]"
