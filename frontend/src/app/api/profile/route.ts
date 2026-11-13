@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { checkCredentials, hashPassword } from "@/lib/auth/password";
+import { checkCredentials, hashPassword, saveDynamicPasswordHash } from "@/lib/auth/password";
 import { verifySessionToken } from "@/lib/auth/session";
 import { authConfig, cookieSecure, SESSION_COOKIE, SESSION_MAX_AGE_S } from "@/lib/server-config";
 import { promises as fs } from "node:fs";
@@ -91,6 +91,7 @@ export async function PATCH(req: NextRequest) {
 
       const newHash = await hashPassword(newPassword);
       process.env.ADMIN_PASSWORD_HASH = newHash;
+      saveDynamicPasswordHash(newHash);
 
       // Update .env.local file
       try {

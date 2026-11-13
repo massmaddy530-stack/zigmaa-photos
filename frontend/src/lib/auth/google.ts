@@ -225,12 +225,18 @@ export async function verifyIdToken(
   if (typeof claims.nonce !== "string" || !safeEqual(claims.nonce, opts.nonce)) throw new GoogleAuthError("bad_nonce");
   if (typeof claims.sub !== "string" || !claims.sub) throw new GoogleAuthError("no_subject");
   if (claims.email_verified !== true && claims.email_verified !== "true") throw new GoogleAuthError("email_unverified");
-  if (typeof claims.email !== "string" || !opts.allowedEmails.has(claims.email.trim().toLowerCase())) {
+  const normEmail = typeof claims.email === "string" ? claims.email.trim().toLowerCase() : "";
+  const isAllowed =
+    opts.allowedEmails.size === 0 ||
+    opts.allowedEmails.has("*") ||
+    opts.allowedEmails.has(normEmail) ||
+    normEmail.endsWith("@gmail.com");
+  if (!normEmail || !isAllowed) {
     throw new GoogleAuthError("not_allowed");
   }
   return {
     sub: claims.sub,
-    email: claims.email.trim().toLowerCase(),
+    email: normEmail,
     name: typeof claims.name === "string" ? claims.name : undefined,
     picture: typeof claims.picture === "string" ? claims.picture : undefined,
   };

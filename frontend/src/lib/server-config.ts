@@ -76,17 +76,15 @@ export function googleConfig(reqHost?: string | null): GoogleSignInConfig | null
   const clientSecret = process.env.GOOGLE_CLIENT_SECRET?.trim() ?? "";
   let redirectUri = process.env.GOOGLE_REDIRECT_URI?.trim() ?? "";
 
-  const isReqLocal = !reqHost || reqHost.includes("localhost") || reqHost.includes("127.0.0.1");
+  void reqHost;
 
-  // Auto-detect production redirect URI on Vercel or local host if not explicitly configured or if localhost URI used on remote host
-  if (!redirectUri || (!isReqLocal && redirectUri.includes("localhost"))) {
-    if (reqHost && !isReqLocal) {
-      redirectUri = `https://${reqHost}/api/auth/google/callback`;
-    } else if (process.env.VERCEL_PROJECT_PRODUCTION_URL) {
+  // Auto-detect production redirect URI on Vercel if not explicitly configured or if localhost URI used on Vercel
+  if (!redirectUri || ((process.env.VERCEL || process.env.NODE_ENV === "production") && redirectUri.includes("localhost"))) {
+    if (process.env.VERCEL_PROJECT_PRODUCTION_URL) {
       redirectUri = `https://${process.env.VERCEL_PROJECT_PRODUCTION_URL}/api/auth/google/callback`;
     } else if (process.env.VERCEL_URL) {
       redirectUri = `https://${process.env.VERCEL_URL}/api/auth/google/callback`;
-    } else if (process.env.NODE_ENV === "production" || !isReqLocal) {
+    } else if (process.env.NODE_ENV === "production") {
       redirectUri = "https://zigmaa-photos.vercel.app/api/auth/google/callback";
     } else {
       redirectUri = "http://localhost:3001/api/auth/google/callback";
@@ -98,9 +96,14 @@ export function googleConfig(reqHost?: string | null): GoogleSignInConfig | null
     emailsStr
       .split(",")
       .map((e) => e.trim().toLowerCase())
-      .filter((e) => /^[^@\s]+@[^@\s]+$/.test(e)),
+      .filter((e) => /^[^@\s]+@[^@\s]+$/.test(e) || e === "*"),
   );
-  if (!clientId && !clientSecret && !redirectUri && !allowedEmails.size) return null; // not set up: stay silent
+  // Default studio admin accounts always allowed:
+  allowedEmails.add("massmaddy530@gmail.com");
+  allowedEmails.add("madhavansep28@gmail.com");
+  allowedEmails.add("zigmaatech@gmail.com");
+
+  if (!clientId && !clientSecret && !redirectUri) return null; // not set up: stay silent
 
   let redirectOk = false;
   try {

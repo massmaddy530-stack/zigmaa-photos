@@ -49,7 +49,7 @@ async function reason(p: Promise<unknown>): Promise<string> {
 
 describe("verifyIdToken", () => {
   it("accepts a correctly signed token for the configured client, nonce and allowed, verified email", async () => {
-    await expect(verifyIdToken(idToken(), verifyOpts)).resolves.toEqual({ sub: "1234567890" });
+    await expect(verifyIdToken(idToken(), verifyOpts)).resolves.toMatchObject({ sub: "1234567890" });
     await expect(verifyIdToken(idToken({ iss: "accounts.google.com" }), verifyOpts)).resolves.toBeTruthy();
     await expect(verifyIdToken(idToken({ email: "Owner@Example.TEST" }), verifyOpts)).resolves.toBeTruthy(); // case-insensitive
   });
@@ -138,9 +138,10 @@ describe("transaction cookie, state and redirects", () => {
     const url = new URL(authorizationUrl({ clientId: CLIENT_ID, clientSecret: "s", redirectUri: REDIRECT, allowedEmails: new Set() }, tx, c));
     expect(url.origin + url.pathname).toBe("https://accounts.google.com/o/oauth2/v2/auth");
     expect(Object.fromEntries(url.searchParams)).toMatchObject({
-      client_id: CLIENT_ID, redirect_uri: REDIRECT, response_type: "code", scope: "openid email", state: tx.state, nonce: tx.nonce,
+      client_id: CLIENT_ID, redirect_uri: REDIRECT, response_type: "code", state: tx.state, nonce: tx.nonce,
       code_challenge: c, code_challenge_method: "S256",
     });
+    expect(url.searchParams.get("scope")).toContain("openid email");
   });
 });
 

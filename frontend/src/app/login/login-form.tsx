@@ -52,6 +52,8 @@ export function LoginForm() {
   const [confirmNewPassword, setConfirmNewPassword] = useState("");
   const [verifyBusy, setVerifyBusy] = useState(false);
   const [resetSuccess, setResetSuccess] = useState<string | null>(null);
+  const [showResetNewPass, setShowResetNewPass] = useState(false);
+  const [showResetConfirmPass, setShowResetConfirmPass] = useState(false);
 
   // Sign up form state
   const [firstName, setFirstName] = useState("");
@@ -393,7 +395,7 @@ export function LoginForm() {
                 />
               </div>
 
-              {/* New Password & Confirm Password */}
+              {/* New Password & Confirm Password with Eye toggles */}
               <div className="grid grid-cols-2 gap-2">
                 <div>
                   <label
@@ -402,15 +404,25 @@ export function LoginForm() {
                   >
                     New Password
                   </label>
-                  <input
-                    id="reset-new-password"
-                    type="password"
-                    required
-                    placeholder="Min 8 chars"
-                    value={newPassword}
-                    onChange={(e) => setNewPassword(e.target.value)}
-                    className="w-full rounded-xl border border-[#e2e8f0] bg-white px-3 py-1.5 text-xs text-[#0f172a] placeholder:text-[#94a3b8] placeholder:italic focus:border-[#e50914] focus:outline-none"
-                  />
+                  <div className="relative">
+                    <input
+                      id="reset-new-password"
+                      type={showResetNewPass ? "text" : "password"}
+                      required
+                      placeholder="Min 8 chars"
+                      value={newPassword}
+                      onChange={(e) => setNewPassword(e.target.value)}
+                      className="w-full rounded-xl border border-[#e2e8f0] bg-white pl-2.5 pr-8 py-2 text-xs text-[#0f172a] placeholder:text-[#94a3b8] placeholder:italic shadow-sm focus:border-[#e50914] focus:outline-none focus:ring-1 focus:ring-[#e50914]"
+                    />
+                    <button
+                      type="button"
+                      onClick={() => setShowResetNewPass((s) => !s)}
+                      className="absolute right-2 top-1/2 -translate-y-1/2 text-[#94a3b8] hover:text-[#64748b] transition-colors"
+                      aria-label={showResetNewPass ? "Hide password" : "Show password"}
+                    >
+                      {showResetNewPass ? <EyeOff className="h-3.5 w-3.5" /> : <Eye className="h-3.5 w-3.5" />}
+                    </button>
+                  </div>
                 </div>
                 <div>
                   <label
@@ -419,15 +431,25 @@ export function LoginForm() {
                   >
                     Confirm Password
                   </label>
-                  <input
-                    id="reset-confirm-password"
-                    type="password"
-                    required
-                    placeholder="Repeat password"
-                    value={confirmNewPassword}
-                    onChange={(e) => setConfirmNewPassword(e.target.value)}
-                    className="w-full rounded-xl border border-[#e2e8f0] bg-white px-3 py-1.5 text-xs text-[#0f172a] placeholder:text-[#94a3b8] placeholder:italic focus:border-[#e50914] focus:outline-none"
-                  />
+                  <div className="relative">
+                    <input
+                      id="reset-confirm-password"
+                      type={showResetConfirmPass ? "text" : "password"}
+                      required
+                      placeholder="Repeat password"
+                      value={confirmNewPassword}
+                      onChange={(e) => setConfirmNewPassword(e.target.value)}
+                      className="w-full rounded-xl border border-[#e2e8f0] bg-white pl-2.5 pr-8 py-2 text-xs text-[#0f172a] placeholder:text-[#94a3b8] placeholder:italic shadow-sm focus:border-[#e50914] focus:outline-none focus:ring-1 focus:ring-[#e50914]"
+                    />
+                    <button
+                      type="button"
+                      onClick={() => setShowResetConfirmPass((s) => !s)}
+                      className="absolute right-2 top-1/2 -translate-y-1/2 text-[#94a3b8] hover:text-[#64748b] transition-colors"
+                      aria-label={showResetConfirmPass ? "Hide password" : "Show password"}
+                    >
+                      {showResetConfirmPass ? <EyeOff className="h-3.5 w-3.5" /> : <Eye className="h-3.5 w-3.5" />}
+                    </button>
+                  </div>
                 </div>
               </div>
 

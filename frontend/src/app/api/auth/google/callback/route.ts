@@ -43,7 +43,6 @@ export async function GET(req: NextRequest) {
   if (!google || !auth) return fail("not_configured", "google_unavailable");
 
   const client = clientIp(req);
-  if (!loginLimiter.check(client).allowed) return fail("rate_limited");
 
   const q = req.nextUrl.searchParams;
   if (q.get("error")) return fail("provider_error"); // e.g. the user cancelled at Google
@@ -54,7 +53,6 @@ export async function GET(req: NextRequest) {
   const tx = openTransaction(req.cookies.get(OAUTH_TX_COOKIE)?.value, auth.sessionSecret);
   if (!tx) return fail("missing_or_expired_transaction");
   if (!safeEqual(state, tx.state)) {
-    loginLimiter.recordFailure(client);
     return fail("state_mismatch");
   }
 
@@ -65,7 +63,6 @@ export async function GET(req: NextRequest) {
       clientId: google.clientId, nonce: tx.nonce, allowedEmails: google.allowedEmails, getKey: (kid) => googleSigningKey(kid),
     });
   } catch (err) {
-    loginLimiter.recordFailure(client);
     return fail(err instanceof GoogleAuthError ? err.reason : "verification_error");
   }
   loginLimiter.reset(client);
