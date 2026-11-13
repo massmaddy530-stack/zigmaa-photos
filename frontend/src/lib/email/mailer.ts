@@ -112,3 +112,4 @@ export async function sendOtpEmail(toEmail: string, otp: string): Promise<boolea
     throw err;
   }
 }
+

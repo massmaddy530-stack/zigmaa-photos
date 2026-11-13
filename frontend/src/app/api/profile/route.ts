@@ -45,6 +45,7 @@ export async function PATCH(req: NextRequest) {
     const body = await req.json().catch(() => null);
     const name = typeof body?.name === "string" ? body.name.trim() : undefined;
     const email = typeof body?.email === "string" ? body.email.trim() : undefined;
+    const picture = typeof body?.picture === "string" ? body.picture : undefined;
     const currentPassword = typeof body?.currentPassword === "string" ? body.currentPassword : "";
     const newPassword = typeof body?.newPassword === "string" ? body.newPassword : "";
 
@@ -106,8 +107,9 @@ export async function PATCH(req: NextRequest) {
 
     const updatedProfile = {
       ...currentProfile,
-      name: name || currentProfile.name,
-      email: email || currentProfile.email,
+      name: name !== undefined ? name : currentProfile.name,
+      email: email !== undefined ? email : currentProfile.email,
+      picture: picture !== undefined ? picture : currentProfile.picture,
     };
 
     const res = NextResponse.json({
@@ -130,3 +132,4 @@ export async function PATCH(req: NextRequest) {
     return NextResponse.json({ ok: false, error: "Failed to update profile." }, { status: 500 });
   }
 }
+
