@@ -103,12 +103,47 @@ export class DownloadError extends Error {
   }
 }
 
+export interface WatermarkConfig {
+  imageUrl?: string | null;
+  xPercent?: number; // 0 to 100
+  yPercent?: number; // 0 to 100
+  sizePercent?: number; // 5 to 60 (relative to photo width)
+  opacity?: number; // 0.1 to 1.0
+  color?: "original" | "white" | "gold" | "dark" | string;
+}
+
+export function getSavedWatermarkConfig(eventIdOrSlug?: string): WatermarkConfig | undefined {
+  if (typeof window === "undefined") return undefined;
+  try {
+    if (eventIdOrSlug) {
+      const saved = localStorage.getItem(`madx_event_watermark_${eventIdOrSlug}`);
+      if (saved) return JSON.parse(saved);
+    }
+    // Also check current URL path to auto-detect event id or slug
+    const pathParts = window.location.pathname.split("/").filter(Boolean);
+    if (pathParts[0] === "e" && pathParts[1]) {
+      const saved = localStorage.getItem(`madx_event_watermark_${pathParts[1]}`);
+      if (saved) return JSON.parse(saved);
+    } else if (pathParts[0] === "dashboard" && pathParts[1] === "events" && pathParts[2]) {
+      const saved = localStorage.getItem(`madx_event_watermark_${pathParts[2]}`);
+      if (saved) return JSON.parse(saved);
+    }
+    const defaultSaved = localStorage.getItem("madx_default_watermark");
+    if (defaultSaved) return JSON.parse(defaultSaved);
+  } catch {
+    /* fallback to default */
+  }
+  return undefined;
+}
+
 /**
- * Overlays the MADX transparent logo in the right side middle of the photo
- * before saving to the user's device.
+ * Overlays the watermark (custom uploaded or default MADX logo) on the photo
+ * before saving to the user's device with exact placement, scale, opacity, and color.
  */
-async function applyWatermark(blob: Blob): Promise<Blob> {
+export async function applyWatermark(blob: Blob, customConfig?: WatermarkConfig): Promise<Blob> {
   if (typeof window === "undefined" || typeof document === "undefined") return blob;
+
+  const config = customConfig || getSavedWatermarkConfig();
 
   return new Promise((resolve) => {
     const photoImg = new Image();
@@ -132,25 +167,76 @@ async function applyWatermark(blob: Blob): Promise<Blob> {
         // Draw the full resolution original photo
         ctx.drawImage(photoImg, 0, 0, width, height);
 
-        // Load the translucent uncropped MADX photography watermark (round logo on top of text)
+        // Load the watermark logo / template
         const logo = new Image();
         logo.crossOrigin = "anonymous";
         logo.onload = () => {
           try {
-            // Smaller, elegant watermark sizing (~12% to 14% width, min 110px, max 320px)
-            const targetWidth = Math.max(110, Math.min(width * 0.13, 320));
+            // Sizing: based on configured percentage (default ~14% of photo width)
+            const sizePct = config?.sizePercent ?? 14;
+            const targetWidth = Math.max(60, Math.round(width * (sizePct / 100)));
             const aspect = (logo.naturalWidth || 736) / (logo.naturalHeight || 570);
-            const targetHeight = targetWidth / aspect;
+            const targetHeight = Math.max(20, Math.round(targetWidth / aspect));
 
-            // Position: right side, below middle (between middle and bottom)
-            const margin = Math.max(16, Math.round(width * 0.03));
-            const x = width - targetWidth - margin;
-            const y = Math.round((height - targetHeight) * 0.68);
+            // Position calculation
+            const xPct = config?.xPercent ?? 95;
+            const yPct = config?.yPercent ?? 68;
+
+            let x: number;
+            let y: number;
+
+            // Margin padding for edge attachments
+            const marginX = Math.max(16, Math.round(width * 0.03));
+            const marginY = Math.max(16, Math.round(height * 0.03));
+
+            if (xPct >= 80) {
+              x = Math.round(width * (xPct / 100)) - targetWidth - (xPct >= 95 ? marginX : 0);
+            } else if (xPct <= 20) {
+              x = Math.round(width * (xPct / 100)) + (xPct <= 5 ? marginX : 0);
+            } else {
+              x = Math.round(width * (xPct / 100) - targetWidth / 2);
+            }
+
+            if (yPct >= 80) {
+              y = Math.round(height * (yPct / 100)) - targetHeight - (yPct >= 95 ? marginY : 0);
+            } else if (yPct <= 20) {
+              y = Math.round(height * (yPct / 100)) + (yPct <= 5 ? marginY : 0);
+            } else {
+              y = Math.round((height - targetHeight) * (yPct / 100));
+            }
+
+            // Bound checks
+            x = Math.max(0, Math.min(x, width - targetWidth));
+            y = Math.max(0, Math.min(y, height - targetHeight));
 
             ctx.save();
-            // 40% transparency (0.40 opacity) for a truly translucent watermark overlay
-            ctx.globalAlpha = 0.40;
-            ctx.drawImage(logo, x, y, targetWidth, targetHeight);
+            ctx.globalAlpha = config?.opacity ?? 0.40;
+
+            const color = config?.color || "original";
+            if (color !== "original") {
+              // Tint watermark using an offscreen canvas with source-in blend mode
+              const offCanvas = document.createElement("canvas");
+              offCanvas.width = targetWidth;
+              offCanvas.height = targetHeight;
+              const offCtx = offCanvas.getContext("2d");
+              if (offCtx) {
+                offCtx.drawImage(logo, 0, 0, targetWidth, targetHeight);
+                let fillColor = color;
+                if (color === "white") fillColor = "#ffffff";
+                else if (color === "gold") fillColor = "#dfa843";
+                else if (color === "dark") fillColor = "#140e07";
+
+                offCtx.globalCompositeOperation = "source-in";
+                offCtx.fillStyle = fillColor;
+                offCtx.fillRect(0, 0, targetWidth, targetHeight);
+                ctx.drawImage(offCanvas, x, y);
+              } else {
+                ctx.drawImage(logo, x, y, targetWidth, targetHeight);
+              }
+            } else {
+              ctx.drawImage(logo, x, y, targetWidth, targetHeight);
+            }
+
             ctx.restore();
 
             canvas.toBlob(
@@ -169,7 +255,7 @@ async function applyWatermark(blob: Blob): Promise<Blob> {
           resolve(blob);
         };
 
-        logo.src = "/watermark.png";
+        logo.src = config?.imageUrl || "/watermark.png";
       } catch {
         resolve(blob);
       }
@@ -185,12 +271,12 @@ async function applyWatermark(blob: Blob): Promise<Blob> {
 }
 
 /**
- * Download an event photo with the MADX transparent watermark embedded on the right side below middle.
+ * Download an event photo with the customized watermark embedded.
  * Automatically proxies through /api/download if cross-origin storage (e.g. Cloudflare R2) restricts CORS,
  * guaranteeing watermark embedding and direct download to local storage.
  * Throws DownloadError when offline, when the link has expired, or when the transfer is interrupted.
  */
-export async function downloadImage(url: string, filename: string) {
+export async function downloadImage(url: string, filename: string, config?: WatermarkConfig) {
   if (typeof navigator !== "undefined" && navigator.onLine === false) {
     throw new DownloadError("You're offline. Reconnect and tap Download again.");
   }
@@ -219,7 +305,7 @@ export async function downloadImage(url: string, filename: string) {
 
   try {
     const rawBlob = await res.blob();
-    const finalBlob = await applyWatermark(rawBlob);
+    const finalBlob = await applyWatermark(rawBlob, config);
     const href = URL.createObjectURL(finalBlob);
     const a = document.createElement("a");
     a.href = href;
