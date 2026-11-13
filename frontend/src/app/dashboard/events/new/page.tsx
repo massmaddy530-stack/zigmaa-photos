@@ -118,9 +118,10 @@ export default function NewEventPage() {
         breadcrumb={
           <Link
             href="/dashboard"
-            onClick={(e) => {
-              e.preventDefault();
-              router.push("/dashboard");
+            onClick={() => {
+              if (typeof window !== "undefined") {
+                window.location.href = "/dashboard";
+              }
             }}
             className="inline-flex items-center gap-1 text-sm font-medium text-muted hover:text-ink cursor-pointer transition-colors"
           >
@@ -146,11 +147,12 @@ export default function NewEventPage() {
                 footerExtra={
                   <Link
                     href="/dashboard"
-                    onClick={(e) => {
-                      e.preventDefault();
-                      router.push("/dashboard");
+                    onClick={() => {
+                      if (typeof window !== "undefined") {
+                        window.location.href = "/dashboard";
+                      }
                     }}
-                    className="px-3 text-sm font-medium text-muted hover:text-ink"
+                    className="px-3 text-sm font-medium text-muted hover:text-ink cursor-pointer"
                   >
                     Cancel
                   </Link>
