@@ -26,7 +26,7 @@ export async function GET(req: NextRequest) {
   try {
     const res = await fetch(targetUrl.toString(), {
       headers: {
-        "User-Agent": "MADX-Photos-Downloader/1.0",
+        "User-Agent": "Zigmaa-Photos-Downloader/1.0",
       },
     });
 

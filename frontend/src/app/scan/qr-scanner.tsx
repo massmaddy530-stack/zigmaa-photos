@@ -92,7 +92,7 @@ export function QrScanner() {
         try {
           for (const b of await detector.detect(video)) {
             if (open(b.rawValue)) return;
-            setProblem("That QR code isn't a MADX Photos event code. Scan the code from the event's table card or screen.");
+            setProblem("That QR code isn't a Zigmaa Photos event code. Scan the code from the event's table card or screen.");
           }
         } catch {
           // A frame can fail to decode; keep scanning.

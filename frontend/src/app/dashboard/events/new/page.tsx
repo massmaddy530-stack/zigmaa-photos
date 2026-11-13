@@ -69,10 +69,10 @@ export default function NewEventPage() {
       opacity: 0.40,
       color: "original",
     });
-    toast.success("Reset to MADX defaults");
+    toast.success("Reset to Zigmaa defaults");
   }
 
-  // Active watermark source: uploaded template if present, else fallback MADX logo
+  // Active watermark source: uploaded template if present, else fallback Zigmaa logo
   const watermarkSrc = live.templatePreview || wm.imageUrl || "/watermark.png";
   // Active cover image: uploaded cover if present, else default AI marriage couple photo
   const coverSrc = live.preview || "/default-cover.jpg";
@@ -188,7 +188,7 @@ export default function NewEventPage() {
                   <button
                     type="button"
                     onClick={resetDefaults}
-                    title="Reset to MADX defaults"
+                    title="Reset to Zigmaa defaults"
                     className="inline-flex items-center gap-1 rounded-lg border border-line bg-surface px-2.5 py-1 text-xs font-medium text-muted hover:bg-canvas hover:text-ink transition-colors"
                   >
                     <RotateCcw className="h-3 w-3" />

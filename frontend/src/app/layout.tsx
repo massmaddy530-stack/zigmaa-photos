@@ -7,7 +7,7 @@ const geistMono = Geist_Mono({ variable: "--font-geist-mono", subsets: ["latin"]
 const playfair = Playfair_Display({ variable: "--font-playfair", subsets: ["latin"], display: "swap" });
 
 export const metadata: Metadata = {
-  title: { default: "MADX Photos — AI event photo sharing", template: "%s · MADX Photos" },
+  title: { default: "Zigmaa Photos — AI event photo sharing", template: "%s · Zigmaa Photos" },
   description: "Deliver every guest their event photos with a selfie.",
   icons: {
     icon: "/favicon.ico",
@@ -18,7 +18,7 @@ export const metadata: Metadata = {
 export const viewport: Viewport = {
   width: "device-width",
   initialScale: 1,
-  themeColor: "#f8f5ef",
+  themeColor: "#ffffff",
 };
 
 export default function RootLayout({ children }: Readonly<{ children: React.ReactNode }>) {

@@ -6,28 +6,28 @@
   /* Headings only (20px and up); body text and controls stay in the sans face. */
   --font-display: var(--font-playfair), Georgia, "Times New Roman", serif;
 
-  /* Brand: MADX metallic gold palette matching the official logo */
-  --color-brand-50: #fdfaf2;
-  --color-brand-100: #f9f1d8;
-  --color-brand-200: #f2e1b1;
-  --color-brand-300: #e8cd82;
-  --color-brand-400: #d8b248;
-  --color-brand-500: #c59b27;
-  --color-brand-600: #a77d18;
-  --color-brand-700: #855f15;
-  --color-brand-800: #6a4b16;
-  --color-brand-900: #543b16;
-  --color-brand-950: #2f1e07;
+  /* Brand: Zigmaa crimson red & white palette matching the official wolf logo */
+  --color-brand-50: #fef2f2;
+  --color-brand-100: #fee2e2;
+  --color-brand-200: #fecaca;
+  --color-brand-300: #fca5a5;
+  --color-brand-400: #f87171;
+  --color-brand-500: #e50914;
+  --color-brand-600: #dc2626;
+  --color-brand-700: #b91c1c;
+  --color-brand-800: #991b1b;
+  --color-brand-900: #7f1d1d;
+  --color-brand-950: #450a0a;
 
-  /* Surfaces: ivory canvas, white cards, warm beige lines, espresso text */
-  --color-canvas: #f8f5ef;
+  /* Surfaces: clean white cards, crisp silver lines, slate ink text */
+  --color-canvas: #f8fafc;
   --color-surface: #ffffff;
-  --color-line: #e8dfd1;
-  --color-ink: #302820;
-  --color-muted: #6f665b;
+  --color-line: #e2e8f0;
+  --color-ink: #0f172a;
+  --color-muted: #64748b;
 
-  --shadow-card: 0 1px 2px rgb(48 40 32 / 0.04), 0 1px 3px rgb(48 40 32 / 0.06);
-  --shadow-pop: 0 12px 32px -12px rgb(48 40 32 / 0.22), 0 4px 12px -4px rgb(48 40 32 / 0.08);
+  --shadow-card: 0 1px 2px rgb(15 23 42 / 0.04), 0 1px 3px rgb(15 23 42 / 0.06);
+  --shadow-pop: 0 12px 32px -12px rgb(229 9 20 / 0.25), 0 4px 12px -4px rgb(15 23 42 / 0.08);
 
   --animate-shimmer: shimmer 1.6s linear infinite;
   --animate-fade-in: fade-in 0.18s ease-out;
@@ -79,7 +79,7 @@ body {
 }
 
 .skeleton {
-  background: linear-gradient(90deg, #efe8dc 0px, #f8f4ec 120px, #efe8dc 240px);
+  background: linear-gradient(90deg, #f1f5f9 0px, #ffffff 120px, #f1f5f9 240px);
   background-size: 800px 100%;
   animation: var(--animate-shimmer);
 }

@@ -9,10 +9,10 @@ import { cn } from "@/lib/format";
 
 export function Logo({ className }: { className?: string; admin?: boolean }) {
   return (
-    <span className={cn("inline-flex items-center gap-3", className)}>
-      <img src="/logo.png" alt="MADX Logo" className="h-9 w-auto max-w-[48px] object-contain drop-shadow-sm" />
+    <span className={cn("inline-flex items-center gap-2.5", className)}>
+      <img src="/logo.png" alt="Zigmaa Logo" className="h-9 w-9 rounded-xl object-cover shadow-sm ring-1 ring-brand-500/20" />
       <span className="font-display text-[21px] font-bold tracking-wide text-ink">
-        MADX <span className="text-[var(--color-brand-600)]">Photos</span>
+        Zigmaa <span className="text-[var(--color-brand-500)]">Photos</span>
       </span>
     </span>
   );
