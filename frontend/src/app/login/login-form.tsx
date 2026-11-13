@@ -1,7 +1,7 @@
 "use client";
 
 import { useRouter, useSearchParams } from "next/navigation";
-import { CheckCircle2, Eye, EyeOff } from "lucide-react";
+import { CheckCircle2, Eye, EyeOff, Lock, User } from "lucide-react";
 import { useState, type FormEvent } from "react";
 import { ApiError, CSRF_HEADER, errorMessage, toApiError } from "@/lib/api";
 
@@ -178,22 +178,29 @@ export function LoginForm() {
   return (
     <div className="w-full">
       {/* ========================================================
-          VIEW 1: SIGN IN (WELCOME BACK)
+          VIEW 1: SIGN IN (WELCOME BACK / STUDIO SIGN IN)
       ======================================================== */}
       {view === "login" && (
-        <div className="space-y-4 animate-fade-in">
+        <div className="space-y-3.5 animate-fade-in">
+          {/* Subtle red diamond separator */}
+          <div className="flex items-center justify-center gap-2.5 py-0.5">
+            <span className="h-px w-12 bg-red-200" />
+            <span className="text-[10px] text-[#e50914]">◆</span>
+            <span className="h-px w-12 bg-red-200" />
+          </div>
+
           {/* Header */}
-          <div className="space-y-1">
-            <h1 className="text-2xl sm:text-[28px] font-bold tracking-tight text-[#0f172a]">
-              Welcome back
+          <div className="space-y-0.5 text-center">
+            <h1 className="text-xl sm:text-2xl font-bold tracking-tight text-[#0f172a]">
+              Sign in to your studio
             </h1>
-            <p className="text-xs sm:text-sm text-[#64748b]">
-              Sign in to continue to your Zigmaa Photos account.
+            <p className="text-xs text-[#64748b]">
+              Sign in with your admin username and password.
             </p>
           </div>
 
           {error && (
-            <div className="rounded-xl border border-red-200 bg-red-50 p-2.5 text-center text-xs font-medium text-[#e50914]">
+            <div className="rounded-xl border border-red-200 bg-red-50 p-2 text-center text-xs font-medium text-[#e50914]">
               {error}
             </div>
           )}
@@ -206,61 +213,71 @@ export function LoginForm() {
             </div>
           )}
 
-          <form onSubmit={onLoginSubmit} className="space-y-3.5">
-            {/* Email Address / Username Field */}
+          <form onSubmit={onLoginSubmit} className="space-y-3">
+            {/* Username Field with User icon */}
             <div>
               <label
                 htmlFor="login-email"
-                className="block text-xs font-semibold text-[#1e293b] mb-1"
+                className="flex items-center gap-1.5 text-xs font-semibold text-[#1e293b] mb-1"
               >
-                Email Address
+                <User className="h-3.5 w-3.5 text-[#64748b]" />
+                <span>Username</span>
               </label>
-              <input
-                id="login-email"
-                name="username"
-                type="text"
-                autoComplete="username"
-                required
-                autoFocus
-                placeholder="Enter Your Registered Email Address"
-                value={username}
-                onChange={(e) => setUsername(e.target.value)}
-                className="w-full rounded-xl border border-[#e2e8f0] bg-white px-3.5 py-2.5 text-sm text-[#0f172a] placeholder:text-[#94a3b8] placeholder:italic shadow-sm transition-all focus:border-[#e50914] focus:outline-none focus:ring-1 focus:ring-[#e50914]"
-              />
+              <div className="relative">
+                <div className="pointer-events-none absolute inset-y-0 left-0 flex items-center pl-3.5 text-[#94a3b8]">
+                  <User className="h-4 w-4" />
+                </div>
+                <input
+                  id="login-email"
+                  name="username"
+                  type="text"
+                  autoComplete="username"
+                  required
+                  autoFocus
+                  placeholder="admin"
+                  value={username}
+                  onChange={(e) => setUsername(e.target.value)}
+                  className="w-full rounded-2xl border border-[#e2e8f0] bg-white pl-10 pr-3.5 py-2.5 text-sm text-[#0f172a] placeholder:text-[#94a3b8] shadow-sm transition-all focus:border-[#e50914] focus:outline-none focus:ring-1 focus:ring-[#e50914]"
+                />
+              </div>
             </div>
 
-            {/* Password Field */}
+            {/* Password Field with Lock icon and Eye toggle */}
             <div>
               <label
                 htmlFor="login-password"
-                className="block text-xs font-semibold text-[#1e293b] mb-1"
+                className="flex items-center gap-1.5 text-xs font-semibold text-[#1e293b] mb-1"
               >
-                Password
+                <Lock className="h-3.5 w-3.5 text-[#64748b]" />
+                <span>Password</span>
               </label>
               <div className="relative">
+                <div className="pointer-events-none absolute inset-y-0 left-0 flex items-center pl-3.5 text-[#94a3b8]">
+                  <Lock className="h-4 w-4" />
+                </div>
                 <input
                   id="login-password"
                   name="password"
                   type={showPassword ? "text" : "password"}
                   autoComplete="current-password"
                   required
-                  placeholder="Enter Your Password"
+                  placeholder="••••••••••"
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
-                  className="w-full rounded-xl border border-[#e2e8f0] bg-white px-3.5 py-2.5 pr-10 text-sm text-[#0f172a] placeholder:text-[#94a3b8] placeholder:italic shadow-sm transition-all focus:border-[#e50914] focus:outline-none focus:ring-1 focus:ring-[#e50914]"
+                  className="w-full rounded-2xl border border-[#e2e8f0] bg-white pl-10 pr-10 py-2.5 text-sm text-[#0f172a] placeholder:text-[#94a3b8] shadow-sm transition-all focus:border-[#e50914] focus:outline-none focus:ring-1 focus:ring-[#e50914]"
                 />
                 <button
                   type="button"
                   onClick={() => setShowPassword((s) => !s)}
-                  className="absolute right-3 top-1/2 -translate-y-1/2 text-[#94a3b8] hover:text-[#64748b] transition-colors"
+                  className="absolute right-3.5 top-1/2 -translate-y-1/2 text-[#94a3b8] hover:text-[#64748b] transition-colors"
                   aria-label={showPassword ? "Hide password" : "Show password"}
                 >
                   {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
                 </button>
               </div>
 
-              {/* Forgot Password Link - Exactly like Photo 2 */}
-              <div className="mt-1.5 text-right">
+              {/* Forgot Password Link */}
+              <div className="mt-1 text-right">
                 <button
                   type="button"
                   onClick={() => {
@@ -275,19 +292,19 @@ export function LoginForm() {
               </div>
             </div>
 
-            {/* Solid Bold Red Login Button */}
+            {/* Solid Bold Red Sign in Button matching the mockup */}
             <button
               type="submit"
               disabled={busy}
-              className="w-full rounded-xl bg-[#e50914] py-3 text-center text-sm font-semibold tracking-wide text-white shadow-md transition-all hover:bg-[#cc0812] active:scale-[0.99] disabled:opacity-50"
+              className="w-full rounded-2xl bg-[#e50914] py-2.5 text-center text-sm font-semibold tracking-wide text-white shadow-[0_4px_14px_rgba(229,9,20,0.35)] transition-all hover:bg-[#cc0812] active:scale-[0.99] disabled:opacity-50"
             >
-              {busy ? "Signing in..." : "Login"}
+              {busy ? "Signing in..." : "Sign in →"}
             </button>
 
             {/* Google Sign in Button */}
             <a
               href={`/api/auth/google/start?next=${encodeURIComponent(next)}`}
-              className="flex w-full items-center justify-center gap-2.5 rounded-xl border border-[#e2e8f0] bg-white py-2.5 text-center text-xs sm:text-sm font-medium text-[#1e293b] shadow-sm transition-all hover:bg-slate-50 hover:border-slate-300 active:scale-[0.99]"
+              className="flex w-full items-center justify-center gap-2.5 rounded-2xl border border-[#e2e8f0] bg-white py-2.5 text-center text-xs sm:text-sm font-medium text-[#1e293b] shadow-sm transition-all hover:bg-slate-50 hover:border-slate-300 active:scale-[0.99]"
             >
               <GoogleIcon />
               <span>Sign in with Google</span>
