@@ -5,7 +5,6 @@ import { useRouter } from "next/navigation";
 import {
   ChevronLeft,
   Move,
-  Palette,
   RotateCcw,
   Sparkles,
   Sliders,
@@ -17,13 +16,6 @@ import { Badge, Card, CardHeader } from "@/components/ui/primitives";
 import { useToast } from "@/components/ui/toast";
 import { adminApi, errorMessage } from "@/lib/api";
 import type { WatermarkConfig } from "@/lib/image";
-
-const COLOR_OPTIONS = [
-  { id: "original", label: "Original", bg: "bg-gradient-to-tr from-amber-400 via-rose-400 to-indigo-500" },
-  { id: "white", label: "White", bg: "bg-white border border-[#d5cbbe]" },
-  { id: "gold", label: "Gold", bg: "bg-[#dfa843]" },
-  { id: "dark", label: "Dark", bg: "bg-[#181109]" },
-] as const;
 
 export default function NewEventPage() {
   const router = useRouter();
@@ -265,59 +257,17 @@ export default function NewEventPage() {
             </div>
 
             {/* Customization Controls Panel */}
-            <div className="p-5 space-y-5">
-              {/* Position Controls */}
-              <div>
-                <div className="mb-2 flex items-center justify-between">
-                  <label className="text-xs font-semibold uppercase tracking-wider text-muted flex items-center gap-1.5">
-                    <Move className="h-3.5 w-3.5 text-brand-600" />
-                    <span>Watermark Position</span>
-                  </label>
-                  <span className="text-xs font-mono font-medium text-ink">
-                    X: {wm.xPercent}% · Y: {wm.yPercent}%
-                  </span>
-                </div>
-
-                {/* Coordinate Sliders */}
-                <div className="grid gap-3 sm:grid-cols-2">
-                  <div className="flex items-center gap-2">
-                    <span className="text-xs text-muted w-14">Horiz (X):</span>
-                    <input
-                      type="range"
-                      min={0}
-                      max={100}
-                      value={wm.xPercent ?? 88}
-                      onChange={(e) => setWm((prev) => ({ ...prev, xPercent: Number(e.target.value) }))}
-                      className="w-full accent-brand-500 cursor-pointer h-1.5 bg-line rounded-lg"
-                    />
-                    <span className="text-xs font-mono text-ink w-9 text-right">{wm.xPercent}%</span>
+            <div className="p-5">
+              <div className="grid gap-5 sm:grid-cols-2">
+                {/* Size & Scale Control */}
+                <div>
+                  <div className="mb-2 flex items-center justify-between">
+                    <label className="text-xs font-semibold uppercase tracking-wider text-muted flex items-center gap-1.5">
+                      <Sliders className="h-3.5 w-3.5 text-brand-600" />
+                      <span>Watermark Size</span>
+                    </label>
+                    <span className="text-xs font-mono font-medium text-ink">{wm.sizePercent}% of photo width</span>
                   </div>
-                  <div className="flex items-center gap-2">
-                    <span className="text-xs text-muted w-14">Vert (Y):</span>
-                    <input
-                      type="range"
-                      min={0}
-                      max={100}
-                      value={wm.yPercent ?? 88}
-                      onChange={(e) => setWm((prev) => ({ ...prev, yPercent: Number(e.target.value) }))}
-                      className="w-full accent-brand-500 cursor-pointer h-1.5 bg-line rounded-lg"
-                    />
-                    <span className="text-xs font-mono text-ink w-9 text-right">{wm.yPercent}%</span>
-                  </div>
-                </div>
-              </div>
-
-              {/* Size & Scale Controls */}
-              <div className="pt-2 border-t border-line/60">
-                <div className="mb-2 flex items-center justify-between">
-                  <label className="text-xs font-semibold uppercase tracking-wider text-muted flex items-center gap-1.5">
-                    <Sliders className="h-3.5 w-3.5 text-brand-600" />
-                    <span>Watermark Size</span>
-                  </label>
-                  <span className="text-xs font-mono font-medium text-ink">{wm.sizePercent}% of photo width</span>
-                </div>
-
-                <div className="flex items-center gap-3">
                   <input
                     type="range"
                     min={5}
@@ -325,46 +275,16 @@ export default function NewEventPage() {
                     step={1}
                     value={wm.sizePercent ?? 14}
                     onChange={(e) => setWm((prev) => ({ ...prev, sizePercent: Number(e.target.value) }))}
-                    className="w-full accent-brand-500 cursor-pointer h-2 bg-line rounded-lg"
+                    className="w-full accent-brand-500 cursor-pointer h-2 bg-line rounded-lg mt-2"
                   />
                 </div>
-              </div>
 
-              {/* Color & Opacity Controls */}
-              <div className="pt-2 border-t border-line/60 grid gap-4 sm:grid-cols-2">
-                {/* Color Scheme */}
-                <div>
-                  <label className="mb-2 block text-xs font-semibold uppercase tracking-wider text-muted flex items-center gap-1.5">
-                    <Palette className="h-3.5 w-3.5 text-brand-600" />
-                    <span>Watermark Color</span>
-                  </label>
-                  <div className="flex flex-wrap items-center gap-2">
-                    {COLOR_OPTIONS.map((c) => {
-                      const isActive = (wm.color || "original") === c.id;
-                      return (
-                        <button
-                          key={c.id}
-                          type="button"
-                          onClick={() => setWm((prev) => ({ ...prev, color: c.id }))}
-                          className={`inline-flex items-center gap-1.5 rounded-xl border px-3 py-1.5 text-xs font-medium transition-all ${
-                            isActive
-                              ? "border-brand-500 bg-brand-50 text-ink ring-1 ring-brand-500"
-                              : "border-line bg-surface text-muted hover:bg-canvas hover:text-ink"
-                          }`}
-                        >
-                          <span className={`h-3 w-3 rounded-full ${c.bg}`} />
-                          <span>{c.label}</span>
-                        </button>
-                      );
-                    })}
-                  </div>
-                </div>
-
-                {/* Opacity Slider */}
+                {/* Transparency / Opacity Control */}
                 <div>
                   <div className="mb-2 flex items-center justify-between">
-                    <label className="text-xs font-semibold uppercase tracking-wider text-muted">
-                      Transparency / Opacity
+                    <label className="text-xs font-semibold uppercase tracking-wider text-muted flex items-center gap-1.5">
+                      <Sparkles className="h-3.5 w-3.5 text-brand-600" />
+                      <span>Transparency / Opacity</span>
                     </label>
                     <span className="text-xs font-mono font-medium text-ink">
                       {Math.round((wm.opacity ?? 0.4) * 100)}%
