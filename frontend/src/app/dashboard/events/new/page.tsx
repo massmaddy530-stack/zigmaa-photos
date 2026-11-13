@@ -15,7 +15,7 @@ import { EventForm } from "@/components/event-form";
 import { Badge, Card, CardHeader } from "@/components/ui/primitives";
 import { useToast } from "@/components/ui/toast";
 import { adminApi, errorMessage } from "@/lib/api";
-import type { WatermarkConfig } from "@/lib/image";
+import { fileToDataUrl, saveEventWatermarkConfig, type WatermarkConfig } from "@/lib/image";
 
 export default function NewEventPage() {
   const router = useRouter();
@@ -136,24 +136,27 @@ export default function NewEventPage() {
                     setWm((prev) => ({ ...prev, imageUrl: templatePreview }));
                   }
                 }}
-                onSubmit={async ({ cover, ...values }) => {
+                onSubmit={async ({ cover, template, ...values }) => {
                   const ev = await adminApi.createEvent(values);
+
+                  // Convert template file to permanent Base64 data URL so it never expires
+                  let dataUrl = live.templatePreview || null;
+                  const templateFile = template || live.template;
+                  if (templateFile) {
+                    try {
+                      dataUrl = await fileToDataUrl(templateFile);
+                    } catch (e) {
+                      console.warn("Could not convert template to data URL", e);
+                    }
+                  }
 
                   // Persist watermark configuration for this event and as studio default
                   const finalConfig: WatermarkConfig = {
                     ...wm,
-                    imageUrl: live.templatePreview || null,
+                    imageUrl: dataUrl,
                   };
 
-                  if (typeof window !== "undefined") {
-                    try {
-                      localStorage.setItem(`madx_event_watermark_${ev.id}`, JSON.stringify(finalConfig));
-                      localStorage.setItem(`madx_event_watermark_${ev.slug}`, JSON.stringify(finalConfig));
-                      localStorage.setItem("madx_default_watermark", JSON.stringify(finalConfig));
-                    } catch (e) {
-                      console.warn("Could not save watermark config", e);
-                    }
-                  }
+                  saveEventWatermarkConfig(ev.id, ev.slug, finalConfig);
 
                   if (cover) {
                     try {
@@ -195,18 +198,18 @@ export default function NewEventPage() {
               }
             />
 
-            {/* Interactive Preview Canvas */}
-            <div className="p-5 pb-0">
+            {/* Interactive Preview Canvas - Uncropped Full Image */}
+            <div className="p-5 pb-0 flex items-center justify-center">
               <div
                 ref={previewRef}
                 onClick={handlePreviewClick}
-                className="relative w-full h-[520px] sm:h-[560px] overflow-hidden rounded-2xl border border-line shadow-md cursor-crosshair select-none group bg-canvas"
+                className="relative inline-block max-h-[620px] max-w-full overflow-hidden rounded-2xl border border-line shadow-md cursor-crosshair select-none group bg-canvas"
               >
                 {/* Background Cover Image (User uploaded or Default AI Marriage Couple) */}
                 <img
                   src={coverSrc}
                   alt="Event Cover Preview"
-                  className="h-full w-full object-cover object-center transition-opacity duration-300"
+                  className="max-h-[620px] w-auto max-w-full block object-contain mx-auto transition-opacity duration-300"
                 />
 
                 {/* Badge indicator on top-left of photo */}

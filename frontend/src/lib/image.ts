@@ -112,6 +112,27 @@ export interface WatermarkConfig {
   color?: "original" | "white" | "gold" | "dark" | string;
 }
 
+export function fileToDataUrl(file: File): Promise<string> {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => resolve(reader.result as string);
+    reader.onerror = (err) => reject(err);
+    reader.readAsDataURL(file);
+  });
+}
+
+export function saveEventWatermarkConfig(eventId: string, slug?: string | null, config?: WatermarkConfig) {
+  if (typeof window === "undefined" || !config) return;
+  try {
+    const json = JSON.stringify(config);
+    if (eventId) localStorage.setItem(`madx_event_watermark_${eventId}`, json);
+    if (slug) localStorage.setItem(`madx_event_watermark_${slug}`, json);
+    localStorage.setItem("madx_default_watermark", json);
+  } catch (e) {
+    console.warn("Could not save watermark config", e);
+  }
+}
+
 export function getSavedWatermarkConfig(eventIdOrSlug?: string): WatermarkConfig | undefined {
   if (typeof window === "undefined") return undefined;
   try {

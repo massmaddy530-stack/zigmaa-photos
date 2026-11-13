@@ -1,11 +1,12 @@
 "use client";
 
 import { useRouter } from "next/navigation";
-import { Archive, ArchiveRestore, ImagePlus, ScanFace, Trash2 } from "lucide-react";
+import { ImagePlus, ScanFace, Sliders, Sparkles, Trash2 } from "lucide-react";
 import { useRef, useState } from "react";
 import { adminApi, errorMessage } from "@/lib/api";
 import { ACCEPTED_IMAGE_TYPES, MAX_UPLOAD_MB } from "@/lib/config";
 import { formatNumber } from "@/lib/format";
+import { fileToDataUrl, getSavedWatermarkConfig, saveEventWatermarkConfig, type WatermarkConfig } from "@/lib/image";
 import type { EventOut } from "@/lib/types";
 import { CoverImage } from "./event-card";
 import { EventForm } from "./event-form";
@@ -18,11 +19,29 @@ export function EventSettings({ event, onSaved }: { event: EventOut; onSaved: (e
   const router = useRouter();
   const toast = useToast();
   const coverRef = useRef<HTMLInputElement>(null);
+  const templateRef = useRef<HTMLInputElement>(null);
+  const previewRef = useRef<HTMLDivElement>(null);
+
   const [coverBusy, setCoverBusy] = useState(false);
-  const [statusBusy, setStatusBusy] = useState(false);
   const [dialog, setDialog] = useState<"purge" | "delete" | null>(null);
   const [busy, setBusy] = useState(false);
   const [confirmName, setConfirmName] = useState("");
+
+  // Load existing watermark configuration or defaults
+  const [wm, setWm] = useState<WatermarkConfig>(() => {
+    return (
+      getSavedWatermarkConfig(event.id) ||
+      getSavedWatermarkConfig(event.slug) ||
+      getSavedWatermarkConfig() || {
+        imageUrl: null,
+        xPercent: 88,
+        yPercent: 88,
+        sizePercent: 14,
+        opacity: 0.4,
+        color: "original",
+      }
+    );
+  });
 
   async function changeCover(f: File | undefined) {
     if (!f) return;
@@ -41,18 +60,29 @@ export function EventSettings({ event, onSaved }: { event: EventOut; onSaved: (e
     }
   }
 
-  async function toggleStatus() {
-    setStatusBusy(true);
+  async function changeTemplate(f: File | undefined) {
+    if (!f) return;
     try {
-      const next = event.status === "active" ? "archived" : "active";
-      onSaved(await adminApi.updateEvent(event.id, { status: next }));
-      toast.success(next === "archived" ? "Event archived" : "Event is live again",
-        next === "archived" ? "Guests can no longer open the event link." : "Guests can use the event link again.");
-    } catch (err) {
-      toast.error("Couldn't change status", errorMessage(err));
-    } finally {
-      setStatusBusy(false);
+      const dataUrl = await fileToDataUrl(f);
+      setWm((prev) => ({ ...prev, imageUrl: dataUrl }));
+      toast.success("Watermark template loaded", "Click 'Save watermark settings' to apply.");
+    } catch {
+      toast.error("Could not read template file");
     }
+  }
+
+  function handlePreviewClick(e: React.MouseEvent<HTMLDivElement>) {
+    if (!previewRef.current) return;
+    const rect = previewRef.current.getBoundingClientRect();
+    if (rect.width <= 0 || rect.height <= 0) return;
+    const x = Math.max(0, Math.min(100, Math.round(((e.clientX - rect.left) / rect.width) * 100)));
+    const y = Math.max(0, Math.min(100, Math.round(((e.clientY - rect.top) / rect.height) * 100)));
+    setWm((prev) => ({ ...prev, xPercent: x, yPercent: y }));
+  }
+
+  function saveWatermark() {
+    saveEventWatermarkConfig(event.id, event.slug, wm);
+    toast.success("Watermark template saved", "Applied to all photo downloads for this event.");
   }
 
   async function purgeFaces() {
@@ -98,8 +128,8 @@ export function EventSettings({ event, onSaved }: { event: EventOut; onSaved: (e
         <Card>
           <CardHeader title="Cover image" />
           <div className="space-y-3 p-5">
-            <div className="aspect-[16/9] overflow-hidden rounded-xl border border-line">
-              <CoverImage src={event.cover_url} name={event.name} />
+            <div className="overflow-hidden rounded-xl border border-line bg-canvas/60 p-2 flex items-center justify-center min-h-[160px] max-h-[300px]">
+              <CoverImage src={event.cover_url} name={event.name} className="max-h-[280px] w-auto max-w-full object-contain block mx-auto shadow-sm" />
             </div>
             <input ref={coverRef} type="file" accept={ACCEPTED_IMAGE_TYPES.join(",")} className="sr-only" tabIndex={-1}
                    onChange={(e) => { void changeCover(e.target.files?.[0]); e.target.value = ""; }} />
@@ -108,15 +138,131 @@ export function EventSettings({ event, onSaved }: { event: EventOut; onSaved: (e
           </div>
         </Card>
 
+        {/* Watermark Template & Customization Card */}
         <Card>
-          <CardHeader title="Visibility" />
-          <div className="space-y-3 p-5 text-sm text-muted">
-            <p>{event.status === "active"
-              ? "The event is live. Guests with the link can search for their photos."
-              : "The event is archived. The guest link is disabled; your photos are kept."}</p>
-            <Button variant="outline" className="w-full" loading={statusBusy} onClick={toggleStatus}
-                    icon={event.status === "active" ? <Archive className="h-4 w-4" /> : <ArchiveRestore className="h-4 w-4" />}>
-              {event.status === "active" ? "Archive event" : "Make live again"}
+          <CardHeader
+            title="Watermark template"
+            description="Custom watermark applied to all photo downloads for this event"
+          />
+          <div className="space-y-4 p-5">
+            {/* Live Watermark Preview on Event Cover */}
+            <div
+              ref={previewRef}
+              onClick={handlePreviewClick}
+              className="relative mx-auto max-h-56 w-full overflow-hidden rounded-xl border border-line bg-canvas flex items-center justify-center cursor-crosshair group select-none shadow-sm"
+            >
+              <img
+                src={event.cover_url || "/default-cover.jpg"}
+                alt="Cover Preview"
+                className="max-h-52 w-auto max-w-full object-contain block mx-auto"
+              />
+              {/* Watermark Overlay */}
+              <div
+                style={{
+                  position: "absolute",
+                  left: `${wm.xPercent}%`,
+                  top: `${wm.yPercent}%`,
+                  transform: `translate(-${wm.xPercent}%, -${wm.yPercent}%)`,
+                  width: `${wm.sizePercent}%`,
+                  opacity: wm.opacity,
+                  pointerEvents: "none",
+                }}
+              >
+                <img
+                  src={wm.imageUrl || "/watermark.png"}
+                  alt="Watermark"
+                  style={{
+                    width: "100%",
+                    height: "auto",
+                    display: "block",
+                  }}
+                />
+              </div>
+            </div>
+
+            {/* Template / Watermark Upload Button */}
+            <div>
+              <input
+                ref={templateRef}
+                type="file"
+                accept="image/png,image/svg+xml,image/webp,image/jpeg"
+                className="sr-only"
+                tabIndex={-1}
+                onChange={(e) => {
+                  void changeTemplate(e.target.files?.[0]);
+                  e.target.value = "";
+                }}
+              />
+              <div className="flex items-center gap-2">
+                <Button
+                  type="button"
+                  variant="outline"
+                  className="w-full"
+                  onClick={() => templateRef.current?.click()}
+                  icon={<Sparkles className="h-4 w-4 text-brand-600" />}
+                >
+                  {wm.imageUrl ? "Replace watermark template" : "Upload watermark template"}
+                </Button>
+                {wm.imageUrl && (
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="sm"
+                    onClick={() => setWm((prev) => ({ ...prev, imageUrl: null }))}
+                    title="Reset to default logo"
+                  >
+                    Reset
+                  </Button>
+                )}
+              </div>
+            </div>
+
+            {/* Size Slider */}
+            <div>
+              <div className="mb-1.5 flex items-center justify-between text-xs">
+                <span className="font-semibold uppercase tracking-wider text-muted flex items-center gap-1">
+                  <Sliders className="h-3 w-3 text-brand-600" /> Size
+                </span>
+                <span className="font-mono font-medium text-ink">{wm.sizePercent}%</span>
+              </div>
+              <input
+                type="range"
+                min={5}
+                max={60}
+                step={1}
+                value={wm.sizePercent ?? 14}
+                onChange={(e) => setWm((prev) => ({ ...prev, sizePercent: Number(e.target.value) }))}
+                className="w-full accent-brand-500 cursor-pointer h-1.5 bg-line rounded-lg"
+              />
+            </div>
+
+            {/* Opacity Slider */}
+            <div>
+              <div className="mb-1.5 flex items-center justify-between text-xs">
+                <span className="font-semibold uppercase tracking-wider text-muted flex items-center gap-1">
+                  <Sparkles className="h-3 w-3 text-brand-600" /> Opacity
+                </span>
+                <span className="font-mono font-medium text-ink">{Math.round((wm.opacity ?? 0.4) * 100)}%</span>
+              </div>
+              <input
+                type="range"
+                min={0.1}
+                max={1.0}
+                step={0.05}
+                value={wm.opacity ?? 0.4}
+                onChange={(e) => setWm((prev) => ({ ...prev, opacity: Number(e.target.value) }))}
+                className="w-full accent-brand-500 cursor-pointer h-1.5 bg-line rounded-lg"
+              />
+            </div>
+
+            {/* Save Watermark Settings Button */}
+            <Button
+              type="button"
+              className="w-full"
+              onClick={saveWatermark}
+              icon={<Sparkles className="h-4 w-4" />}
+            >
+              Save watermark settings
             </Button>
           </div>
         </Card>

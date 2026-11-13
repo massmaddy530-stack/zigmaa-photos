@@ -3,7 +3,7 @@
 import { Download, ExternalLink, ImageIcon, RotateCcw, ScanFace, Search, Trash2, UploadCloud } from "lucide-react";
 import { useCallback, useEffect, useState } from "react";
 import { adminApi, errorMessage } from "@/lib/api";
-import { downloadImage } from "@/lib/image";
+import { downloadImage, getSavedWatermarkConfig } from "@/lib/image";
 import { cn, formatBytes, formatDateTime, formatNumber } from "@/lib/format";
 import { useDebounced, useQuery } from "@/lib/hooks";
 import type { PhotoDetailOut, PhotoOut, PhotoStatus } from "@/lib/types";
@@ -241,7 +241,7 @@ function PhotoDetailPanel({ eventId, photoId, onLoaded, onDeleted, onRetried }: 
         )}
         {p.original_url && (
           <>
-            <Button size="sm" variant="outline" onClick={() => downloadImage(p.original_url!, p.original_filename || "photo.jpg")} icon={<Download className="h-4 w-4" />}>
+            <Button size="sm" variant="outline" onClick={() => downloadImage(p.original_url!, p.original_filename || "photo.jpg", getSavedWatermarkConfig(eventId))} icon={<Download className="h-4 w-4" />}>
               Download
             </Button>
             <a href={p.original_url} target="_blank" rel="noopener noreferrer"
