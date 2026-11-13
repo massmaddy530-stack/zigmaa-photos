@@ -46,6 +46,12 @@ export function LoginForm() {
   const [forgotEmail, setForgotEmail] = useState("");
   const [forgotBusy, setForgotBusy] = useState(false);
   const [forgotSent, setForgotSent] = useState(false);
+  const [forgotError, setForgotError] = useState<string | null>(null);
+  const [otpCode, setOtpCode] = useState("");
+  const [newPassword, setNewPassword] = useState("");
+  const [confirmNewPassword, setConfirmNewPassword] = useState("");
+  const [verifyBusy, setVerifyBusy] = useState(false);
+  const [resetSuccess, setResetSuccess] = useState<string | null>(null);
 
   // Sign up form state
   const [firstName, setFirstName] = useState("");
@@ -94,11 +100,65 @@ export function LoginForm() {
   // Handle Send OTP (Forgot Password)
   async function onForgotSubmit(e: FormEvent) {
     e.preventDefault();
+    setForgotError(null);
     setForgotBusy(true);
-    // Simulate OTP / Reset email dispatch
-    await new Promise((r) => setTimeout(r, 600));
-    setForgotBusy(false);
-    setForgotSent(true);
+    try {
+      const res = await fetch("/api/auth/otp/send", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ email: forgotEmail }),
+      });
+      const data = await res.json();
+      if (!res.ok || !data.ok) {
+        throw new Error(data.error || "Failed to send OTP.");
+      }
+      setForgotSent(true);
+    } catch (err: unknown) {
+      setForgotError(err instanceof Error ? err.message : "Failed to send OTP.");
+    } finally {
+      setForgotBusy(false);
+    }
+  }
+
+  // Handle Verify OTP & Reset Password
+  async function onVerifyOtpSubmit(e: FormEvent) {
+    e.preventDefault();
+    setForgotError(null);
+
+    if (newPassword && newPassword !== confirmNewPassword) {
+      setForgotError("New passwords do not match.");
+      return;
+    }
+    if (newPassword && newPassword.length < 8) {
+      setForgotError("New password must be at least 8 characters.");
+      return;
+    }
+
+    setVerifyBusy(true);
+    try {
+      const res = await fetch("/api/auth/otp/verify", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ email: forgotEmail, otp: otpCode, newPassword }),
+      });
+      const data = await res.json();
+      if (!res.ok || !data.ok) {
+        throw new Error(data.error || "Verification failed.");
+      }
+      setResetSuccess(data.message || "Password reset successfully!");
+      setTimeout(() => {
+        setView("login");
+        setForgotSent(false);
+        setOtpCode("");
+        setNewPassword("");
+        setConfirmNewPassword("");
+        setResetSuccess(null);
+      }, 2000);
+    } catch (err: unknown) {
+      setForgotError(err instanceof Error ? err.message : "Verification failed.");
+    } finally {
+      setVerifyBusy(false);
+    }
   }
 
   // Handle Sign Up Submit
@@ -257,36 +317,147 @@ export function LoginForm() {
           VIEW 2: FORGOT PASSWORD (RESET YOUR PASSWORD)
       ======================================================== */}
       {view === "forgot" && (
-        <div className="space-y-4 animate-fade-in">
+        <div className="space-y-3.5 animate-fade-in">
           {/* Header - Exactly like Photo 1 */}
           <div className="space-y-1">
             <h1 className="text-2xl sm:text-[28px] font-bold tracking-tight text-[#0f172a]">
               Reset your password
             </h1>
             <p className="text-xs sm:text-sm text-[#64748b]">
-              We will send the OTP to your registered email address
+              {forgotSent
+                ? `Enter the 6-digit OTP code sent to ${forgotEmail}`
+                : "We will send the OTP to your registered email address"}
             </p>
           </div>
 
-          {forgotSent ? (
-            <div className="space-y-4 py-3 text-center">
-              <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-full bg-red-50 text-[#e50914]">
+          {forgotError && (
+            <div className="rounded-xl border border-red-200 bg-red-50 p-2.5 text-center text-xs font-medium text-[#e50914]">
+              {forgotError}
+            </div>
+          )}
+
+          {resetSuccess ? (
+            <div className="space-y-3 py-3 text-center">
+              <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-full bg-emerald-50 text-emerald-600">
                 <CheckCircle2 className="h-6 w-6" />
               </div>
               <div className="space-y-1">
-                <p className="text-sm font-semibold text-[#0f172a]">OTP Sent Successfully</p>
-                <p className="text-xs text-[#64748b]">
-                  Please check <strong className="text-[#0f172a]">{forgotEmail}</strong> for instructions to reset your password.
-                </p>
+                <p className="text-sm font-semibold text-[#0f172a]">Password Reset Complete!</p>
+                <p className="text-xs text-[#64748b]">{resetSuccess}</p>
               </div>
               <button
                 type="button"
                 onClick={() => setView("login")}
                 className="w-full rounded-xl bg-[#e50914] py-2.5 text-xs sm:text-sm font-semibold text-white shadow-md hover:bg-[#cc0812]"
               >
-                Back to Login
+                Sign In Now
               </button>
             </div>
+          ) : forgotSent ? (
+            <form onSubmit={onVerifyOtpSubmit} className="space-y-3">
+              {/* 6-digit OTP Code */}
+              <div>
+                <label
+                  htmlFor="otp-code"
+                  className="block text-xs font-semibold text-[#1e293b] mb-1"
+                >
+                  6-Digit OTP Code
+                </label>
+                <input
+                  id="otp-code"
+                  type="text"
+                  required
+                  autoFocus
+                  maxLength={6}
+                  placeholder="e.g. 123456"
+                  value={otpCode}
+                  onChange={(e) => setOtpCode(e.target.value.replace(/\D/g, ""))}
+                  className="w-full rounded-xl border border-[#e2e8f0] bg-white px-3.5 py-2 text-center text-lg font-bold tracking-[6px] text-[#0f172a] placeholder:text-[#94a3b8] placeholder:font-normal placeholder:tracking-normal placeholder:italic shadow-sm transition-all focus:border-[#e50914] focus:outline-none focus:ring-1 focus:ring-[#e50914]"
+                />
+              </div>
+
+              {/* New Password & Confirm Password */}
+              <div className="grid grid-cols-2 gap-2">
+                <div>
+                  <label
+                    htmlFor="reset-new-password"
+                    className="block text-xs font-semibold text-[#1e293b] mb-1"
+                  >
+                    New Password
+                  </label>
+                  <input
+                    id="reset-new-password"
+                    type="password"
+                    required
+                    placeholder="Min 8 chars"
+                    value={newPassword}
+                    onChange={(e) => setNewPassword(e.target.value)}
+                    className="w-full rounded-xl border border-[#e2e8f0] bg-white px-3 py-1.5 text-xs text-[#0f172a] placeholder:text-[#94a3b8] placeholder:italic focus:border-[#e50914] focus:outline-none"
+                  />
+                </div>
+                <div>
+                  <label
+                    htmlFor="reset-confirm-password"
+                    className="block text-xs font-semibold text-[#1e293b] mb-1"
+                  >
+                    Confirm Password
+                  </label>
+                  <input
+                    id="reset-confirm-password"
+                    type="password"
+                    required
+                    placeholder="Repeat password"
+                    value={confirmNewPassword}
+                    onChange={(e) => setConfirmNewPassword(e.target.value)}
+                    className="w-full rounded-xl border border-[#e2e8f0] bg-white px-3 py-1.5 text-xs text-[#0f172a] placeholder:text-[#94a3b8] placeholder:italic focus:border-[#e50914] focus:outline-none"
+                  />
+                </div>
+              </div>
+
+              {/* Reset Password Button */}
+              <button
+                type="submit"
+                disabled={verifyBusy}
+                className="w-full rounded-xl bg-[#e50914] py-2.5 text-center text-xs sm:text-sm font-semibold tracking-wide text-white shadow-md transition-all hover:bg-[#cc0812] active:scale-[0.99] disabled:opacity-50"
+              >
+                {verifyBusy ? "Verifying..." : "Verify OTP & Reset Password"}
+              </button>
+
+              {/* Resend OTP button */}
+              <div className="flex items-center justify-between pt-1 text-xs text-[#64748b]">
+                <button
+                  type="button"
+                  onClick={onForgotSubmit}
+                  disabled={forgotBusy}
+                  className="font-medium text-[#e50914] hover:underline transition-colors"
+                >
+                  {forgotBusy ? "Sending..." : "Resend OTP"}
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setForgotSent(false);
+                    setOtpCode("");
+                    setForgotError(null);
+                  }}
+                  className="text-slate-500 hover:underline"
+                >
+                  Change Email
+                </button>
+              </div>
+
+              {/* Already a Member? Sign In Footer */}
+              <div className="pt-2 text-center text-xs text-[#64748b]">
+                <span>Already a Member? </span>
+                <button
+                  type="button"
+                  onClick={() => setView("login")}
+                  className="font-semibold text-[#e50914] hover:underline transition-colors"
+                >
+                  Sign In
+                </button>
+              </div>
+            </form>
           ) : (
             <form onSubmit={onForgotSubmit} className="space-y-4">
               <div>

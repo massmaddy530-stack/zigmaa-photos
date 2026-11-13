@@ -121,7 +121,7 @@ export function authorizationUrl(config: GoogleConfig, tx: OAuthTransaction, cha
     client_id: config.clientId,
     redirect_uri: config.redirectUri, // the configured value only, never derived from the request Host
     response_type: "code",
-    scope: "openid email",
+    scope: "openid email profile",
     state: tx.state,
     nonce: tx.nonce,
     code_challenge: challenge,
@@ -172,6 +172,14 @@ export type KeyLookup = (kid: string) => Promise<KeyObject | undefined>;
 interface IdTokenClaims {
   iss?: unknown; aud?: unknown; azp?: unknown; exp?: unknown; iat?: unknown; nonce?: unknown;
   sub?: unknown; email?: unknown; email_verified?: unknown;
+  name?: unknown; picture?: unknown; given_name?: unknown; family_name?: unknown;
+}
+
+export interface GoogleVerifiedUser {
+  sub: string;
+  email: string;
+  name?: string;
+  picture?: string;
 }
 
 function decodeSegment(segment: string): Record<string, unknown> | null {
@@ -192,7 +200,7 @@ function decodeSegment(segment: string): Record<string, unknown> | null {
 export async function verifyIdToken(
   idToken: string,
   opts: { clientId: string; nonce: string; allowedEmails: ReadonlySet<string>; getKey: KeyLookup; now?: number },
-): Promise<{ sub: string }> {
+): Promise<GoogleVerifiedUser> {
   if (typeof idToken !== "string" || idToken.length > MAX_ID_TOKEN_LENGTH) throw new GoogleAuthError("malformed");
   const parts = idToken.split(".");
   if (parts.length !== 3) throw new GoogleAuthError("malformed");
@@ -220,7 +228,12 @@ export async function verifyIdToken(
   if (typeof claims.email !== "string" || !opts.allowedEmails.has(claims.email.trim().toLowerCase())) {
     throw new GoogleAuthError("not_allowed");
   }
-  return { sub: claims.sub };
+  return {
+    sub: claims.sub,
+    email: claims.email.trim().toLowerCase(),
+    name: typeof claims.name === "string" ? claims.name : undefined,
+    picture: typeof claims.picture === "string" ? claims.picture : undefined,
+  };
 }
 
 // ------------------------------------------------------------------------------------------------

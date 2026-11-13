@@ -7,6 +7,8 @@ import { useState, type ReactNode } from "react";
 import { CSRF_HEADER } from "@/lib/api";
 import { cn } from "@/lib/format";
 
+import { ProfileMenu } from "./profile-menu";
+
 export function Logo({ className }: { className?: string; admin?: boolean }) {
   return (
     <span className={cn("inline-flex items-center gap-2.5", className)}>
@@ -47,7 +49,7 @@ export function AppShell({ children }: { children: ReactNode }) {
             <Logo />
           </Link>
           <div className="flex items-center gap-3">
-            <SignOut />
+            <ProfileMenu />
           </div>
         </div>
       </header>

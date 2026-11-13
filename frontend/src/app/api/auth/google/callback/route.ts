@@ -58,9 +58,10 @@ export async function GET(req: NextRequest) {
     return fail("state_mismatch");
   }
 
+  let verifiedUser;
   try {
     const idToken = await exchangeCode(google, code, tx.verifier);
-    await verifyIdToken(idToken, {
+    verifiedUser = await verifyIdToken(idToken, {
       clientId: google.clientId, nonce: tx.nonce, allowedEmails: google.allowedEmails, getKey: (kid) => googleSigningKey(kid),
     });
   } catch (err) {
@@ -83,5 +84,20 @@ export async function GET(req: NextRequest) {
     path: "/",
     maxAge: SESSION_MAX_AGE_S,
   });
+
+  const profile = {
+    name: verifiedUser.name || "Zigmaa Admin",
+    email: verifiedUser.email,
+    picture: verifiedUser.picture || "",
+    provider: "google",
+  };
+  res.cookies.set("evp_profile", encodeURIComponent(JSON.stringify(profile)), {
+    httpOnly: false,
+    sameSite: "lax",
+    secure: cookieSecure(),
+    path: "/",
+    maxAge: SESSION_MAX_AGE_S,
+  });
+
   return clearTx(res);
 }

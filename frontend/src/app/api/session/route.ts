@@ -80,7 +80,48 @@ export async function POST(req: NextRequest) {
     path: "/",
     maxAge: SESSION_MAX_AGE_S,
   });
+
+  const profile = {
+    name: "Studio Admin",
+    email: "massmaddy530@gmail.com",
+    picture: "",
+    provider: "password",
+  };
+  res.cookies.set("evp_profile", encodeURIComponent(JSON.stringify(profile)), {
+    httpOnly: false,
+    sameSite: "lax",
+    secure: cookieSecure(),
+    path: "/",
+    maxAge: SESSION_MAX_AGE_S,
+  });
+
   return res;
+}
+
+export async function GET(req: NextRequest) {
+  const token = req.cookies.get(SESSION_COOKIE)?.value;
+  const config = authConfig();
+  if (!token || !config) {
+    return NextResponse.json({ authenticated: false, user: null }, { headers: { "Cache-Control": "no-store" } });
+  }
+
+  let profile = {
+    name: "Studio Admin",
+    email: "massmaddy530@gmail.com",
+    picture: "",
+    provider: "password",
+  };
+
+  const rawProfile = req.cookies.get("evp_profile")?.value;
+  if (rawProfile) {
+    try {
+      profile = JSON.parse(decodeURIComponent(rawProfile));
+    } catch {
+      // ignore
+    }
+  }
+
+  return NextResponse.json({ authenticated: true, user: profile }, { headers: { "Cache-Control": "no-store" } });
 }
 
 export async function DELETE(req: NextRequest) {
@@ -88,5 +129,6 @@ export async function DELETE(req: NextRequest) {
   const res = NextResponse.json({ ok: true }, { headers: { "Cache-Control": "no-store" } });
   res.cookies.delete(SESSION_COOKIE);
   res.cookies.delete(LEGACY_SESSION_COOKIE);
+  res.cookies.delete("evp_profile");
   return res;
 }
