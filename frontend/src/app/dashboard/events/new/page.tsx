@@ -197,61 +197,59 @@ export default function NewEventPage() {
 
             {/* Interactive Preview Canvas */}
             <div className="p-5 pb-0">
-              <div className="relative rounded-2xl border border-line bg-[#161009]/95 p-3 flex items-center justify-center min-h-[320px] max-h-[560px] overflow-hidden shadow-inner">
-                <div
-                  ref={previewRef}
-                  onClick={handlePreviewClick}
-                  className="relative inline-block max-h-[530px] max-w-full cursor-crosshair select-none group"
-                >
-                  {/* Background Cover Image (User uploaded or Default AI Marriage Couple) */}
-                  <img
-                    src={coverSrc}
-                    alt="Event Cover Preview"
-                    className="max-h-[530px] w-auto max-w-full rounded-xl object-contain block shadow-xl transition-opacity duration-300"
-                  />
+              <div
+                ref={previewRef}
+                onClick={handlePreviewClick}
+                className="relative w-full h-[520px] sm:h-[560px] overflow-hidden rounded-2xl border border-line shadow-md cursor-crosshair select-none group bg-canvas"
+              >
+                {/* Background Cover Image (User uploaded or Default AI Marriage Couple) */}
+                <img
+                  src={coverSrc}
+                  alt="Event Cover Preview"
+                  className="h-full w-full object-cover object-center transition-opacity duration-300"
+                />
 
-                  {/* Badge indicator on top-left of photo */}
-                  <div className="absolute top-3 left-3 flex items-center gap-2 pointer-events-none">
-                    <span className="inline-flex items-center gap-1.5 rounded-full bg-black/75 border border-white/20 px-2.5 py-1 text-[11px] font-medium text-white backdrop-blur-md shadow-md">
-                      {live.preview ? "Custom Cover Image" : "Default AI Couple Photo"}
+                {/* Badge indicator on top-left of photo */}
+                <div className="absolute top-3 left-3 flex items-center gap-2 pointer-events-none">
+                  <span className="inline-flex items-center gap-1.5 rounded-full bg-black/75 border border-white/20 px-2.5 py-1 text-[11px] font-medium text-white backdrop-blur-md shadow-md">
+                    {live.preview ? "Custom Cover Image" : "Default AI Couple Photo"}
+                  </span>
+                  {live.templatePreview && (
+                    <span className="inline-flex items-center gap-1.5 rounded-full bg-[#dfa843]/90 border border-[#dfa843] px-2.5 py-1 text-[11px] font-semibold text-[#1c1305] backdrop-blur-md shadow-md">
+                      <Sparkles className="h-3 w-3" /> Custom Watermark
                     </span>
-                    {live.templatePreview && (
-                      <span className="inline-flex items-center gap-1.5 rounded-full bg-[#dfa843]/90 border border-[#dfa843] px-2.5 py-1 text-[11px] font-semibold text-[#1c1305] backdrop-blur-md shadow-md">
-                        <Sparkles className="h-3 w-3" /> Custom Watermark
-                      </span>
-                    )}
-                  </div>
+                  )}
+                </div>
 
-                  {/* Click hint pill */}
-                  <div className="absolute bottom-3 left-3 rounded-md bg-black/75 border border-white/15 px-2.5 py-1 text-[11px] font-medium text-white/90 backdrop-blur-md pointer-events-none flex items-center gap-1.5 shadow-md">
-                    <Move className="h-3 w-3 text-brand-300" />
-                    <span>Click anywhere on photo to place watermark</span>
-                  </div>
+                {/* Click hint pill */}
+                <div className="absolute bottom-3 left-3 rounded-md bg-black/75 border border-white/15 px-2.5 py-1 text-[11px] font-medium text-white/90 backdrop-blur-md pointer-events-none flex items-center gap-1.5 shadow-md">
+                  <Move className="h-3 w-3 text-brand-300" />
+                  <span>Click anywhere on photo to place watermark</span>
+                </div>
 
-                  {/* Live Watermark Overlay Layer */}
-                  <div
+                {/* Live Watermark Overlay Layer */}
+                <div
+                  style={{
+                    position: "absolute",
+                    left: `${wm.xPercent}%`,
+                    top: `${wm.yPercent}%`,
+                    transform: `translate(-${wm.xPercent}%, -${wm.yPercent}%)`,
+                    width: `${wm.sizePercent}%`,
+                    opacity: wm.opacity,
+                    pointerEvents: "none",
+                    transition: "opacity 0.15s ease, filter 0.15s ease",
+                  }}
+                >
+                  <img
+                    src={watermarkSrc}
+                    alt="Watermark Overlay"
                     style={{
-                      position: "absolute",
-                      left: `${wm.xPercent}%`,
-                      top: `${wm.yPercent}%`,
-                      transform: `translate(-${wm.xPercent}%, -${wm.yPercent}%)`,
-                      width: `${wm.sizePercent}%`,
-                      opacity: wm.opacity,
-                      pointerEvents: "none",
-                      transition: "opacity 0.15s ease, filter 0.15s ease",
+                      width: "100%",
+                      height: "auto",
+                      display: "block",
+                      filter: getFilterCss(wm.color),
                     }}
-                  >
-                    <img
-                      src={watermarkSrc}
-                      alt="Watermark Overlay"
-                      style={{
-                        width: "100%",
-                        height: "auto",
-                        display: "block",
-                        filter: getFilterCss(wm.color),
-                      }}
-                    />
-                  </div>
+                  />
                 </div>
               </div>
             </div>
