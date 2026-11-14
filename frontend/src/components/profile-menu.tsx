@@ -27,9 +27,16 @@ interface UserProfile {
   provider: "google" | "password";
 }
 
+function isGenericName(n?: string): boolean {
+  if (!n) return true;
+  const s = n.trim().toLowerCase();
+  return s === "studio" || s === "studio admin" || s === "studio administrator";
+}
+
 export function ProfileMenu() {
   const router = useRouter();
   const dropdownRef = useRef<HTMLDivElement>(null);
+  const [mounted, setMounted] = useState(false);
 
   const [profile, setProfile] = useState<UserProfile>(() => {
     if (typeof window !== "undefined") {
@@ -37,7 +44,7 @@ export function ProfileMenu() {
         const stored = localStorage.getItem("zigmaa_user_profile");
         if (stored) {
           const parsed = JSON.parse(stored);
-          if (parsed && parsed.name && parsed.name !== "Studio Admin") {
+          if (parsed && !isGenericName(parsed.name)) {
             return parsed;
           }
         }
@@ -46,7 +53,7 @@ export function ProfileMenu() {
         const match = document.cookie.match(/evp_profile=([^;]+)/);
         if (match) {
           const parsed = JSON.parse(decodeURIComponent(match[1]));
-          if (parsed && parsed.name && parsed.name !== "Studio Admin") {
+          if (parsed && !isGenericName(parsed.name)) {
             return parsed;
           }
         }
@@ -63,7 +70,6 @@ export function ProfileMenu() {
   const [helpOpen, setHelpOpen] = useState(false);
   const [signingOut, setSigningOut] = useState(false);
   const [copiedField, setCopiedField] = useState<string | null>(null);
-  const [mounted, setMounted] = useState(false);
 
   useEffect(() => {
     setMounted(true);
@@ -72,7 +78,7 @@ export function ProfileMenu() {
       const stored = localStorage.getItem("zigmaa_user_profile");
       if (stored) {
         const parsed = JSON.parse(stored);
-        if (parsed && parsed.name && parsed.name !== "Studio Admin") {
+        if (parsed && !isGenericName(parsed.name)) {
           setProfile((prev) => ({ ...prev, ...parsed }));
         }
       }
@@ -96,19 +102,21 @@ export function ProfileMenu() {
           const data = await res.json();
           if (data.user) {
             setProfile((prev) => {
-              const localName = prev.name && prev.name !== "Studio Admin" ? prev.name : "";
-              const serverName = data.user.name && data.user.name !== "Studio Admin" ? data.user.name : "";
-              const resolvedName = serverName || localName || data.user.email?.split("@")[0] || prev.email?.split("@")[0] || "Studio";
+              const localName = !isGenericName(prev.name) ? prev.name : "";
+              const serverName = !isGenericName(data.user.name) ? data.user.name : "";
+              const bestName = serverName || localName || data.user.email?.split("@")[0] || prev.email?.split("@")[0] || "";
 
               const resolved: UserProfile = {
                 ...prev,
                 ...data.user,
-                name: resolvedName,
+                name: bestName,
                 picture: data.user.picture || prev.picture || "",
               };
-              try {
-                localStorage.setItem("zigmaa_user_profile", JSON.stringify(resolved));
-              } catch {}
+              if (bestName) {
+                try {
+                  localStorage.setItem("zigmaa_user_profile", JSON.stringify(resolved));
+                } catch {}
+              }
               return resolved;
             });
             return;
@@ -123,7 +131,7 @@ export function ProfileMenu() {
         const stored = localStorage.getItem("zigmaa_user_profile");
         if (stored) {
           const parsed = JSON.parse(stored);
-          if (parsed?.name && parsed.name !== "Studio Admin") {
+          if (parsed && !isGenericName(parsed.name)) {
             setProfile((prev) => ({ ...prev, ...parsed }));
             return;
           }
@@ -131,7 +139,7 @@ export function ProfileMenu() {
         const match = document.cookie.match(/evp_profile=([^;]+)/);
         if (match) {
           const parsed = JSON.parse(decodeURIComponent(match[1]));
-          if (parsed?.name && parsed.name !== "Studio Admin") {
+          if (parsed && !isGenericName(parsed.name)) {
             setProfile((prev) => ({ ...prev, ...parsed }));
           }
         }
@@ -180,12 +188,22 @@ export function ProfileMenu() {
     router.refresh();
   }
 
-  const displayName = profile.name && profile.name !== "Studio Admin"
+  // Prevent SSR / hydration flash of default text
+  if (!mounted) {
+    return (
+      <div className="flex items-center gap-2.5 rounded-full p-1" aria-hidden="true">
+        <div className="h-9 w-9 rounded-full bg-slate-200/80 animate-pulse" />
+        <div className="hidden h-3.5 w-24 rounded-md bg-slate-200/80 animate-pulse lg:block" />
+      </div>
+    );
+  }
+
+  const resolvedName = !isGenericName(profile.name)
     ? profile.name
     : profile.email
     ? profile.email.split("@")[0]
-    : "Studio";
-  const initial = displayName ? displayName.charAt(0).toUpperCase() : "Z";
+    : "";
+  const initial = resolvedName ? resolvedName.charAt(0).toUpperCase() : "";
 
   return (
     <div className="relative" ref={dropdownRef}>
@@ -200,21 +218,27 @@ export function ProfileMenu() {
           {profile.picture ? (
             <img
               src={profile.picture}
-              alt={displayName}
+              alt={resolvedName || "User Profile"}
               className="h-full w-full object-cover"
               referrerPolicy="no-referrer"
             />
-          ) : (
+          ) : initial ? (
             <span>{initial}</span>
+          ) : (
+            <User className="h-4 w-4 text-white" />
           )}
           {/* Active Online Indicator */}
           <span className="absolute bottom-0 right-0 h-2.5 w-2.5 rounded-full border-2 border-white bg-emerald-500" />
         </div>
 
         <div className="hidden text-left lg:block">
-          <p className="max-w-[140px] truncate text-xs font-semibold text-[#0f172a] leading-tight">
-            {displayName}
-          </p>
+          {resolvedName ? (
+            <p className="max-w-[140px] truncate text-xs font-semibold text-[#0f172a] leading-tight">
+              {resolvedName}
+            </p>
+          ) : (
+            <div className="h-3.5 w-20 rounded bg-slate-200/80 animate-pulse" />
+          )}
         </div>
 
         <ChevronDown
@@ -235,17 +259,19 @@ export function ProfileMenu() {
                 {profile.picture ? (
                   <img
                     src={profile.picture}
-                    alt={profile.name}
+                    alt={resolvedName || "User"}
                     className="h-full w-full object-cover"
                     referrerPolicy="no-referrer"
                   />
-                ) : (
+                ) : initial ? (
                   <span>{initial}</span>
+                ) : (
+                  <User className="h-5 w-5 text-white" />
                 )}
               </div>
               <div className="min-w-0 flex-1">
-                <p className="truncate text-sm font-bold text-[#0f172a]">{profile.name}</p>
-                <p className="truncate text-xs text-[#64748b]">{profile.email}</p>
+                <p className="truncate text-sm font-bold text-[#0f172a]">{resolvedName || profile.email || "My Studio"}</p>
+                {profile.email && <p className="truncate text-xs text-[#64748b]">{profile.email}</p>}
               </div>
             </div>
           </div>

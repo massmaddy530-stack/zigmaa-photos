@@ -47,7 +47,7 @@ export async function GET(req: NextRequest) {
     }
 
     if (!profile.name) {
-      profile.name = profile.email ? profile.email.split("@")[0] : "Studio";
+      profile.name = profile.email ? profile.email.split("@")[0] : "";
     }
 
     return NextResponse.json({ ok: true, user: profile });
@@ -95,7 +95,7 @@ export async function PATCH(req: NextRequest) {
     }
 
     if (!currentProfile.name) {
-      currentProfile.name = currentProfile.email ? currentProfile.email.split("@")[0] : "Studio";
+      currentProfile.name = currentProfile.email ? currentProfile.email.split("@")[0] : "";
     }
 
     // Check if password change is requested

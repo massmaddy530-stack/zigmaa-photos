@@ -137,8 +137,8 @@ export async function GET(req: NextRequest) {
     }
   }
 
-  if (!profile.name || profile.name === "Studio Admin") {
-    profile.name = profile.email ? profile.email.split("@")[0] : "Studio";
+  if (!profile.name || profile.name === "Studio Admin" || profile.name === "Studio") {
+    profile.name = profile.email ? profile.email.split("@")[0] : "";
   }
 
   return NextResponse.json({ authenticated: true, user: profile }, { headers: { "Cache-Control": "no-store" } });
