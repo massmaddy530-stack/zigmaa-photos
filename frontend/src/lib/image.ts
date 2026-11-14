@@ -108,6 +108,12 @@ export interface WatermarkTemplateItem {
   name: string;
   dataUrl: string;
   sizeBytes?: number;
+  xPercent?: number; // 0 to 100
+  yPercent?: number; // 0 to 100
+  sizePercent?: number; // 5 to 60 (relative to photo width)
+  opacity?: number; // 0.1 to 1.0
+  color?: "original" | "white" | "gold" | "dark" | string;
+  enabled?: boolean; // default true
 }
 
 export interface WatermarkConfig {
@@ -191,7 +197,7 @@ export async function applyWatermark(blob: Blob, customConfig?: WatermarkConfig)
     const photoImg = new Image();
     const objectUrl = URL.createObjectURL(blob);
 
-    photoImg.onload = () => {
+    photoImg.onload = async () => {
       URL.revokeObjectURL(objectUrl);
       try {
         const canvas = document.createElement("canvas");
@@ -209,76 +215,110 @@ export async function applyWatermark(blob: Blob, customConfig?: WatermarkConfig)
         // Draw the full resolution original photo
         ctx.drawImage(photoImg, 0, 0, width, height);
 
-        // Load the watermark logo / template
-        const logo = new Image();
-        logo.crossOrigin = "anonymous";
-        logo.onload = () => {
-          try {
-            // Sizing: based on configured percentage (default ~14% of photo width)
-            const sizePct = config?.sizePercent ?? 14;
-            const targetWidth = Math.max(60, Math.round(width * (sizePct / 100)));
-            const aspect = (logo.naturalWidth || 736) / (logo.naturalHeight || 570);
-            const targetHeight = Math.max(20, Math.round(targetWidth / aspect));
+        // Collect all enabled template layers to draw at the same time
+        const layersToDraw: Array<{
+          src: string;
+          xPercent: number;
+          yPercent: number;
+          sizePercent: number;
+          opacity: number;
+          color: string;
+        }> = [];
 
-            // Position calculation
-            const xPct = config?.xPercent ?? 88;
-            const yPct = config?.yPercent ?? 88;
-
-            // Mathematical match with preview (0% = left edge, 100% = right edge, 50% = center)
-            let x = Math.round((width - targetWidth) * (Math.max(0, Math.min(100, xPct)) / 100));
-            let y = Math.round((height - targetHeight) * (Math.max(0, Math.min(100, yPct)) / 100));
-
-            // Bound checks
-            x = Math.max(0, Math.min(x, width - targetWidth));
-            y = Math.max(0, Math.min(y, height - targetHeight));
-
-            ctx.save();
-            ctx.globalAlpha = config?.opacity ?? 0.40;
-
-            const color = config?.color || "original";
-            if (color !== "original") {
-              // Tint watermark using an offscreen canvas with source-in blend mode
-              const offCanvas = document.createElement("canvas");
-              offCanvas.width = targetWidth;
-              offCanvas.height = targetHeight;
-              const offCtx = offCanvas.getContext("2d");
-              if (offCtx) {
-                offCtx.drawImage(logo, 0, 0, targetWidth, targetHeight);
-                let fillColor = color;
-                if (color === "white") fillColor = "#ffffff";
-                else if (color === "gold") fillColor = "#dfa843";
-                else if (color === "dark") fillColor = "#140e07";
-
-                offCtx.globalCompositeOperation = "source-in";
-                offCtx.fillStyle = fillColor;
-                offCtx.fillRect(0, 0, targetWidth, targetHeight);
-                ctx.drawImage(offCanvas, x, y);
-              } else {
-                ctx.drawImage(logo, x, y, targetWidth, targetHeight);
-              }
-            } else {
-              ctx.drawImage(logo, x, y, targetWidth, targetHeight);
+        if (Array.isArray(config?.templates) && config.templates.length > 0) {
+          for (const t of config.templates) {
+            if (t.enabled !== false && t.dataUrl) {
+              layersToDraw.push({
+                src: t.dataUrl,
+                xPercent: t.xPercent ?? config?.xPercent ?? 88,
+                yPercent: t.yPercent ?? config?.yPercent ?? 88,
+                sizePercent: t.sizePercent ?? config?.sizePercent ?? 14,
+                opacity: t.opacity ?? config?.opacity ?? 0.40,
+                color: t.color ?? config?.color ?? "original",
+              });
             }
-
-            ctx.restore();
-
-            canvas.toBlob(
-              (watermarkedBlob) => {
-                resolve(watermarkedBlob || blob);
-              },
-              "image/jpeg",
-              0.95
-            );
-          } catch {
-            resolve(blob);
           }
+        }
+
+        // If no template items enabled, fallback to single imageUrl or default watermark
+        if (layersToDraw.length === 0) {
+          layersToDraw.push({
+            src: config?.imageUrl || "/watermark.png",
+            xPercent: config?.xPercent ?? 88,
+            yPercent: config?.yPercent ?? 88,
+            sizePercent: config?.sizePercent ?? 14,
+            opacity: config?.opacity ?? 0.40,
+            color: config?.color ?? "original",
+          });
+        }
+
+        // Draw each template onto the canvas at its own position, size and opacity
+        const drawLayer = (layer: (typeof layersToDraw)[0]): Promise<void> => {
+          return new Promise((layerResolve) => {
+            const logo = new Image();
+            logo.crossOrigin = "anonymous";
+            logo.onload = () => {
+              try {
+                const sizePct = layer.sizePercent;
+                const targetWidth = Math.max(60, Math.round(width * (sizePct / 100)));
+                const aspect = (logo.naturalWidth || 736) / (logo.naturalHeight || 570);
+                const targetHeight = Math.max(20, Math.round(targetWidth / aspect));
+
+                let x = Math.round((width - targetWidth) * (Math.max(0, Math.min(100, layer.xPercent)) / 100));
+                let y = Math.round((height - targetHeight) * (Math.max(0, Math.min(100, layer.yPercent)) / 100));
+
+                x = Math.max(0, Math.min(x, width - targetWidth));
+                y = Math.max(0, Math.min(y, height - targetHeight));
+
+                ctx.save();
+                ctx.globalAlpha = layer.opacity;
+
+                const color = layer.color || "original";
+                if (color !== "original") {
+                  const offCanvas = document.createElement("canvas");
+                  offCanvas.width = targetWidth;
+                  offCanvas.height = targetHeight;
+                  const offCtx = offCanvas.getContext("2d");
+                  if (offCtx) {
+                    offCtx.drawImage(logo, 0, 0, targetWidth, targetHeight);
+                    let fillColor = color;
+                    if (color === "white") fillColor = "#ffffff";
+                    else if (color === "gold") fillColor = "#dfa843";
+                    else if (color === "dark") fillColor = "#140e07";
+
+                    offCtx.globalCompositeOperation = "source-in";
+                    offCtx.fillStyle = fillColor;
+                    offCtx.fillRect(0, 0, targetWidth, targetHeight);
+                    ctx.drawImage(offCanvas, x, y);
+                  } else {
+                    ctx.drawImage(logo, x, y, targetWidth, targetHeight);
+                  }
+                } else {
+                  ctx.drawImage(logo, x, y, targetWidth, targetHeight);
+                }
+
+                ctx.restore();
+              } catch (e) {
+                console.warn("Could not draw template layer", e);
+              }
+              layerResolve();
+            };
+            logo.onerror = () => layerResolve();
+            logo.src = layer.src;
+          });
         };
 
-        logo.onerror = () => {
-          resolve(blob);
-        };
+        for (const layer of layersToDraw) {
+          await drawLayer(layer);
+        }
 
-        logo.src = config?.imageUrl || "/watermark.png";
+        canvas.toBlob(
+          (watermarkedBlob) => {
+            resolve(watermarkedBlob || blob);
+          },
+          "image/jpeg",
+          0.95
+        );
       } catch {
         resolve(blob);
       }

@@ -1,7 +1,7 @@
 "use client";
 
 import { useRouter } from "next/navigation";
-import { ImagePlus, ScanFace, Sliders, Sparkles, Trash2, X } from "lucide-react";
+import { Eye, EyeOff, ImagePlus, ScanFace, Sliders, Sparkles, Trash2, X } from "lucide-react";
 import { useRef, useState } from "react";
 import { adminApi, errorMessage } from "@/lib/api";
 import { ACCEPTED_IMAGE_TYPES, MAX_UPLOAD_MB } from "@/lib/config";
@@ -65,6 +65,14 @@ export function EventSettings({ event, onSaved }: { event: EventOut; onSaved: (e
     const allowed = ["image/png", "image/svg+xml", "image/webp", "image/jpeg"];
     const newItems: WatermarkTemplateItem[] = [];
 
+    const defaultCorners = [
+      { x: 88, y: 88 },
+      { x: 88, y: 12 },
+      { x: 12, y: 12 },
+      { x: 12, y: 88 },
+      { x: 50, y: 88 },
+    ];
+
     for (let i = 0; i < files.length; i++) {
       const f = files[i];
       if (!allowed.includes(f.type)) {
@@ -77,11 +85,18 @@ export function EventSettings({ event, onSaved }: { event: EventOut; onSaved: (e
       }
       try {
         const dataUrl = await fileToDataUrl(f);
+        const existingCount = (wm.templates || []).length + newItems.length;
+        const corner = defaultCorners[existingCount % defaultCorners.length];
         newItems.push({
           id: `${Date.now()}-${Math.random().toString(36).slice(2, 7)}-${f.name.replace(/[^a-zA-Z0-9.-]/g, "_")}`,
           name: f.name,
           sizeBytes: f.size,
           dataUrl,
+          xPercent: corner.x,
+          yPercent: corner.y,
+          sizePercent: 14,
+          opacity: 0.40,
+          enabled: true,
         });
       } catch {
         toast.error("Could not read template file", f.name);
@@ -98,6 +113,10 @@ export function EventSettings({ event, onSaved }: { event: EventOut; onSaved: (e
           templates: updated,
           activeTemplateId: active.id,
           imageUrl: active.dataUrl,
+          sizePercent: active.sizePercent ?? 14,
+          opacity: active.opacity ?? 0.40,
+          xPercent: active.xPercent ?? 88,
+          yPercent: active.yPercent ?? 88,
         };
       });
       toast.success(
@@ -112,6 +131,17 @@ export function EventSettings({ event, onSaved }: { event: EventOut; onSaved: (e
       ...prev,
       activeTemplateId: item.id,
       imageUrl: item.dataUrl,
+      sizePercent: item.sizePercent ?? prev.sizePercent ?? 14,
+      opacity: item.opacity ?? prev.opacity ?? 0.40,
+    }));
+  }
+
+  function toggleTemplateEnabled(id: string) {
+    setWm((prev) => ({
+      ...prev,
+      templates: (prev.templates || []).map((t) =>
+        t.id === id ? { ...t, enabled: t.enabled === false ? true : false } : t
+      ),
     }));
   }
 
@@ -134,6 +164,10 @@ export function EventSettings({ event, onSaved }: { event: EventOut; onSaved: (e
       imageUrl: null,
       templates: [],
       activeTemplateId: null,
+      xPercent: 88,
+      yPercent: 88,
+      sizePercent: 14,
+      opacity: 0.40,
     }));
     toast.success("Reset to default Zigmaa logo");
   }
@@ -144,7 +178,20 @@ export function EventSettings({ event, onSaved }: { event: EventOut; onSaved: (e
     if (rect.width <= 0 || rect.height <= 0) return;
     const x = Math.max(0, Math.min(100, Math.round(((e.clientX - rect.left) / rect.width) * 100)));
     const y = Math.max(0, Math.min(100, Math.round(((e.clientY - rect.top) / rect.height) * 100)));
-    setWm((prev) => ({ ...prev, xPercent: x, yPercent: y }));
+
+    if (wm.templates && wm.templates.length > 0) {
+      const activeId = wm.activeTemplateId || wm.templates[0].id;
+      setWm((prev) => ({
+        ...prev,
+        xPercent: x,
+        yPercent: y,
+        templates: (prev.templates || []).map((t) =>
+          t.id === activeId ? { ...t, xPercent: x, yPercent: y } : t
+        ),
+      }));
+    } else {
+      setWm((prev) => ({ ...prev, xPercent: x, yPercent: y }));
+    }
   }
 
   function saveWatermark() {
@@ -212,7 +259,7 @@ export function EventSettings({ event, onSaved }: { event: EventOut; onSaved: (e
             description="Custom watermark applied to all photo downloads for this event"
           />
           <div className="space-y-4 p-5">
-            {/* Live Watermark Preview on Event Cover */}
+            {/* Live Watermark Preview on Event Cover - ALL Enabled Templates Visible at the Same Time! */}
             <div
               ref={previewRef}
               onClick={handlePreviewClick}
@@ -223,28 +270,81 @@ export function EventSettings({ event, onSaved }: { event: EventOut; onSaved: (e
                 alt="Cover Preview"
                 className="max-h-52 w-auto max-w-full object-contain block mx-auto"
               />
-              {/* Watermark Overlay */}
-              <div
-                style={{
-                  position: "absolute",
-                  left: `${wm.xPercent}%`,
-                  top: `${wm.yPercent}%`,
-                  transform: `translate(-${wm.xPercent}%, -${wm.yPercent}%)`,
-                  width: `${wm.sizePercent}%`,
-                  opacity: wm.opacity,
-                  pointerEvents: "none",
-                }}
-              >
-                <img
-                  src={wm.imageUrl || "/watermark.png"}
-                  alt="Watermark"
+              {/* All Enabled Watermarks Rendered Simultaneously */}
+              {wm.templates && wm.templates.length > 0 ? (
+                wm.templates.map((t) => {
+                  if (t.enabled === false) return null;
+                  const isEditing = t.id === (wm.activeTemplateId || wm.templates![0]?.id);
+                  const xPct = t.xPercent ?? wm.xPercent ?? 88;
+                  const yPct = t.yPercent ?? wm.yPercent ?? 88;
+                  const sizePct = t.sizePercent ?? wm.sizePercent ?? 14;
+                  const opVal = t.opacity ?? wm.opacity ?? 0.40;
+
+                  return (
+                    <div
+                      key={t.id}
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        selectTemplate(t);
+                      }}
+                      style={{
+                        position: "absolute",
+                        left: `${xPct}%`,
+                        top: `${yPct}%`,
+                        transform: `translate(-${xPct}%, -${yPct}%)`,
+                        width: `${sizePct}%`,
+                        opacity: opVal,
+                        pointerEvents: "auto",
+                        cursor: "pointer",
+                        transition: "opacity 0.15s ease",
+                      }}
+                      className={`group rounded-lg p-0.5 select-none ${
+                        isEditing
+                          ? "ring-2 ring-brand-500 ring-offset-1 ring-offset-black/50 shadow-md bg-white/10"
+                          : "hover:ring-1 hover:ring-white/60"
+                      }`}
+                      title={`Click to edit position/size of ${t.name}`}
+                    >
+                      <img
+                        src={t.dataUrl}
+                        alt={t.name}
+                        style={{
+                          width: "100%",
+                          height: "auto",
+                          display: "block",
+                        }}
+                      />
+                      {isEditing && (
+                        <span className="absolute -top-5 left-1/2 -translate-x-1/2 whitespace-nowrap rounded bg-brand-600 px-1.5 py-0.2 text-[8px] font-semibold text-white shadow pointer-events-none">
+                          Editing
+                        </span>
+                      )}
+                    </div>
+                  );
+                })
+              ) : (
+                <div
                   style={{
-                    width: "100%",
-                    height: "auto",
-                    display: "block",
+                    position: "absolute",
+                    left: `${wm.xPercent}%`,
+                    top: `${wm.yPercent}%`,
+                    transform: `translate(-${wm.xPercent}%, -${wm.yPercent}%)`,
+                    width: `${wm.sizePercent}%`,
+                    opacity: wm.opacity,
+                    pointerEvents: "none",
                   }}
-                />
-              </div>
+                >
+                  <img
+                    src={wm.imageUrl || "/watermark.png"}
+                    alt="Watermark"
+                    style={{
+                      width: "100%",
+                      height: "auto",
+                      display: "block",
+                    }}
+                  />
+                </div>
+              )}
             </div>
 
             {/* Template / Watermark Upload Section */}
@@ -266,14 +366,15 @@ export function EventSettings({ event, onSaved }: { event: EventOut; onSaved: (e
                 <div className="space-y-2.5">
                   <div className="flex items-center justify-between text-xs">
                     <span className="font-semibold uppercase tracking-wider text-muted">
-                      Saved Templates ({wm.templates.length})
+                      Templates ({wm.templates.filter((t) => t.enabled !== false).length}/{wm.templates.length} visible)
                     </span>
-                    <span className="text-[11px] text-muted">Click to select active</span>
+                    <span className="text-[11px] text-muted">Click to select &amp; position</span>
                   </div>
 
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 max-h-[220px] overflow-y-auto p-1">
                     {wm.templates.map((t) => {
                       const isActive = t.id === (wm.activeTemplateId || wm.templates![0]?.id);
+                      const isEnabled = t.enabled !== false;
                       return (
                         <div
                           key={t.id}
@@ -290,30 +391,49 @@ export function EventSettings({ event, onSaved }: { event: EventOut; onSaved: (e
                             </div>
                             <div className="min-w-0 flex-1">
                               <div className="flex items-center gap-1">
-                                <p className="truncate text-xs font-semibold text-ink">{t.name}</p>
+                                <p className={`truncate text-xs font-semibold text-ink ${!isEnabled ? "line-through opacity-50" : ""}`}>
+                                  {t.name}
+                                </p>
                                 {isActive && (
                                   <span className="shrink-0 rounded-full bg-brand-100 px-1.5 py-0.2 text-[9px] font-semibold text-brand-700">
                                     Active
                                   </span>
                                 )}
                               </div>
-                              {t.sizeBytes ? (
-                                <p className="text-[10px] text-muted">{(t.sizeBytes / 1024).toFixed(1)} KB</p>
-                              ) : null}
+                              <p className="text-[10px] text-muted">
+                                {t.sizeBytes ? `${(t.sizeBytes / 1024).toFixed(1)} KB • ` : ""}
+                                {isEnabled ? "Visible" : "Hidden"}
+                              </p>
                             </div>
                           </div>
-                          <button
-                            type="button"
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              removeTemplateItem(t.id);
-                            }}
-                            aria-label={`Remove ${t.name}`}
-                            className="grid h-6 w-6 shrink-0 place-items-center rounded-md text-muted hover:bg-red-50 hover:text-red-600 transition-colors"
-                            title="Remove template"
-                          >
-                            <X className="h-3 w-3" />
-                          </button>
+                          <div className="flex items-center gap-1">
+                            <button
+                              type="button"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                toggleTemplateEnabled(t.id);
+                              }}
+                              aria-label={isEnabled ? "Hide from photo" : "Show on photo"}
+                              className={`grid h-6 w-6 shrink-0 place-items-center rounded-md transition-colors ${
+                                isEnabled ? "text-brand-600 hover:bg-brand-50" : "text-muted hover:bg-canvas hover:text-ink"
+                              }`}
+                              title={isEnabled ? "Visible on photo" : "Hidden - click to show"}
+                            >
+                              {isEnabled ? <Eye className="h-3 w-3" /> : <EyeOff className="h-3 w-3" />}
+                            </button>
+                            <button
+                              type="button"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                removeTemplateItem(t.id);
+                              }}
+                              aria-label={`Remove ${t.name}`}
+                              className="grid h-6 w-6 shrink-0 place-items-center rounded-md text-muted hover:bg-red-50 hover:text-red-600 transition-colors"
+                              title="Remove template"
+                            >
+                              <X className="h-3 w-3" />
+                            </button>
+                          </div>
                         </div>
                       );
                     })}
@@ -372,17 +492,39 @@ export function EventSettings({ event, onSaved }: { event: EventOut; onSaved: (e
             <div>
               <div className="mb-1.5 flex items-center justify-between text-xs">
                 <span className="font-semibold uppercase tracking-wider text-muted flex items-center gap-1">
-                  <Sliders className="h-3 w-3 text-brand-600" /> Size
+                  <Sliders className="h-3 w-3 text-brand-600" /> Size{" "}
+                  {wm.templates?.find((t) => t.id === (wm.activeTemplateId || wm.templates?.[0]?.id))
+                    ? `(${wm.templates.find((t) => t.id === (wm.activeTemplateId || wm.templates?.[0]?.id))?.name})`
+                    : ""}
                 </span>
-                <span className="font-mono font-medium text-ink">{wm.sizePercent}%</span>
+                <span className="font-mono font-medium text-ink">
+                  {wm.templates?.find((t) => t.id === (wm.activeTemplateId || wm.templates?.[0]?.id))?.sizePercent ??
+                    wm.sizePercent ??
+                    14}
+                  %
+                </span>
               </div>
               <input
                 type="range"
                 min={5}
                 max={60}
                 step={1}
-                value={wm.sizePercent ?? 14}
-                onChange={(e) => setWm((prev) => ({ ...prev, sizePercent: Number(e.target.value) }))}
+                value={
+                  wm.templates?.find((t) => t.id === (wm.activeTemplateId || wm.templates?.[0]?.id))?.sizePercent ??
+                  wm.sizePercent ??
+                  14
+                }
+                onChange={(e) => {
+                  const val = Number(e.target.value);
+                  const activeId = wm.activeTemplateId || wm.templates?.[0]?.id;
+                  setWm((prev) => ({
+                    ...prev,
+                    sizePercent: val,
+                    templates: (prev.templates || []).map((t) =>
+                      t.id === activeId ? { ...t, sizePercent: val } : t
+                    ),
+                  }));
+                }}
                 className="w-full accent-brand-500 cursor-pointer h-1.5 bg-line rounded-lg"
               />
             </div>
@@ -391,17 +533,41 @@ export function EventSettings({ event, onSaved }: { event: EventOut; onSaved: (e
             <div>
               <div className="mb-1.5 flex items-center justify-between text-xs">
                 <span className="font-semibold uppercase tracking-wider text-muted flex items-center gap-1">
-                  <Sparkles className="h-3 w-3 text-brand-600" /> Opacity
+                  <Sparkles className="h-3 w-3 text-brand-600" /> Opacity{" "}
+                  {wm.templates?.find((t) => t.id === (wm.activeTemplateId || wm.templates?.[0]?.id))
+                    ? `(${wm.templates.find((t) => t.id === (wm.activeTemplateId || wm.templates?.[0]?.id))?.name})`
+                    : ""}
                 </span>
-                <span className="font-mono font-medium text-ink">{Math.round((wm.opacity ?? 0.4) * 100)}%</span>
+                <span className="font-mono font-medium text-ink">
+                  {Math.round(
+                    (wm.templates?.find((t) => t.id === (wm.activeTemplateId || wm.templates?.[0]?.id))?.opacity ??
+                      wm.opacity ??
+                      0.4) * 100
+                  )}
+                  %
+                </span>
               </div>
               <input
                 type="range"
                 min={0.1}
                 max={1.0}
                 step={0.05}
-                value={wm.opacity ?? 0.4}
-                onChange={(e) => setWm((prev) => ({ ...prev, opacity: Number(e.target.value) }))}
+                value={
+                  wm.templates?.find((t) => t.id === (wm.activeTemplateId || wm.templates?.[0]?.id))?.opacity ??
+                  wm.opacity ??
+                  0.4
+                }
+                onChange={(e) => {
+                  const val = Number(e.target.value);
+                  const activeId = wm.activeTemplateId || wm.templates?.[0]?.id;
+                  setWm((prev) => ({
+                    ...prev,
+                    opacity: val,
+                    templates: (prev.templates || []).map((t) =>
+                      t.id === activeId ? { ...t, opacity: val } : t
+                    ),
+                  }));
+                }}
                 className="w-full accent-brand-500 cursor-pointer h-1.5 bg-line rounded-lg"
               />
             </div>

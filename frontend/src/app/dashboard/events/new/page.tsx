@@ -56,17 +56,50 @@ export default function NewEventPage() {
     color: "original",
   });
 
-  // Handle clicking anywhere on the preview image to accurately place watermark
+  // Active editing template
+  const activeEditingId = wm.activeTemplateId || live.activeTemplateId || live.templateItems[0]?.id || null;
+  const activeEditingItem = live.templateItems.find((t) => t.id === activeEditingId) || live.templateItems[0] || null;
+
+  // Handle clicking anywhere on the preview image to accurately place currently selected watermark
   function handlePreviewClick(e: React.MouseEvent<HTMLDivElement>) {
     if (!previewRef.current) return;
     const rect = previewRef.current.getBoundingClientRect();
     if (rect.width <= 0 || rect.height <= 0) return;
     const x = Math.max(0, Math.min(100, Math.round(((e.clientX - rect.left) / rect.width) * 100)));
     const y = Math.max(0, Math.min(100, Math.round(((e.clientY - rect.top) / rect.height) * 100)));
+
+    if (activeEditingItem && live.templateItems.length > 0) {
+      setLive((prev) => ({
+        ...prev,
+        templateItems: prev.templateItems.map((t) =>
+          t.id === activeEditingItem.id ? { ...t, xPercent: x, yPercent: y } : t
+        ),
+      }));
+    }
     setWm((prev) => ({ ...prev, xPercent: x, yPercent: y }));
   }
 
   function resetDefaults() {
+    const defaultCorners = [
+      { x: 88, y: 88 },
+      { x: 88, y: 12 },
+      { x: 12, y: 12 },
+      { x: 12, y: 88 },
+      { x: 50, y: 88 },
+    ];
+    if (live.templateItems.length > 0) {
+      setLive((prev) => ({
+        ...prev,
+        templateItems: prev.templateItems.map((t, idx) => ({
+          ...t,
+          xPercent: defaultCorners[idx % defaultCorners.length].x,
+          yPercent: defaultCorners[idx % defaultCorners.length].y,
+          sizePercent: 14,
+          opacity: 0.40,
+          enabled: true,
+        })),
+      }));
+    }
     setWm({
       imageUrl: live.templatePreview || null,
       xPercent: 88,
@@ -75,11 +108,9 @@ export default function NewEventPage() {
       opacity: 0.40,
       color: "original",
     });
-    toast.success("Reset to Zigmaa defaults");
+    toast.success("Reset positions & sizes to defaults");
   }
 
-  // Active watermark source: uploaded template if present, else fallback Zigmaa logo
-  const watermarkSrc = live.templatePreview || wm.imageUrl || "/watermark.png";
   // Active cover image: uploaded cover if present, else default AI marriage couple photo
   const coverSrc = live.preview || "/default-cover.jpg";
 
@@ -161,6 +192,12 @@ export default function NewEventPage() {
                         name: item.name,
                         sizeBytes: item.size,
                         dataUrl,
+                        xPercent: item.xPercent ?? wm.xPercent ?? 88,
+                        yPercent: item.yPercent ?? wm.yPercent ?? 88,
+                        sizePercent: item.sizePercent ?? wm.sizePercent ?? 14,
+                        opacity: item.opacity ?? wm.opacity ?? 0.40,
+                        enabled: item.enabled !== false,
+                        color: wm.color ?? "original",
                       });
                     } catch (e) {
                       console.warn("Could not convert template to data URL", e);
@@ -259,65 +296,146 @@ export default function NewEventPage() {
                   <span>Click anywhere on photo to place watermark</span>
                 </div>
 
-                {/* Live Watermark Overlay Layer */}
-                <div
-                  style={{
-                    position: "absolute",
-                    left: `${wm.xPercent}%`,
-                    top: `${wm.yPercent}%`,
-                    transform: `translate(-${wm.xPercent}%, -${wm.yPercent}%)`,
-                    width: `${wm.sizePercent}%`,
-                    opacity: wm.opacity,
-                    pointerEvents: "none",
-                    transition: "opacity 0.15s ease, filter 0.15s ease",
-                  }}
-                >
-                  <img
-                    src={watermarkSrc}
-                    alt="Watermark Overlay"
+                {/* Live Watermark Overlay Layer - ALL Enabled Templates Visible at the Same Time! */}
+                {live.templateItems.length > 0 ? (
+                  live.templateItems.map((t) => {
+                    if (t.enabled === false) return null;
+                    const isEditing = t.id === activeEditingId;
+                    const xPct = t.xPercent ?? 88;
+                    const yPct = t.yPercent ?? 88;
+                    const sizePct = t.sizePercent ?? 14;
+                    const opVal = t.opacity ?? 0.40;
+
+                    return (
+                      <div
+                        key={t.id}
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          setWm((prev) => ({
+                            ...prev,
+                            activeTemplateId: t.id,
+                            imageUrl: t.preview,
+                            sizePercent: t.sizePercent ?? 14,
+                            opacity: t.opacity ?? 0.40,
+                            xPercent: t.xPercent ?? 88,
+                            yPercent: t.yPercent ?? 88,
+                          }));
+                          setLive((prev) => ({ ...prev, activeTemplateId: t.id }));
+                        }}
+                        style={{
+                          position: "absolute",
+                          left: `${xPct}%`,
+                          top: `${yPct}%`,
+                          transform: `translate(-${xPct}%, -${yPct}%)`,
+                          width: `${sizePct}%`,
+                          opacity: opVal,
+                          pointerEvents: "auto",
+                          cursor: "pointer",
+                          transition: "opacity 0.15s ease",
+                        }}
+                        className={`group rounded-lg p-0.5 select-none ${
+                          isEditing
+                            ? "ring-2 ring-brand-500 ring-offset-2 ring-offset-black/60 shadow-xl bg-white/10"
+                            : "hover:ring-1 hover:ring-white/70"
+                        }`}
+                        title={`Click to select & position "${t.name}"`}
+                      >
+                        <img
+                          src={t.preview}
+                          alt={t.name}
+                          style={{
+                            width: "100%",
+                            height: "auto",
+                            display: "block",
+                            filter: getFilterCss(wm.color),
+                          }}
+                        />
+                        {isEditing && (
+                          <span className="absolute -top-5 left-1/2 -translate-x-1/2 whitespace-nowrap rounded bg-brand-600 px-1.5 py-0.2 text-[9px] font-semibold text-white shadow pointer-events-none">
+                            Editing: {t.name}
+                          </span>
+                        )}
+                      </div>
+                    );
+                  })
+                ) : (
+                  <div
                     style={{
-                      width: "100%",
-                      height: "auto",
-                      display: "block",
-                      filter: getFilterCss(wm.color),
+                      position: "absolute",
+                      left: `${wm.xPercent}%`,
+                      top: `${wm.yPercent}%`,
+                      transform: `translate(-${wm.xPercent}%, -${wm.yPercent}%)`,
+                      width: `${wm.sizePercent}%`,
+                      opacity: wm.opacity,
+                      pointerEvents: "none",
+                      transition: "opacity 0.15s ease, filter 0.15s ease",
                     }}
-                  />
-                </div>
+                  >
+                    <img
+                      src="/watermark.png"
+                      alt="Watermark Overlay"
+                      style={{
+                        width: "100%",
+                        height: "auto",
+                        display: "block",
+                        filter: getFilterCss(wm.color),
+                      }}
+                    />
+                  </div>
+                )}
               </div>
             </div>
 
-            {/* Template Selector Bar (When multiple templates are uploaded) */}
-            {live.templateItems.length > 1 && (
-              <div className="flex items-center gap-2 overflow-x-auto px-5 pt-3 pb-1 border-b border-line bg-canvas/30">
-                <span className="text-xs font-semibold text-muted shrink-0">Active watermark:</span>
-                <div className="flex items-center gap-1.5 flex-nowrap">
-                  {live.templateItems.map((t) => {
-                    const isActive = t.id === (wm.activeTemplateId || live.activeTemplateId || live.templateItems[0].id);
-                    return (
-                      <button
-                        key={t.id}
-                        type="button"
-                        onClick={() => {
-                          setWm((prev) => ({
-                            ...prev,
-                            imageUrl: t.preview,
-                            activeTemplateId: t.id,
-                          }));
-                        }}
-                        className={`inline-flex items-center gap-1.5 rounded-lg border px-2.5 py-1 text-xs transition-all cursor-pointer ${
-                          isActive
-                            ? "border-brand-500 bg-brand-50 text-brand-700 font-semibold ring-1 ring-brand-500 shadow-xs"
-                            : "border-line bg-surface text-ink hover:bg-canvas"
-                        }`}
-                      >
-                        <div className="h-4 w-4 shrink-0 rounded bg-[repeating-conic-gradient(#e8e4dc_0%_25%,#fdfbf7_0%_50%)] bg-[length:4px_4px] p-0.5 flex items-center justify-center overflow-hidden">
-                          <img src={t.preview} alt="" className="max-h-full max-w-full object-contain" />
-                        </div>
-                        <span className="truncate max-w-[120px]">{t.name}</span>
-                      </button>
-                    );
-                  })}
+            {/* Template Selector Bar (When templates are uploaded) */}
+            {live.templateItems.length > 0 && (
+              <div className="flex items-center justify-between gap-2 overflow-x-auto px-5 py-2.5 border-b border-line bg-canvas/30">
+                <div className="flex items-center gap-2">
+                  <span className="text-xs font-semibold text-muted shrink-0">
+                    Templates on photo ({live.templateItems.filter((t) => t.enabled !== false).length}/{live.templateItems.length}):
+                  </span>
+                  <div className="flex items-center gap-1.5 flex-nowrap">
+                    {live.templateItems.map((t) => {
+                      const isEditing = t.id === activeEditingId;
+                      const isEnabled = t.enabled !== false;
+                      return (
+                        <button
+                          key={t.id}
+                          type="button"
+                          onClick={() => {
+                            setWm((prev) => ({
+                              ...prev,
+                              activeTemplateId: t.id,
+                              imageUrl: t.preview,
+                              sizePercent: t.sizePercent ?? 14,
+                              opacity: t.opacity ?? 0.40,
+                              xPercent: t.xPercent ?? 88,
+                              yPercent: t.yPercent ?? 88,
+                            }));
+                            setLive((prev) => ({ ...prev, activeTemplateId: t.id }));
+                          }}
+                          className={`inline-flex items-center gap-1.5 rounded-lg border px-2.5 py-1 text-xs transition-all cursor-pointer ${
+                            isEditing
+                              ? "border-brand-500 bg-brand-50 text-brand-700 font-semibold ring-1 ring-brand-500 shadow-xs"
+                              : "border-line bg-surface text-ink hover:bg-canvas"
+                          }`}
+                        >
+                          <div className="h-4 w-4 shrink-0 rounded bg-[repeating-conic-gradient(#e8e4dc_0%_25%,#fdfbf7_0%_50%)] bg-[length:4px_4px] p-0.5 flex items-center justify-center overflow-hidden">
+                            <img src={t.preview} alt="" className="max-h-full max-w-full object-contain" />
+                          </div>
+                          <span className={`truncate max-w-[110px] ${!isEnabled ? "line-through opacity-50" : ""}`}>
+                            {t.name}
+                          </span>
+                          {isEditing && <span className="text-[10px] text-brand-600 font-bold">(Editing)</span>}
+                        </button>
+                      );
+                    })}
+                  </div>
                 </div>
+                {activeEditingItem && (
+                  <span className="text-[11px] text-muted shrink-0 hidden sm:inline">
+                    Click photo to place &quot;{activeEditingItem.name}&quot;
+                  </span>
+                )}
               </div>
             )}
 
@@ -329,17 +447,30 @@ export default function NewEventPage() {
                   <div className="mb-2 flex items-center justify-between">
                     <label className="text-xs font-semibold uppercase tracking-wider text-muted flex items-center gap-1.5">
                       <Sliders className="h-3.5 w-3.5 text-brand-600" />
-                      <span>Watermark Size</span>
+                      <span>Watermark Size {activeEditingItem ? `(${activeEditingItem.name})` : ""}</span>
                     </label>
-                    <span className="text-xs font-mono font-medium text-ink">{wm.sizePercent}% of photo width</span>
+                    <span className="text-xs font-mono font-medium text-ink">
+                      {activeEditingItem?.sizePercent ?? wm.sizePercent ?? 14}% of photo width
+                    </span>
                   </div>
                   <input
                     type="range"
                     min={5}
                     max={60}
                     step={1}
-                    value={wm.sizePercent ?? 14}
-                    onChange={(e) => setWm((prev) => ({ ...prev, sizePercent: Number(e.target.value) }))}
+                    value={activeEditingItem?.sizePercent ?? wm.sizePercent ?? 14}
+                    onChange={(e) => {
+                      const newSize = Number(e.target.value);
+                      if (activeEditingItem) {
+                        setLive((prev) => ({
+                          ...prev,
+                          templateItems: prev.templateItems.map((t) =>
+                            t.id === activeEditingItem.id ? { ...t, sizePercent: newSize } : t
+                          ),
+                        }));
+                      }
+                      setWm((prev) => ({ ...prev, sizePercent: newSize }));
+                    }}
                     className="w-full accent-brand-500 cursor-pointer h-2 bg-line rounded-lg mt-2"
                   />
                 </div>
@@ -349,10 +480,10 @@ export default function NewEventPage() {
                   <div className="mb-2 flex items-center justify-between">
                     <label className="text-xs font-semibold uppercase tracking-wider text-muted flex items-center gap-1.5">
                       <Sparkles className="h-3.5 w-3.5 text-brand-600" />
-                      <span>Transparency / Opacity</span>
+                      <span>Transparency / Opacity {activeEditingItem ? `(${activeEditingItem.name})` : ""}</span>
                     </label>
                     <span className="text-xs font-mono font-medium text-ink">
-                      {Math.round((wm.opacity ?? 0.4) * 100)}%
+                      {Math.round(((activeEditingItem?.opacity ?? wm.opacity ?? 0.40)) * 100)}%
                     </span>
                   </div>
                   <input
@@ -360,8 +491,19 @@ export default function NewEventPage() {
                     min={0.1}
                     max={1.0}
                     step={0.05}
-                    value={wm.opacity ?? 0.4}
-                    onChange={(e) => setWm((prev) => ({ ...prev, opacity: Number(e.target.value) }))}
+                    value={activeEditingItem?.opacity ?? wm.opacity ?? 0.40}
+                    onChange={(e) => {
+                      const newOpacity = Number(e.target.value);
+                      if (activeEditingItem) {
+                        setLive((prev) => ({
+                          ...prev,
+                          templateItems: prev.templateItems.map((t) =>
+                            t.id === activeEditingItem.id ? { ...t, opacity: newOpacity } : t
+                          ),
+                        }));
+                      }
+                      setWm((prev) => ({ ...prev, opacity: newOpacity }));
+                    }}
                     className="w-full accent-brand-500 cursor-pointer h-2 bg-line rounded-lg mt-2"
                   />
                 </div>

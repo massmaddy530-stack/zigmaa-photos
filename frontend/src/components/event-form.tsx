@@ -1,6 +1,6 @@
 "use client";
 
-import { ImagePlus, Sparkles, X } from "lucide-react";
+import { Eye, EyeOff, ImagePlus, Sparkles, X } from "lucide-react";
 import { useEffect, useRef, useState, type FormEvent, type ReactNode } from "react";
 import { ApiError, errorMessage } from "@/lib/api";
 import { ACCEPTED_IMAGE_TYPES, MAX_UPLOAD_MB } from "@/lib/config";
@@ -15,6 +15,11 @@ export interface TemplateItem {
   size: number;
   preview: string;
   file: File;
+  xPercent?: number;
+  yPercent?: number;
+  sizePercent?: number;
+  opacity?: number;
+  enabled?: boolean;
 }
 
 export interface EventFormValues extends EventCreate {
@@ -120,6 +125,14 @@ export function EventForm({ initial, submitLabel, onSubmit, footerExtra, withCov
     const newItems: TemplateItem[] = [];
     let errorMsg: string | undefined;
 
+    const defaultCorners = [
+      { x: 88, y: 88 },
+      { x: 88, y: 12 },
+      { x: 12, y: 12 },
+      { x: 12, y: 88 },
+      { x: 50, y: 88 },
+    ];
+
     for (let i = 0; i < fileList.length; i++) {
       const f = fileList[i];
       if (!allowed.includes(f.type)) {
@@ -132,12 +145,18 @@ export function EventForm({ initial, submitLabel, onSubmit, footerExtra, withCov
       }
       const id = `${Date.now()}-${Math.random().toString(36).slice(2, 7)}-${f.name.replace(/[^a-zA-Z0-9.-]/g, "_")}`;
       const preview = URL.createObjectURL(f);
+      const corner = defaultCorners[(templates.length + newItems.length) % defaultCorners.length];
       newItems.push({
         id,
         name: f.name,
         size: f.size,
         preview,
         file: f,
+        xPercent: corner.x,
+        yPercent: corner.y,
+        sizePercent: 14,
+        opacity: 0.40,
+        enabled: true,
       });
     }
 
@@ -154,6 +173,12 @@ export function EventForm({ initial, submitLabel, onSubmit, footerExtra, withCov
       }
       return updated;
     });
+  }
+
+  function toggleTemplateEnabled(id: string) {
+    setTemplates((prev) =>
+      prev.map((t) => (t.id === id ? { ...t, enabled: t.enabled === false ? true : false } : t))
+    );
   }
 
   function removeTemplate(id: string) {
@@ -285,25 +310,45 @@ export function EventForm({ initial, submitLabel, onSubmit, footerExtra, withCov
                               <p className="truncate text-xs font-semibold text-ink">{t.name}</p>
                               {isActive && (
                                 <span className="shrink-0 rounded-full bg-brand-100 px-1.5 py-0.2 text-[10px] font-semibold text-brand-700">
-                                  Active
+                                  Selected
                                 </span>
                               )}
                             </div>
-                            <p className="text-[11px] text-muted">{(t.size / 1024).toFixed(1)} KB</p>
+                            <p className="text-[11px] text-muted">
+                              {(t.size / 1024).toFixed(1)} KB &bull; {t.enabled === false ? "Hidden" : "Visible"}
+                            </p>
                           </div>
                         </div>
-                        <button
-                          type="button"
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            removeTemplate(t.id);
-                          }}
-                          aria-label={`Remove ${t.name}`}
-                          className="grid h-7 w-7 shrink-0 place-items-center rounded-md text-muted hover:bg-red-50 hover:text-red-600 transition-colors"
-                          title="Remove template"
-                        >
-                          <X className="h-3.5 w-3.5" />
-                        </button>
+                        <div className="flex items-center gap-1">
+                          <button
+                            type="button"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              toggleTemplateEnabled(t.id);
+                            }}
+                            aria-label={t.enabled === false ? "Show on photo" : "Hide from photo"}
+                            className={`grid h-7 w-7 shrink-0 place-items-center rounded-md transition-colors ${
+                              t.enabled === false
+                                ? "text-muted hover:bg-canvas hover:text-ink"
+                                : "text-brand-600 hover:bg-brand-50"
+                            }`}
+                            title={t.enabled === false ? "Hidden - click to show" : "Visible on photo"}
+                          >
+                            {t.enabled === false ? <EyeOff className="h-3.5 w-3.5" /> : <Eye className="h-3.5 w-3.5" />}
+                          </button>
+                          <button
+                            type="button"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              removeTemplate(t.id);
+                            }}
+                            aria-label={`Remove ${t.name}`}
+                            className="grid h-7 w-7 shrink-0 place-items-center rounded-md text-muted hover:bg-red-50 hover:text-red-600 transition-colors"
+                            title="Remove template"
+                          >
+                            <X className="h-3.5 w-3.5" />
+                          </button>
+                        </div>
                       </div>
                     );
                   })}
