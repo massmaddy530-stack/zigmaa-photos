@@ -40,7 +40,7 @@ export default function NewEventPage() {
     templatePreview: null,
   });
 
-  // Watermark customization state (MADX defaults: bottom-right corner, 14% size, 40% opacity)
+  // Watermark customization state (Zigmaa defaults: bottom-right corner, 14% size, 40% opacity)
   const [wm, setWm] = useState<WatermarkConfig>({
     imageUrl: null,
     xPercent: 88,

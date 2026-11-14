@@ -30,6 +30,4 @@ build/
 dist/
 *.spec
 *.exe
-MADX_Photos_Report.html
-generate_report.py
 

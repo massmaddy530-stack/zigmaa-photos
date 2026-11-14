@@ -125,9 +125,9 @@ export function saveEventWatermarkConfig(eventId: string, slug?: string | null, 
   if (typeof window === "undefined" || !config) return;
   try {
     const json = JSON.stringify(config);
-    if (eventId) localStorage.setItem(`madx_event_watermark_${eventId}`, json);
-    if (slug) localStorage.setItem(`madx_event_watermark_${slug}`, json);
-    localStorage.setItem("madx_default_watermark", json);
+    if (eventId) localStorage.setItem(`zigmaa_event_watermark_${eventId}`, json);
+    if (slug) localStorage.setItem(`zigmaa_event_watermark_${slug}`, json);
+    localStorage.setItem("zigmaa_default_watermark", json);
   } catch (e) {
     console.warn("Could not save watermark config", e);
   }
@@ -137,19 +137,19 @@ export function getSavedWatermarkConfig(eventIdOrSlug?: string): WatermarkConfig
   if (typeof window === "undefined") return undefined;
   try {
     if (eventIdOrSlug) {
-      const saved = localStorage.getItem(`madx_event_watermark_${eventIdOrSlug}`);
+      const saved = localStorage.getItem(`zigmaa_event_watermark_${eventIdOrSlug}`) || localStorage.getItem(`madx_event_watermark_${eventIdOrSlug}`);
       if (saved) return JSON.parse(saved);
     }
     // Also check current URL path to auto-detect event id or slug
     const pathParts = window.location.pathname.split("/").filter(Boolean);
     if (pathParts[0] === "e" && pathParts[1]) {
-      const saved = localStorage.getItem(`madx_event_watermark_${pathParts[1]}`);
+      const saved = localStorage.getItem(`zigmaa_event_watermark_${pathParts[1]}`) || localStorage.getItem(`madx_event_watermark_${pathParts[1]}`);
       if (saved) return JSON.parse(saved);
     } else if (pathParts[0] === "dashboard" && pathParts[1] === "events" && pathParts[2]) {
-      const saved = localStorage.getItem(`madx_event_watermark_${pathParts[2]}`);
+      const saved = localStorage.getItem(`zigmaa_event_watermark_${pathParts[2]}`) || localStorage.getItem(`madx_event_watermark_${pathParts[2]}`);
       if (saved) return JSON.parse(saved);
     }
-    const defaultSaved = localStorage.getItem("madx_default_watermark");
+    const defaultSaved = localStorage.getItem("zigmaa_default_watermark") || localStorage.getItem("madx_default_watermark");
     if (defaultSaved) return JSON.parse(defaultSaved);
   } catch {
     /* fallback to default */
@@ -158,7 +158,7 @@ export function getSavedWatermarkConfig(eventIdOrSlug?: string): WatermarkConfig
 }
 
 /**
- * Overlays the watermark (custom uploaded or default MADX logo) on the photo
+ * Overlays the watermark (custom uploaded or default Zigmaa logo) on the photo
  * before saving to the user's device with exact placement, scale, opacity, and color.
  */
 export async function applyWatermark(blob: Blob, customConfig?: WatermarkConfig): Promise<Blob> {
