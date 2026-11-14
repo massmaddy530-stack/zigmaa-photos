@@ -74,14 +74,16 @@ def run_ftp_server(watch_dir: Path, port: int = 21) -> tuple[FTPServer, int]:
     """Start pyftpdlib server in a daemon thread."""
     watch_dir.mkdir(parents=True, exist_ok=True)
     authorizer = DummyAuthorizer()
-    # Full read/write/create permissions for uploads
+    # Full read/write/create permissions for uploads from any camera
     authorizer.add_anonymous(str(watch_dir), perm="elradfmwMT")
     authorizer.add_user("sony", "sony", str(watch_dir), perm="elradfmwMT")
+    authorizer.add_user("canon", "canon", str(watch_dir), perm="elradfmwMT")
+    authorizer.add_user("nikon", "nikon", str(watch_dir), perm="elradfmwMT")
     authorizer.add_user("camera", "camera", str(watch_dir), perm="elradfmwMT")
 
     handler = FTPHandler
     handler.authorizer = authorizer
-    handler.banner = "Zigmaa Photos Sony FX3 Receiver Ready"
+    handler.banner = "Zigmaa Photos Multi-Camera Receiver Ready"
     handler.passive_ports = range(60000, 60050)
 
     chosen_port = port
@@ -95,19 +97,19 @@ def run_ftp_server(watch_dir: Path, port: int = 21) -> tuple[FTPServer, int]:
 
     local_ip = get_local_ip()
     print("\n" + "=" * 65)
-    print("       SONY FX3 WI-FI FTP RECEIVER - ACTIVE")
+    print("   ZIGMAA PHOTOS — ALL WI-FI CAMERAS FTP RECEIVER ACTIVE")
     print("=" * 65)
     print(f"  Target Folder : {watch_dir}")
     print(f"  Laptop IP     : {local_ip}")
     print(f"  Port          : {chosen_port}")
-    print(f"  User / Pass   : sony / sony  (or anonymous / no password)")
+    print(f"  Credentials   : sony/sony, canon/canon, nikon/nikon, or anonymous")
     print("=" * 65)
-    print("  ON YOUR SONY FX3:")
-    print("  1. Connect FX3 to same Wi-Fi network.")
-    print("  2. Menu -> Network (Globe) -> FTP Transfer -> FTP Trans. Func. -> ON")
+    print("  ON YOUR CAMERA (Sony / Canon / Nikon / Lumix):")
+    print("  1. Connect camera to the same Wi-Fi network as laptop.")
+    print("  2. Menu -> Network -> FTP Transfer -> FTP Function -> ON")
     print("  3. Auto FTP Transfer -> ON")
-    print(f"  4. Server Setting 1 -> Host: {local_ip}")
-    print(f"     Port: {chosen_port} | User: sony | Pass: sony | Secure: OFF")
+    print(f"  4. Server Host: {local_ip} | Port: {chosen_port}")
+    print(f"     User/Pass: sony/sony (or canon/canon or anonymous) | Secure: OFF")
     print("=" * 65 + "\n")
 
     server.max_cons = 15
