@@ -1,61 +1,33 @@
 @echo off
 setlocal enabledelayedexpansion
 title Zigmaa Photos - Camera Auto Sync
-
 echo ===================================================
 echo       Zigmaa Photos - Camera Auto Sync Agent
 echo ===================================================
 echo.
 
 set ROOT_DIR=%~dp0
+set EXE_PATH=%ROOT_DIR%Zigmaa-Camera-Sync.exe
+
+:: Unblock to ensure smooth execution without SmartScreen warnings
+powershell -NoProfile -ExecutionPolicy Bypass -Command "Unblock-File -Path '%EXE_PATH%' -ErrorAction SilentlyContinue"
+
+if exist "%EXE_PATH%" (
+    echo Starting standalone sync agent...
+    "%EXE_PATH%"
+    exit /b %errorlevel%
+)
+
+:: Fallback to python venv if running from source tree
 set AGENT_DIR=%ROOT_DIR%ingestion-agent
-
-if not exist "%AGENT_DIR%\.venv\Scripts\python.exe" (
-    echo [ERROR] Virtual environment not found in %AGENT_DIR%\.venv
-    echo Please ensure ingestion-agent dependencies are installed.
-    pause
-    exit /b 1
+if exist "%AGENT_DIR%\.venv\Scripts\python.exe" (
+    echo [DEV MODE] Running via Python environment...
+    cd /d "%AGENT_DIR%"
+    set PYTHONPATH=%AGENT_DIR%
+    "%AGENT_DIR%\.venv\Scripts\python.exe" -m zigmaa_agent.ftp_sync
+    exit /b %errorlevel%
 )
 
-set /p EV_INPUT="Paste Event ID or Event URL (Press Enter for 100b1ef3-ccf3-4c24-8aca-16df4f6f6a63): "
-if "%EV_INPUT%"=="" set EV_INPUT=100b1ef3-ccf3-4c24-8aca-16df4f6f6a63
-
-:: Pass the raw input directly to Python so it can auto-resolve UUID or slug
-set EVENT_ID=%EV_INPUT%
-
-set /p FOLDER_INPUT="Enter Folder to watch (Press Enter for C:\EventPhotos): "
-if "%FOLDER_INPUT%"=="" set FOLDER_INPUT=C:\EventPhotos
-
-if not exist "%FOLDER_INPUT%" (
-    echo Creating folder: %FOLDER_INPUT%
-    mkdir "%FOLDER_INPUT%" 2>nul
-)
-
-set API_URL=https://zigmaa-photos-backend.onrender.com
-set INGEST_KEY=HbwzKQUT3Jeg63DZz6xwsc9NkJ8SAOSH9KOP_e8AJIk
-
-set CAMERA_SOURCE=folder
-set WATCH_FOLDER=%FOLDER_INPUT%
-set EVENT_ID=%EVENT_ID%
-set API_BASE_URL=%API_URL%
-set INGEST_API_KEY=%INGEST_KEY%
-set FOLDER_RECURSIVE=true
-set FILE_STABLE_SECONDS=2
-
-echo.
-echo ---------------------------------------------------
-echo  Event ID:      %EVENT_ID%
-echo  Watch Folder:  %WATCH_FOLDER%
-echo  Server:        %API_BASE_URL%
-echo ---------------------------------------------------
-echo [READY] Every photo saved to %WATCH_FOLDER% will auto-upload!
-echo Keep this window open during the event. (Press Ctrl+C to stop)
-echo ---------------------------------------------------
-echo.
-
-cd /d "%AGENT_DIR%"
-set PYTHONPATH=%AGENT_DIR%
-"%AGENT_DIR%\.venv\Scripts\python.exe" -m zigmaa_agent.ftp_sync
-
+echo [ERROR] Neither Zigmaa-Camera-Sync.exe nor Python environment was found.
+echo Please run Install-Zigmaa-Sync.bat first.
 pause
-

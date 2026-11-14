@@ -29,5 +29,6 @@ out/
 build/
 dist/
 *.spec
+!ingestion-agent/Zigmaa-Camera-Sync.spec
 *.exe
 
