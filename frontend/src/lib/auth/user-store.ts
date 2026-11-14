@@ -23,7 +23,7 @@ const SEED_USERS: StoredUser[] = [
   {
     id: "admin-seed-1",
     email: "massmaddy530@gmail.com",
-    name: "Mass Maddy (Studio Admin)",
+    name: "Mass Maddy",
     passwordHash: "scrypt$16384$8$5$WHyZeot7L8+sJHzOxUuu4w==$O44VqRiQDMR/jO/74TIFjkQybd14EMvLhGkMA8VJFmc=", // Maddy@2002
     role: "admin",
     createdAt: 1700000000000,
@@ -31,7 +31,7 @@ const SEED_USERS: StoredUser[] = [
   {
     id: "admin-seed-2",
     email: "madhavansep28@gmail.com",
-    name: "Madhavan R (Studio Admin)",
+    name: "Madhavan R",
     passwordHash: "scrypt$16384$8$5$3lDOiyOND/ViqEfjFqZchw==$+2i86f3jGATMexT03gB5QPp68Zjceb7w4QxlI1O125c=", // Admin12345678!
     role: "admin",
     createdAt: 1700000000000,

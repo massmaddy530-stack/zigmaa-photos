@@ -11,7 +11,7 @@
   {
     "id": "admin-seed-2",
     "email": "madhavansep28@gmail.com",
-    "name": "Madhavan R (Studio Admin)",
+    "name": "Madhavan R",
     "passwordHash": "scrypt$16384$8$5$3lDOiyOND/ViqEfjFqZchw==$+2i86f3jGATMexT03gB5QPp68Zjceb7w4QxlI1O125c=",
     "role": "admin",
     "createdAt": 1700000000000

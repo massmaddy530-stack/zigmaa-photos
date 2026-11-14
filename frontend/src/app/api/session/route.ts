@@ -77,7 +77,23 @@ export async function POST(req: NextRequest) {
   }
   loginLimiter.reset(client);
 
-  const res = NextResponse.json({ ok: true }, { headers: { "Cache-Control": "no-store" } });
+  const storedUser = findUserByEmail(username);
+  const resolvedName = storedUser?.name && storedUser.name !== "Studio Admin"
+    ? storedUser.name
+    : username.toLowerCase() === "admin"
+    ? "Studio Administrator"
+    : username.includes("@")
+    ? username.split("@")[0]
+    : username;
+
+  const profile = {
+    name: resolvedName,
+    email: storedUser?.email || (username.includes("@") ? username : "admin@zigmaa.com"),
+    picture: storedUser?.picture || "",
+    provider: "password",
+  };
+
+  const res = NextResponse.json({ ok: true, user: profile }, { headers: { "Cache-Control": "no-store" } });
   res.cookies.delete(LEGACY_SESSION_COOKIE);
   res.cookies.set(SESSION_COOKIE, await createSessionToken(config, SESSION_MAX_AGE_S), {
     httpOnly: true,
@@ -87,13 +103,6 @@ export async function POST(req: NextRequest) {
     maxAge: SESSION_MAX_AGE_S,
   });
 
-  const storedUser = findUserByEmail(username);
-  const profile = {
-    name: storedUser?.name || (username.toLowerCase() === "admin" ? "Studio Admin" : username.split("@")[0]),
-    email: storedUser?.email || (username.includes("@") ? username : "massmaddy530@gmail.com"),
-    picture: storedUser?.picture || "",
-    provider: "password",
-  };
   res.cookies.set("evp_profile", encodeURIComponent(JSON.stringify(profile)), {
     httpOnly: false,
     sameSite: "lax",
@@ -113,8 +122,8 @@ export async function GET(req: NextRequest) {
   }
 
   let profile = {
-    name: "Studio Admin",
-    email: "massmaddy530@gmail.com",
+    name: "",
+    email: "",
     picture: "",
     provider: "password",
   };
@@ -126,6 +135,10 @@ export async function GET(req: NextRequest) {
     } catch {
       // ignore
     }
+  }
+
+  if (!profile.name || profile.name === "Studio Admin") {
+    profile.name = profile.email ? profile.email.split("@")[0] : "Studio";
   }
 
   return NextResponse.json({ authenticated: true, user: profile }, { headers: { "Cache-Control": "no-store" } });

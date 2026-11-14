@@ -63,7 +63,27 @@ async function proxy(req: NextRequest, ctx: { params: Promise<{ path: string[] }
       ...(hasBody ? { duplex: "half" } : {}),
     } as RequestInit);
   } catch {
-    return errorJson(502, "backend_unreachable", "The API server is not reachable.");
+    // If local connection refused, try alternative localhost port (e.g. 8001 <-> 8000)
+    if (process.env.NODE_ENV !== "test" && (API_BASE_URL.includes("localhost") || API_BASE_URL.includes("127.0.0.1"))) {
+      const altUrl = API_BASE_URL.includes(":8001")
+        ? API_BASE_URL.replace(":8001", ":8000")
+        : API_BASE_URL.replace(":8000", ":8001");
+      const altTarget = `${altUrl}/api/v1/${path.map(encodeURIComponent).join("/")}${req.nextUrl.search}`;
+      try {
+        upstream = await fetch(altTarget, {
+          method: req.method,
+          headers,
+          body: hasBody ? req.body : undefined,
+          cache: "no-store",
+          redirect: "manual",
+          ...(hasBody ? { duplex: "half" } : {}),
+        } as RequestInit);
+      } catch {
+        return errorJson(502, "backend_unreachable", "The API server is not reachable.");
+      }
+    } else {
+      return errorJson(502, "backend_unreachable", "The API server is not reachable.");
+    }
   }
 
   // The backend only answers 401/403 when it rejects the API key itself: a server misconfiguration, not an

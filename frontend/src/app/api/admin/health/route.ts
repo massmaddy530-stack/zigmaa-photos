@@ -41,7 +41,23 @@ export async function GET(req: NextRequest) {
       signal: AbortSignal.timeout(7000),
     });
   } catch {
-    return errorJson(502, "backend_unreachable", "The API server is not reachable.");
+    if (process.env.NODE_ENV !== "test" && (API_BASE_URL.includes("localhost") || API_BASE_URL.includes("127.0.0.1"))) {
+      const altUrl = API_BASE_URL.includes(":8001")
+        ? API_BASE_URL.replace(":8001", ":8000")
+        : API_BASE_URL.replace(":8000", ":8001");
+      try {
+        upstream = await fetch(`${altUrl}/health`, {
+          headers: { Accept: "application/json" },
+          cache: "no-store",
+          redirect: "manual",
+          signal: AbortSignal.timeout(7000),
+        });
+      } catch {
+        return errorJson(502, "backend_unreachable", "The API server is not reachable.");
+      }
+    } else {
+      return errorJson(502, "backend_unreachable", "The API server is not reachable.");
+    }
   }
   // 200 when healthy, 503 with the same body when degraded: both carry the checks the dashboard shows.
   if (upstream.status !== 200 && upstream.status !== 503) {

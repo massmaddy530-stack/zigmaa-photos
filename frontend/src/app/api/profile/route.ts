@@ -18,8 +18,8 @@ export async function GET(req: NextRequest) {
     }
 
     const profile = {
-      name: "Studio Admin",
-      email: "massmaddy530@gmail.com",
+      name: "",
+      email: "",
       picture: "",
       provider: "password" as "google" | "password",
     };
@@ -30,7 +30,7 @@ export async function GET(req: NextRequest) {
         const parsed = JSON.parse(decodeURIComponent(raw));
         if (parsed && typeof parsed === "object") {
           if (typeof parsed.email === "string" && parsed.email) profile.email = parsed.email;
-          if (typeof parsed.name === "string" && parsed.name) profile.name = parsed.name;
+          if (typeof parsed.name === "string" && parsed.name && parsed.name !== "Studio Admin") profile.name = parsed.name;
           if (typeof parsed.picture === "string") profile.picture = parsed.picture;
           if (parsed.provider === "google" || parsed.provider === "password") profile.provider = parsed.provider;
         }
@@ -39,11 +39,15 @@ export async function GET(req: NextRequest) {
       }
     }
 
-    // Always fetch latest persisted name & avatar from store
-    const storedUser = findUserByEmail(profile.email);
+    // Always fetch latest persisted name & avatar from store if available
+    const storedUser = profile.email ? findUserByEmail(profile.email) : null;
     if (storedUser) {
-      if (storedUser.name) profile.name = storedUser.name;
+      if (storedUser.name && storedUser.name !== "Studio Admin") profile.name = storedUser.name;
       if (storedUser.picture) profile.picture = storedUser.picture;
+    }
+
+    if (!profile.name) {
+      profile.name = profile.email ? profile.email.split("@")[0] : "Studio";
     }
 
     return NextResponse.json({ ok: true, user: profile });
@@ -69,8 +73,8 @@ export async function PATCH(req: NextRequest) {
     const newPassword = typeof body?.newPassword === "string" ? body.newPassword : "";
 
     const currentProfile = {
-      name: "Studio Admin",
-      email: "massmaddy530@gmail.com",
+      name: "",
+      email: "",
       picture: "",
       provider: "password" as "google" | "password",
     };
@@ -81,13 +85,17 @@ export async function PATCH(req: NextRequest) {
         const parsed = JSON.parse(decodeURIComponent(raw));
         if (parsed && typeof parsed === "object") {
           if (typeof parsed.email === "string" && parsed.email) currentProfile.email = parsed.email;
-          if (typeof parsed.name === "string" && parsed.name) currentProfile.name = parsed.name;
+          if (typeof parsed.name === "string" && parsed.name && parsed.name !== "Studio Admin") currentProfile.name = parsed.name;
           if (typeof parsed.picture === "string") currentProfile.picture = parsed.picture;
           if (parsed.provider === "google" || parsed.provider === "password") currentProfile.provider = parsed.provider;
         }
       } catch {
         // ignore
       }
+    }
+
+    if (!currentProfile.name) {
+      currentProfile.name = currentProfile.email ? currentProfile.email.split("@")[0] : "Studio";
     }
 
     // Check if password change is requested

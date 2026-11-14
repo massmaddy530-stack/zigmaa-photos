@@ -32,8 +32,8 @@ export default function SettingsPage() {
 
   const [loading, setLoading] = useState(true);
   const [, setProfile] = useState<UserProfile>({
-    name: "Studio Admin",
-    email: "massmaddy530@gmail.com",
+    name: "",
+    email: "",
     picture: "",
     provider: "password",
   });
@@ -55,6 +55,17 @@ export default function SettingsPage() {
   const [success, setSuccess] = useState<string | null>(null);
 
   useEffect(() => {
+    // Immediate hydration from localStorage to prevent flicker
+    try {
+      const stored = localStorage.getItem("zigmaa_user_profile");
+      if (stored) {
+        const parsed = JSON.parse(stored);
+        if (parsed.name && parsed.name !== "Studio Admin") setName(parsed.name);
+        if (parsed.email) setEmail(parsed.email);
+        if (parsed.picture) setAvatarPreview(parsed.picture);
+      }
+    } catch {}
+
     async function fetchProfile() {
       try {
         const res = await fetch("/api/profile", { headers: { Accept: "application/json" } });
@@ -62,9 +73,14 @@ export default function SettingsPage() {
           const data = await res.json();
           if (data.user) {
             setProfile(data.user);
-            setName(data.user.name || "");
-            setEmail(data.user.email || "");
-            setAvatarPreview(data.user.picture || "");
+            if (data.user.name && data.user.name !== "Studio Admin") {
+              setName(data.user.name);
+            }
+            if (data.user.email) setEmail(data.user.email);
+            if (data.user.picture) setAvatarPreview(data.user.picture);
+            try {
+              localStorage.setItem("zigmaa_user_profile", JSON.stringify(data.user));
+            } catch {}
           }
         }
       } catch (err) {
@@ -180,6 +196,10 @@ export default function SettingsPage() {
       }
 
       setProfile(data.user);
+      try {
+        localStorage.setItem("zigmaa_user_profile", JSON.stringify(data.user));
+        window.dispatchEvent(new CustomEvent("zigmaa-profile-updated", { detail: data.user }));
+      } catch {}
       setSuccess("Profile settings saved successfully!");
       setCurrentPassword("");
       setNewPassword("");
@@ -463,54 +483,22 @@ export default function SettingsPage() {
                   </button>
                 </div>
 
-                {/* Strong password requirements hint matching red theme */}
-                <div className="mt-2 space-y-1">
-                  <p className="text-[11px] font-medium text-[#e50914] flex items-center gap-1">
-                    <span>●</span> Min 8 chars, 1 uppercase, 1 lowercase & 1 symbol
-                  </p>
-                  <div className="flex flex-wrap gap-1.5 text-[10px]">
-                    <span
-                      className={cn(
-                        "inline-flex items-center gap-1 rounded-md px-2 py-0.5 font-medium transition-colors",
-                        newPassword.length >= 8
-                          ? "bg-emerald-50 text-emerald-600 border border-emerald-200"
-                          : "bg-red-50 text-[#e50914] border border-red-200/60"
-                      )}
-                    >
-                      {newPassword.length >= 8 ? "✓" : "●"} 8+ Chars
-                    </span>
-                    <span
-                      className={cn(
-                        "inline-flex items-center gap-1 rounded-md px-2 py-0.5 font-medium transition-colors",
-                        /[A-Z]/.test(newPassword)
-                          ? "bg-emerald-50 text-emerald-600 border border-emerald-200"
-                          : "bg-red-50 text-[#e50914] border border-red-200/60"
-                      )}
-                    >
-                      {/[A-Z]/.test(newPassword) ? "✓" : "●"} 1 Uppercase (A-Z)
-                    </span>
-                    <span
-                      className={cn(
-                        "inline-flex items-center gap-1 rounded-md px-2 py-0.5 font-medium transition-colors",
-                        /[a-z]/.test(newPassword)
-                          ? "bg-emerald-50 text-emerald-600 border border-emerald-200"
-                          : "bg-red-50 text-[#e50914] border border-red-200/60"
-                      )}
-                    >
-                      {/[a-z]/.test(newPassword) ? "✓" : "●"} 1 Lowercase (a-z)
-                    </span>
-                    <span
-                      className={cn(
-                        "inline-flex items-center gap-1 rounded-md px-2 py-0.5 font-medium transition-colors",
-                        /[^A-Za-z0-9]/.test(newPassword)
-                          ? "bg-emerald-50 text-emerald-600 border border-emerald-200"
-                          : "bg-red-50 text-[#e50914] border border-red-200/60"
-                      )}
-                    >
-                      {/[^A-Za-z0-9]/.test(newPassword) ? "✓" : "●"} 1 Symbol (!@#$)
-                    </span>
-                  </div>
-                </div>
+                {/* Strong password requirements hint matching red theme (single line) */}
+                <p
+                  className={cn(
+                    "mt-1.5 text-[11px] font-medium flex items-center gap-1 transition-colors",
+                    newPassword.length >= 8 && /[A-Z]/.test(newPassword) && /[a-z]/.test(newPassword) && /[^A-Za-z0-9]/.test(newPassword)
+                      ? "text-emerald-600"
+                      : "text-[#e50914]"
+                  )}
+                >
+                  <span>
+                    {newPassword.length >= 8 && /[A-Z]/.test(newPassword) && /[a-z]/.test(newPassword) && /[^A-Za-z0-9]/.test(newPassword)
+                      ? "✓"
+                      : "●"}
+                  </span>
+                  <span>Min 8 chars, 1 uppercase, 1 lowercase &amp; 1 symbol</span>
+                </p>
               </div>
 
               <div>

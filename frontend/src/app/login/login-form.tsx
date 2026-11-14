@@ -11,52 +11,18 @@ function PasswordRequirements({ password }: { password: string }) {
   const hasUpper = /[A-Z]/.test(password);
   const hasLower = /[a-z]/.test(password);
   const hasSymbol = /[^A-Za-z0-9]/.test(password);
+  const allMet = hasLen && hasUpper && hasLower && hasSymbol;
 
   return (
-    <div className="mt-1 space-y-0.5">
-      <div className="flex flex-wrap gap-1 text-[9px]">
-        <span
-          className={cn(
-            "inline-flex items-center gap-0.5 rounded px-1.5 py-0.5 font-medium transition-colors",
-            hasLen
-              ? "bg-emerald-50 text-emerald-600 border border-emerald-200"
-              : "bg-red-50 text-[#e50914] border border-red-200/60"
-          )}
-        >
-          {hasLen ? "✓" : "●"} 8+ Chars
-        </span>
-        <span
-          className={cn(
-            "inline-flex items-center gap-0.5 rounded px-1.5 py-0.5 font-medium transition-colors",
-            hasUpper
-              ? "bg-emerald-50 text-emerald-600 border border-emerald-200"
-              : "bg-red-50 text-[#e50914] border border-red-200/60"
-          )}
-        >
-          {hasUpper ? "✓" : "●"} 1 Upper (A-Z)
-        </span>
-        <span
-          className={cn(
-            "inline-flex items-center gap-0.5 rounded px-1.5 py-0.5 font-medium transition-colors",
-            hasLower
-              ? "bg-emerald-50 text-emerald-600 border border-emerald-200"
-              : "bg-red-50 text-[#e50914] border border-red-200/60"
-          )}
-        >
-          {hasLower ? "✓" : "●"} 1 Lower (a-z)
-        </span>
-        <span
-          className={cn(
-            "inline-flex items-center gap-0.5 rounded px-1.5 py-0.5 font-medium transition-colors",
-            hasSymbol
-              ? "bg-emerald-50 text-emerald-600 border border-emerald-200"
-              : "bg-red-50 text-[#e50914] border border-red-200/60"
-          )}
-        >
-          {hasSymbol ? "✓" : "●"} 1 Symbol
-        </span>
-      </div>
-    </div>
+    <p
+      className={cn(
+        "mt-1 text-[11px] font-medium flex items-center gap-1 transition-colors",
+        allMet ? "text-emerald-600" : "text-[#e50914]"
+      )}
+    >
+      <span>{allMet ? "✓" : "●"}</span>
+      <span>Min 8 chars, 1 uppercase, 1 lowercase &amp; 1 symbol</span>
+    </p>
   );
 }
 
@@ -144,6 +110,12 @@ export function LoginForm() {
         body: JSON.stringify({ username, password }),
       });
       if (!res.ok) throw await toApiError(res);
+      const data = await res.json().catch(() => null);
+      if (data?.user) {
+        try {
+          localStorage.setItem("zigmaa_user_profile", JSON.stringify(data.user));
+        } catch {}
+      }
       setPassword("");
       router.replace(next);
       router.refresh();

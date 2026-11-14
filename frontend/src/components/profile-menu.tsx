@@ -31,11 +31,33 @@ export function ProfileMenu() {
   const router = useRouter();
   const dropdownRef = useRef<HTMLDivElement>(null);
 
-  const [profile, setProfile] = useState<UserProfile>({
-    name: "Studio Admin",
-    email: "massmaddy530@gmail.com",
-    picture: "",
-    provider: "password",
+  const [profile, setProfile] = useState<UserProfile>(() => {
+    if (typeof window !== "undefined") {
+      try {
+        const stored = localStorage.getItem("zigmaa_user_profile");
+        if (stored) {
+          const parsed = JSON.parse(stored);
+          if (parsed && parsed.name && parsed.name !== "Studio Admin") {
+            return parsed;
+          }
+        }
+      } catch {}
+      try {
+        const match = document.cookie.match(/evp_profile=([^;]+)/);
+        if (match) {
+          const parsed = JSON.parse(decodeURIComponent(match[1]));
+          if (parsed && parsed.name && parsed.name !== "Studio Admin") {
+            return parsed;
+          }
+        }
+      } catch {}
+    }
+    return {
+      name: "",
+      email: "",
+      picture: "",
+      provider: "password",
+    };
   });
   const [dropdownOpen, setDropdownOpen] = useState(false);
   const [helpOpen, setHelpOpen] = useState(false);
@@ -45,6 +67,16 @@ export function ProfileMenu() {
 
   useEffect(() => {
     setMounted(true);
+    // Instant hydration from local storage if available
+    try {
+      const stored = localStorage.getItem("zigmaa_user_profile");
+      if (stored) {
+        const parsed = JSON.parse(stored);
+        if (parsed && parsed.name && parsed.name !== "Studio Admin") {
+          setProfile((prev) => ({ ...prev, ...parsed }));
+        }
+      }
+    } catch {}
   }, []);
 
   function handleCopy(text: string, field: string) {
@@ -63,23 +95,64 @@ export function ProfileMenu() {
         if (res.ok) {
           const data = await res.json();
           if (data.user) {
-            setProfile(data.user);
+            setProfile((prev) => {
+              const localName = prev.name && prev.name !== "Studio Admin" ? prev.name : "";
+              const serverName = data.user.name && data.user.name !== "Studio Admin" ? data.user.name : "";
+              const resolvedName = serverName || localName || data.user.email?.split("@")[0] || prev.email?.split("@")[0] || "Studio";
+
+              const resolved: UserProfile = {
+                ...prev,
+                ...data.user,
+                name: resolvedName,
+                picture: data.user.picture || prev.picture || "",
+              };
+              try {
+                localStorage.setItem("zigmaa_user_profile", JSON.stringify(resolved));
+              } catch {}
+              return resolved;
+            });
+            return;
           }
         }
       } catch {
-        // Fallback to cookie if available
-        try {
-          const match = document.cookie.match(/evp_profile=([^;]+)/);
-          if (match) {
-            const parsed = JSON.parse(decodeURIComponent(match[1]));
-            setProfile(parsed);
-          }
-        } catch {
-          // ignore
-        }
+        // Fallback to local storage / cookie
       }
+
+      // If network fails or non-ok response, retain existing valid cached profile
+      try {
+        const stored = localStorage.getItem("zigmaa_user_profile");
+        if (stored) {
+          const parsed = JSON.parse(stored);
+          if (parsed?.name && parsed.name !== "Studio Admin") {
+            setProfile((prev) => ({ ...prev, ...parsed }));
+            return;
+          }
+        }
+        const match = document.cookie.match(/evp_profile=([^;]+)/);
+        if (match) {
+          const parsed = JSON.parse(decodeURIComponent(match[1]));
+          if (parsed?.name && parsed.name !== "Studio Admin") {
+            setProfile((prev) => ({ ...prev, ...parsed }));
+          }
+        }
+      } catch {}
     }
     loadProfile();
+  }, []);
+
+  // Listen for real-time profile updates from settings page
+  useEffect(() => {
+    function onProfileUpdated(e: Event) {
+      const detail = (e as CustomEvent).detail;
+      if (detail && detail.name) {
+        setProfile((prev) => ({ ...prev, ...detail }));
+        try {
+          localStorage.setItem("zigmaa_user_profile", JSON.stringify(detail));
+        } catch {}
+      }
+    }
+    window.addEventListener("zigmaa-profile-updated", onProfileUpdated);
+    return () => window.removeEventListener("zigmaa-profile-updated", onProfileUpdated);
   }, []);
 
   // Close dropdown on outside click
@@ -96,6 +169,9 @@ export function ProfileMenu() {
   async function handleSignOut() {
     setSigningOut(true);
     try {
+      localStorage.removeItem("zigmaa_user_profile");
+    } catch {}
+    try {
       await fetch("/api/session", { method: "DELETE", headers: CSRF_HEADER });
     } catch {
       // ignore
@@ -104,7 +180,12 @@ export function ProfileMenu() {
     router.refresh();
   }
 
-  const initial = profile.name ? profile.name.charAt(0).toUpperCase() : "Z";
+  const displayName = profile.name && profile.name !== "Studio Admin"
+    ? profile.name
+    : profile.email
+    ? profile.email.split("@")[0]
+    : "Studio";
+  const initial = displayName ? displayName.charAt(0).toUpperCase() : "Z";
 
   return (
     <div className="relative" ref={dropdownRef}>
@@ -119,7 +200,7 @@ export function ProfileMenu() {
           {profile.picture ? (
             <img
               src={profile.picture}
-              alt={profile.name}
+              alt={displayName}
               className="h-full w-full object-cover"
               referrerPolicy="no-referrer"
             />
@@ -132,7 +213,7 @@ export function ProfileMenu() {
 
         <div className="hidden text-left lg:block">
           <p className="max-w-[140px] truncate text-xs font-semibold text-[#0f172a] leading-tight">
-            {profile.name || "Studio Admin"}
+            {displayName}
           </p>
         </div>
 
