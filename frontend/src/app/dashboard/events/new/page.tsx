@@ -22,28 +22,23 @@ export default function NewEventPage() {
   const toast = useToast();
   const previewRef = useRef<HTMLDivElement>(null);
 
+  // Top-level single source of truth for templates
+  const [templateItems, setTemplateItems] = useState<TemplateItem[]>([]);
+  const [activeTemplateId, setActiveTemplateId] = useState<string | null>(null);
+  const [draggingId, setDraggingId] = useState<string | null>(null);
+
   const [live, setLive] = useState<{
     name: string;
     date: string;
     venue: string;
     description: string;
     preview: string | null;
-    template: File | null;
-    templatePreview: string | null;
-    templates: File[];
-    templateItems: TemplateItem[];
-    activeTemplateId: string | null;
   }>({
     name: "",
     date: "",
     venue: "",
     description: "",
     preview: null,
-    template: null,
-    templatePreview: null,
-    templates: [],
-    templateItems: [],
-    activeTemplateId: null,
   });
 
   // Watermark customization state (Zigmaa defaults: bottom-right corner, 14% size, 40% opacity)
@@ -57,8 +52,18 @@ export default function NewEventPage() {
   });
 
   // Active editing template
-  const activeEditingId = wm.activeTemplateId || live.activeTemplateId || live.templateItems[0]?.id || null;
-  const activeEditingItem = live.templateItems.find((t) => t.id === activeEditingId) || live.templateItems[0] || null;
+  const activeEditingId = activeTemplateId || templateItems[0]?.id || null;
+  const activeEditingItem = templateItems.find((t) => t.id === activeEditingId) || templateItems[0] || null;
+
+  // Direct positioning function
+  function setPosition(xPercent: number, yPercent: number) {
+    if (activeEditingItem && templateItems.length > 0) {
+      setTemplateItems((prev) =>
+        prev.map((t) => (t.id === activeEditingItem.id ? { ...t, xPercent, yPercent } : t))
+      );
+    }
+    setWm((prev) => ({ ...prev, xPercent, yPercent }));
+  }
 
   // Handle clicking anywhere on the preview image to accurately place currently selected watermark
   function handlePreviewClick(e: React.MouseEvent<HTMLDivElement>) {
@@ -68,15 +73,47 @@ export default function NewEventPage() {
     const x = Math.max(0, Math.min(100, Math.round(((e.clientX - rect.left) / rect.width) * 100)));
     const y = Math.max(0, Math.min(100, Math.round(((e.clientY - rect.top) / rect.height) * 100)));
 
-    if (activeEditingItem && live.templateItems.length > 0) {
-      setLive((prev) => ({
-        ...prev,
-        templateItems: prev.templateItems.map((t) =>
-          t.id === activeEditingItem.id ? { ...t, xPercent: x, yPercent: y } : t
-        ),
-      }));
-    }
-    setWm((prev) => ({ ...prev, xPercent: x, yPercent: y }));
+    setPosition(x, y);
+  }
+
+  // Direct mouse & touch dragging on photo
+  function startDrag(e: React.PointerEvent<HTMLDivElement>, targetId: string) {
+    e.stopPropagation();
+    e.preventDefault();
+    setActiveTemplateId(targetId);
+    setDraggingId(targetId);
+
+    const startX = e.clientX;
+    const startY = e.clientY;
+    const targetItem = templateItems.find((t) => t.id === targetId);
+    const startXPercent = targetItem?.xPercent ?? 88;
+    const startYPercent = targetItem?.yPercent ?? 88;
+
+    const onPointerMove = (moveEvent: PointerEvent) => {
+      if (!previewRef.current) return;
+      const rect = previewRef.current.getBoundingClientRect();
+      if (rect.width <= 0 || rect.height <= 0) return;
+
+      const dxPct = ((moveEvent.clientX - startX) / rect.width) * 100;
+      const dyPct = ((moveEvent.clientY - startY) / rect.height) * 100;
+
+      const newX = Math.max(0, Math.min(100, Math.round(startXPercent + dxPct)));
+      const newY = Math.max(0, Math.min(100, Math.round(startYPercent + dyPct)));
+
+      setTemplateItems((prev) =>
+        prev.map((t) => (t.id === targetId ? { ...t, xPercent: newX, yPercent: newY } : t))
+      );
+      setWm((prev) => ({ ...prev, xPercent: newX, yPercent: newY }));
+    };
+
+    const onPointerUp = () => {
+      setDraggingId(null);
+      window.removeEventListener("pointermove", onPointerMove);
+      window.removeEventListener("pointerup", onPointerUp);
+    };
+
+    window.addEventListener("pointermove", onPointerMove);
+    window.addEventListener("pointerup", onPointerUp);
   }
 
   function resetDefaults() {
@@ -87,21 +124,20 @@ export default function NewEventPage() {
       { x: 12, y: 88 },
       { x: 50, y: 88 },
     ];
-    if (live.templateItems.length > 0) {
-      setLive((prev) => ({
-        ...prev,
-        templateItems: prev.templateItems.map((t, idx) => ({
+    if (templateItems.length > 0) {
+      setTemplateItems((prev) =>
+        prev.map((t, idx) => ({
           ...t,
           xPercent: defaultCorners[idx % defaultCorners.length].x,
           yPercent: defaultCorners[idx % defaultCorners.length].y,
           sizePercent: 14,
           opacity: 0.40,
           enabled: true,
-        })),
-      }));
+        }))
+      );
     }
     setWm({
-      imageUrl: live.templatePreview || null,
+      imageUrl: templateItems[0]?.preview || null,
       xPercent: 88,
       yPercent: 88,
       sizePercent: 14,
@@ -154,6 +190,10 @@ export default function NewEventPage() {
             <div className="p-5 sm:p-6">
               <EventForm
                 submitLabel="Create event"
+                templateItems={templateItems}
+                onTemplateItemsChange={setTemplateItems}
+                activeTemplateId={activeTemplateId}
+                onSelectTemplate={setActiveTemplateId}
                 footerExtra={
                   <Link
                     href="/dashboard"
@@ -168,23 +208,21 @@ export default function NewEventPage() {
                   </Link>
                 }
                 onValuesChange={(vals) => {
-                  setLive(vals);
-                  if (vals.templatePreview) {
-                    setWm((prev) => ({
-                      ...prev,
-                      imageUrl: vals.templatePreview,
-                      activeTemplateId: vals.activeTemplateId,
-                    }));
-                  }
+                  setLive({
+                    name: vals.name,
+                    date: vals.date,
+                    venue: vals.venue,
+                    description: vals.description,
+                    preview: vals.preview,
+                  });
                 }}
-                onSubmit={async ({ cover, template, templateItems, activeTemplateId, ...values }) => {
+                onSubmit={async ({ cover, template, ...values }) => {
                   const ev = await adminApi.createEvent(values);
 
                   // Convert all uploaded template files to permanent Base64 data URLs
-                  const items = templateItems || live.templateItems || [];
                   const savedTemplates: WatermarkTemplateItem[] = [];
 
-                  for (const item of items) {
+                  for (const item of templateItems) {
                     try {
                       const dataUrl = await fileToDataUrl(item.file);
                       savedTemplates.push({
@@ -192,10 +230,10 @@ export default function NewEventPage() {
                         name: item.name,
                         sizeBytes: item.size,
                         dataUrl,
-                        xPercent: item.xPercent ?? wm.xPercent ?? 88,
-                        yPercent: item.yPercent ?? wm.yPercent ?? 88,
-                        sizePercent: item.sizePercent ?? wm.sizePercent ?? 14,
-                        opacity: item.opacity ?? wm.opacity ?? 0.40,
+                        xPercent: item.xPercent ?? 88,
+                        yPercent: item.yPercent ?? 88,
+                        sizePercent: item.sizePercent ?? 14,
+                        opacity: item.opacity ?? 0.40,
                         enabled: item.enabled !== false,
                         color: wm.color ?? "original",
                       });
@@ -204,13 +242,13 @@ export default function NewEventPage() {
                     }
                   }
 
-                  const activeId = wm.activeTemplateId || activeTemplateId || live.activeTemplateId;
+                  const activeId = activeTemplateId || savedTemplates[0]?.id;
                   const activeSaved = savedTemplates.find((t) => t.id === activeId) || savedTemplates[0];
 
                   let activeDataUrl = activeSaved?.dataUrl || null;
-                  if (!activeDataUrl && (template || live.template)) {
+                  if (!activeDataUrl && template) {
                     try {
-                      activeDataUrl = await fileToDataUrl((template || live.template)!);
+                      activeDataUrl = await fileToDataUrl(template);
                     } catch {}
                   }
 
@@ -264,7 +302,7 @@ export default function NewEventPage() {
               }
             />
 
-            {/* Interactive Preview Canvas - Uncropped Full Image */}
+            {/* Interactive Preview Canvas - Clean, uncropped photo */}
             <div className="p-5 pb-0 flex items-center justify-center">
               <div
                 ref={previewRef}
@@ -283,22 +321,22 @@ export default function NewEventPage() {
                   <span className="inline-flex items-center gap-1.5 rounded-full bg-black/75 border border-white/20 px-2.5 py-1 text-[11px] font-medium text-white backdrop-blur-md shadow-md">
                     {live.preview ? "Custom Cover Image" : "Default AI Couple Photo"}
                   </span>
-                  {live.templatePreview && (
+                  {templateItems.length > 0 && (
                     <span className="inline-flex items-center gap-1.5 rounded-full bg-[#dfa843]/90 border border-[#dfa843] px-2.5 py-1 text-[11px] font-semibold text-[#1c1305] backdrop-blur-md shadow-md">
-                      <Sparkles className="h-3 w-3" /> Custom Watermark
+                      <Sparkles className="h-3 w-3" /> Custom Watermark ({templateItems.filter((t) => t.enabled !== false).length})
                     </span>
                   )}
                 </div>
 
-                {/* Click hint pill */}
+                {/* Click / Drag hint pill */}
                 <div className="absolute bottom-3 left-3 rounded-md bg-black/75 border border-white/15 px-2.5 py-1 text-[11px] font-medium text-white/90 backdrop-blur-md pointer-events-none flex items-center gap-1.5 shadow-md">
                   <Move className="h-3 w-3 text-brand-300" />
-                  <span>Click anywhere on photo to place watermark</span>
+                  <span>Drag watermark or click photo to reposition</span>
                 </div>
 
                 {/* Live Watermark Overlay Layer - ALL Enabled Templates Visible at the Same Time! */}
-                {live.templateItems.length > 0 ? (
-                  live.templateItems.map((t) => {
+                {templateItems.length > 0 ? (
+                  templateItems.map((t) => {
                     if (t.enabled === false) return null;
                     const isEditing = t.id === activeEditingId;
                     const xPct = t.xPercent ?? 88;
@@ -309,18 +347,10 @@ export default function NewEventPage() {
                     return (
                       <div
                         key={t.id}
+                        onPointerDown={(e) => startDrag(e, t.id)}
                         onClick={(e) => {
                           e.stopPropagation();
-                          setWm((prev) => ({
-                            ...prev,
-                            activeTemplateId: t.id,
-                            imageUrl: t.preview,
-                            sizePercent: t.sizePercent ?? 14,
-                            opacity: t.opacity ?? 0.40,
-                            xPercent: t.xPercent ?? 88,
-                            yPercent: t.yPercent ?? 88,
-                          }));
-                          setLive((prev) => ({ ...prev, activeTemplateId: t.id }));
+                          setActiveTemplateId(t.id);
                         }}
                         style={{
                           position: "absolute",
@@ -329,32 +359,27 @@ export default function NewEventPage() {
                           transform: `translate(-${xPct}%, -${yPct}%)`,
                           width: `${sizePct}%`,
                           opacity: opVal,
-                          pointerEvents: "auto",
-                          cursor: "pointer",
-                          transition: "opacity 0.15s ease",
+                          cursor: draggingId === t.id ? "grabbing" : "grab",
+                          touchAction: "none",
+                          userSelect: "none",
                         }}
-                        className={`group rounded-lg p-0.5 select-none ${
-                          isEditing
-                            ? "ring-2 ring-brand-500 ring-offset-2 ring-offset-black/60 shadow-xl bg-white/10"
-                            : "hover:ring-1 hover:ring-white/70"
+                        className={`transition-opacity duration-150 select-none ${
+                          isEditing ? "ring-1 ring-white/50 rounded" : ""
                         }`}
-                        title={`Click to select & position "${t.name}"`}
+                        title={`Drag to reposition "${t.name}" or select to edit`}
                       >
                         <img
                           src={t.preview}
                           alt={t.name}
+                          draggable={false}
                           style={{
                             width: "100%",
                             height: "auto",
                             display: "block",
                             filter: getFilterCss(wm.color),
+                            pointerEvents: "none",
                           }}
                         />
-                        {isEditing && (
-                          <span className="absolute -top-5 left-1/2 -translate-x-1/2 whitespace-nowrap rounded bg-brand-600 px-1.5 py-0.2 text-[9px] font-semibold text-white shadow pointer-events-none">
-                            Editing: {t.name}
-                          </span>
-                        )}
                       </div>
                     );
                   })
@@ -368,7 +393,7 @@ export default function NewEventPage() {
                       width: `${wm.sizePercent}%`,
                       opacity: wm.opacity,
                       pointerEvents: "none",
-                      transition: "opacity 0.15s ease, filter 0.15s ease",
+                      transition: "opacity 0.15s ease",
                     }}
                   >
                     <img
@@ -387,32 +412,21 @@ export default function NewEventPage() {
             </div>
 
             {/* Template Selector Bar (When templates are uploaded) */}
-            {live.templateItems.length > 0 && (
-              <div className="flex items-center justify-between gap-2 overflow-x-auto px-5 py-2.5 border-b border-line bg-canvas/30">
-                <div className="flex items-center gap-2">
+            {templateItems.length > 0 && (
+              <div className="flex flex-wrap items-center justify-between gap-2 px-5 py-2.5 border-b border-line bg-canvas/30">
+                <div className="flex items-center gap-2 flex-wrap">
                   <span className="text-xs font-semibold text-muted shrink-0">
-                    Templates on photo ({live.templateItems.filter((t) => t.enabled !== false).length}/{live.templateItems.length}):
+                    Templates ({templateItems.filter((t) => t.enabled !== false).length}/{templateItems.length}):
                   </span>
-                  <div className="flex items-center gap-1.5 flex-nowrap">
-                    {live.templateItems.map((t) => {
+                  <div className="flex items-center gap-1.5 flex-wrap">
+                    {templateItems.map((t) => {
                       const isEditing = t.id === activeEditingId;
                       const isEnabled = t.enabled !== false;
                       return (
                         <button
                           key={t.id}
                           type="button"
-                          onClick={() => {
-                            setWm((prev) => ({
-                              ...prev,
-                              activeTemplateId: t.id,
-                              imageUrl: t.preview,
-                              sizePercent: t.sizePercent ?? 14,
-                              opacity: t.opacity ?? 0.40,
-                              xPercent: t.xPercent ?? 88,
-                              yPercent: t.yPercent ?? 88,
-                            }));
-                            setLive((prev) => ({ ...prev, activeTemplateId: t.id }));
-                          }}
+                          onClick={() => setActiveTemplateId(t.id)}
                           className={`inline-flex items-center gap-1.5 rounded-lg border px-2.5 py-1 text-xs transition-all cursor-pointer ${
                             isEditing
                               ? "border-brand-500 bg-brand-50 text-brand-700 font-semibold ring-1 ring-brand-500 shadow-xs"
@@ -422,26 +436,82 @@ export default function NewEventPage() {
                           <div className="h-4 w-4 shrink-0 rounded bg-[repeating-conic-gradient(#e8e4dc_0%_25%,#fdfbf7_0%_50%)] bg-[length:4px_4px] p-0.5 flex items-center justify-center overflow-hidden">
                             <img src={t.preview} alt="" className="max-h-full max-w-full object-contain" />
                           </div>
-                          <span className={`truncate max-w-[110px] ${!isEnabled ? "line-through opacity-50" : ""}`}>
+                          <span className={`truncate max-w-[120px] ${!isEnabled ? "line-through opacity-50" : ""}`}>
                             {t.name}
                           </span>
-                          {isEditing && <span className="text-[10px] text-brand-600 font-bold">(Editing)</span>}
+                          {isEditing && (
+                            <span className="text-[10px] text-brand-600 font-bold shrink-0">(Active)</span>
+                          )}
                         </button>
                       );
                     })}
                   </div>
                 </div>
-                {activeEditingItem && (
-                  <span className="text-[11px] text-muted shrink-0 hidden sm:inline">
-                    Click photo to place &quot;{activeEditingItem.name}&quot;
-                  </span>
-                )}
+                <span className="text-[11px] text-muted hidden sm:inline">
+                  Drag watermark or click buttons to position
+                </span>
               </div>
             )}
 
             {/* Customization Controls Panel */}
-            <div className="p-5">
-              <div className="grid gap-5 sm:grid-cols-2">
+            <div className="p-5 space-y-4">
+              {/* 1-Click Quick Corner Placement buttons */}
+              <div>
+                <div className="mb-1.5 flex items-center justify-between">
+                  <label className="text-xs font-semibold uppercase tracking-wider text-muted flex items-center gap-1.5">
+                    <Move className="h-3.5 w-3.5 text-brand-600" />
+                    <span>Quick Position {activeEditingItem ? `(${activeEditingItem.name})` : ""}</span>
+                  </label>
+                  <span className="text-[11px] text-muted">
+                    X: {activeEditingItem?.xPercent ?? wm.xPercent}%, Y: {activeEditingItem?.yPercent ?? wm.yPercent}%
+                  </span>
+                </div>
+                <div className="grid grid-cols-5 gap-2">
+                  <button
+                    type="button"
+                    onClick={() => setPosition(12, 12)}
+                    className="flex items-center justify-center gap-1 rounded-lg border border-line bg-surface py-1.5 text-xs font-medium text-ink hover:border-brand-300 hover:bg-brand-50/50 transition-colors cursor-pointer"
+                    title="Top Left"
+                  >
+                    ↖ Top-L
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setPosition(88, 12)}
+                    className="flex items-center justify-center gap-1 rounded-lg border border-line bg-surface py-1.5 text-xs font-medium text-ink hover:border-brand-300 hover:bg-brand-50/50 transition-colors cursor-pointer"
+                    title="Top Right"
+                  >
+                    ↗ Top-R
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setPosition(50, 50)}
+                    className="flex items-center justify-center gap-1 rounded-lg border border-line bg-surface py-1.5 text-xs font-medium text-ink hover:border-brand-300 hover:bg-brand-50/50 transition-colors cursor-pointer"
+                    title="Center"
+                  >
+                    ⦿ Center
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setPosition(12, 88)}
+                    className="flex items-center justify-center gap-1 rounded-lg border border-line bg-surface py-1.5 text-xs font-medium text-ink hover:border-brand-300 hover:bg-brand-50/50 transition-colors cursor-pointer"
+                    title="Bottom Left"
+                  >
+                    ↙ Btm-L
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setPosition(88, 88)}
+                    className="flex items-center justify-center gap-1 rounded-lg border border-line bg-surface py-1.5 text-xs font-medium text-ink hover:border-brand-300 hover:bg-brand-50/50 transition-colors cursor-pointer"
+                    title="Bottom Right (Default)"
+                  >
+                    ↘ Btm-R
+                  </button>
+                </div>
+              </div>
+
+              {/* Sliders: Size & Transparency */}
+              <div className="grid gap-5 sm:grid-cols-2 pt-1">
                 {/* Size & Scale Control */}
                 <div>
                   <div className="mb-2 flex items-center justify-between">
@@ -462,12 +532,11 @@ export default function NewEventPage() {
                     onChange={(e) => {
                       const newSize = Number(e.target.value);
                       if (activeEditingItem) {
-                        setLive((prev) => ({
-                          ...prev,
-                          templateItems: prev.templateItems.map((t) =>
+                        setTemplateItems((prev) =>
+                          prev.map((t) =>
                             t.id === activeEditingItem.id ? { ...t, sizePercent: newSize } : t
-                          ),
-                        }));
+                          )
+                        );
                       }
                       setWm((prev) => ({ ...prev, sizePercent: newSize }));
                     }}
@@ -483,24 +552,23 @@ export default function NewEventPage() {
                       <span>Transparency / Opacity {activeEditingItem ? `(${activeEditingItem.name})` : ""}</span>
                     </label>
                     <span className="text-xs font-mono font-medium text-ink">
-                      {Math.round(((activeEditingItem?.opacity ?? wm.opacity ?? 0.40)) * 100)}%
+                      {Math.round((activeEditingItem?.opacity ?? wm.opacity ?? 0.40) * 100)}%
                     </span>
                   </div>
                   <input
                     type="range"
-                    min={0.1}
+                    min={0.05}
                     max={1.0}
                     step={0.05}
                     value={activeEditingItem?.opacity ?? wm.opacity ?? 0.40}
                     onChange={(e) => {
                       const newOpacity = Number(e.target.value);
                       if (activeEditingItem) {
-                        setLive((prev) => ({
-                          ...prev,
-                          templateItems: prev.templateItems.map((t) =>
+                        setTemplateItems((prev) =>
+                          prev.map((t) =>
                             t.id === activeEditingItem.id ? { ...t, opacity: newOpacity } : t
-                          ),
-                        }));
+                          )
+                        );
                       }
                       setWm((prev) => ({ ...prev, opacity: newOpacity }));
                     }}

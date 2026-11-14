@@ -45,12 +45,27 @@ function fieldErrorsFrom(err: unknown): FieldErrors {
   return out;
 }
 
-export function EventForm({ initial, submitLabel, onSubmit, footerExtra, withCover = true, onValuesChange }: {
+export function EventForm({
+  initial,
+  submitLabel,
+  onSubmit,
+  footerExtra,
+  withCover = true,
+  templateItems: propTemplates,
+  onTemplateItemsChange,
+  activeTemplateId: propActiveId,
+  onSelectTemplate,
+  onValuesChange,
+}: {
   initial?: Partial<EventOut>;
   submitLabel: string;
   onSubmit: (values: EventFormValues) => Promise<void>;
   footerExtra?: ReactNode;
   withCover?: boolean;
+  templateItems?: TemplateItem[];
+  onTemplateItemsChange?: (items: TemplateItem[]) => void;
+  activeTemplateId?: string | null;
+  onSelectTemplate?: (id: string) => void;
   onValuesChange?: (values: {
     name: string;
     date: string;
@@ -58,11 +73,11 @@ export function EventForm({ initial, submitLabel, onSubmit, footerExtra, withCov
     description: string;
     cover: File | null;
     preview: string | null;
-    template: File | null;
-    templatePreview: string | null;
-    templates: File[];
-    templateItems: TemplateItem[];
-    activeTemplateId: string | null;
+    template?: File | null;
+    templatePreview?: string | null;
+    templates?: File[];
+    templateItems?: TemplateItem[];
+    activeTemplateId?: string | null;
   }) => void;
 }) {
   const [name, setName] = useState(initial?.name ?? "");
@@ -71,8 +86,30 @@ export function EventForm({ initial, submitLabel, onSubmit, footerExtra, withCov
   const [description, setDescription] = useState(initial?.description ?? "");
   const [cover, setCover] = useState<File | null>(null);
   const [preview, setPreview] = useState<string | null>(null);
-  const [templates, setTemplates] = useState<TemplateItem[]>([]);
-  const [activeTemplateId, setActiveTemplateId] = useState<string | null>(null);
+  const [localTemplates, setLocalTemplates] = useState<TemplateItem[]>([]);
+  const [localActiveId, setLocalActiveId] = useState<string | null>(null);
+
+  const templates = propTemplates !== undefined ? propTemplates : localTemplates;
+  const activeTemplateId = propActiveId !== undefined ? propActiveId : localActiveId;
+
+  function updateTemplates(next: TemplateItem[] | ((prev: TemplateItem[]) => TemplateItem[])) {
+    const updated = typeof next === "function" ? next(templates) : next;
+    if (onTemplateItemsChange) {
+      onTemplateItemsChange(updated);
+    } else {
+      setLocalTemplates(updated);
+    }
+    return updated;
+  }
+
+  function changeActiveTemplate(id: string | null) {
+    if (onSelectTemplate && id) {
+      onSelectTemplate(id);
+    } else {
+      setLocalActiveId(id);
+    }
+  }
+
   const [errors, setErrors] = useState<FieldErrors>({});
   const [formError, setFormError] = useState<unknown>(null);
   const [busy, setBusy] = useState(false);
@@ -89,7 +126,6 @@ export function EventForm({ initial, submitLabel, onSubmit, footerExtra, withCov
   const activeTemplate = templates.find((t) => t.id === activeTemplateId) || templates[0] || null;
 
   useEffect(() => {
-    const active = templates.find((t) => t.id === activeTemplateId) || templates[0] || null;
     onValuesChange?.({
       name,
       date,
@@ -97,13 +133,13 @@ export function EventForm({ initial, submitLabel, onSubmit, footerExtra, withCov
       description,
       cover,
       preview,
-      template: active?.file || null,
-      templatePreview: active?.preview || null,
+      template: activeTemplate?.file || null,
+      templatePreview: activeTemplate?.preview || null,
       templates: templates.map((t) => t.file),
       templateItems: templates,
-      activeTemplateId: active?.id || null,
+      activeTemplateId: activeTemplate?.id || null,
     });
-  }, [name, date, venue, description, cover, preview, templates, activeTemplateId, onValuesChange]);
+  }, [name, date, venue, description, cover, preview, activeTemplate, templates, onValuesChange]);
 
   function pickCover(f: File | undefined) {
     if (!f) return;
@@ -166,33 +202,30 @@ export function EventForm({ initial, submitLabel, onSubmit, footerExtra, withCov
     }
     setErrors((e) => ({ ...e, template: undefined }));
 
-    setTemplates((prev) => {
-      const updated = [...prev, ...newItems];
-      if (!activeTemplateId && updated.length > 0) {
-        setActiveTemplateId(updated[0].id);
-      }
-      return updated;
-    });
+    const updated = [...templates, ...newItems];
+    updateTemplates(updated);
+    if (!activeTemplateId && updated.length > 0) {
+      changeActiveTemplate(updated[0].id);
+    }
   }
 
   function toggleTemplateEnabled(id: string) {
-    setTemplates((prev) =>
-      prev.map((t) => (t.id === id ? { ...t, enabled: t.enabled === false ? true : false } : t))
+    const updated = templates.map((t) =>
+      t.id === id ? { ...t, enabled: t.enabled === false ? true : false } : t
     );
+    updateTemplates(updated);
   }
 
   function removeTemplate(id: string) {
-    setTemplates((prev) => {
-      const target = prev.find((t) => t.id === id);
-      if (target?.preview) {
-        try { URL.revokeObjectURL(target.preview); } catch {}
-      }
-      const updated = prev.filter((t) => t.id !== id);
-      if (activeTemplateId === id) {
-        setActiveTemplateId(updated[0]?.id || null);
-      }
-      return updated;
-    });
+    const target = templates.find((t) => t.id === id);
+    if (target?.preview) {
+      try { URL.revokeObjectURL(target.preview); } catch {}
+    }
+    const updated = templates.filter((t) => t.id !== id);
+    updateTemplates(updated);
+    if (activeTemplateId === id) {
+      changeActiveTemplate(updated[0]?.id || null);
+    }
   }
 
   async function submit(e: FormEvent) {
@@ -294,7 +327,7 @@ export function EventForm({ initial, submitLabel, onSubmit, footerExtra, withCov
                     return (
                       <div
                         key={t.id}
-                        onClick={() => setActiveTemplateId(t.id)}
+                        onClick={() => changeActiveTemplate(t.id)}
                         className={`relative flex items-center justify-between gap-2.5 rounded-xl border p-2.5 transition-all cursor-pointer select-none ${
                           isActive
                             ? "border-brand-500 bg-brand-50/40 ring-1 ring-brand-500 shadow-xs"

@@ -1,7 +1,7 @@
 "use client";
 
 import { useRouter } from "next/navigation";
-import { Eye, EyeOff, ImagePlus, ScanFace, Sliders, Sparkles, Trash2, X } from "lucide-react";
+import { Eye, EyeOff, ImagePlus, Move, ScanFace, Sliders, Sparkles, Trash2, X } from "lucide-react";
 import { useRef, useState } from "react";
 import { adminApi, errorMessage } from "@/lib/api";
 import { ACCEPTED_IMAGE_TYPES, MAX_UPLOAD_MB } from "@/lib/config";
@@ -26,6 +26,7 @@ export function EventSettings({ event, onSaved }: { event: EventOut; onSaved: (e
   const [dialog, setDialog] = useState<"purge" | "delete" | null>(null);
   const [busy, setBusy] = useState(false);
   const [confirmName, setConfirmName] = useState("");
+  const [draggingId, setDraggingId] = useState<string | null>(null);
 
   // Load existing watermark configuration or defaults
   const [wm, setWm] = useState<WatermarkConfig>(() => {
@@ -172,6 +173,22 @@ export function EventSettings({ event, onSaved }: { event: EventOut; onSaved: (e
     toast.success("Reset to default Zigmaa logo");
   }
 
+  function setPosition(xPercent: number, yPercent: number) {
+    if (wm.templates && wm.templates.length > 0) {
+      const activeId = wm.activeTemplateId || wm.templates[0].id;
+      setWm((prev) => ({
+        ...prev,
+        xPercent,
+        yPercent,
+        templates: (prev.templates || []).map((t) =>
+          t.id === activeId ? { ...t, xPercent, yPercent } : t
+        ),
+      }));
+    } else {
+      setWm((prev) => ({ ...prev, xPercent, yPercent }));
+    }
+  }
+
   function handlePreviewClick(e: React.MouseEvent<HTMLDivElement>) {
     if (!previewRef.current) return;
     const rect = previewRef.current.getBoundingClientRect();
@@ -179,19 +196,53 @@ export function EventSettings({ event, onSaved }: { event: EventOut; onSaved: (e
     const x = Math.max(0, Math.min(100, Math.round(((e.clientX - rect.left) / rect.width) * 100)));
     const y = Math.max(0, Math.min(100, Math.round(((e.clientY - rect.top) / rect.height) * 100)));
 
-    if (wm.templates && wm.templates.length > 0) {
-      const activeId = wm.activeTemplateId || wm.templates[0].id;
+    setPosition(x, y);
+  }
+
+  function startDrag(e: React.PointerEvent<HTMLDivElement>, targetId: string) {
+    e.stopPropagation();
+    e.preventDefault();
+    setDraggingId(targetId);
+
+    const target = (wm.templates || []).find((t) => t.id === targetId);
+    if (target) {
+      selectTemplate(target);
+    }
+
+    const startX = e.clientX;
+    const startY = e.clientY;
+    const startXPercent = target?.xPercent ?? wm.xPercent ?? 88;
+    const startYPercent = target?.yPercent ?? wm.yPercent ?? 88;
+
+    const onPointerMove = (moveEvent: PointerEvent) => {
+      if (!previewRef.current) return;
+      const rect = previewRef.current.getBoundingClientRect();
+      if (rect.width <= 0 || rect.height <= 0) return;
+
+      const dxPct = ((moveEvent.clientX - startX) / rect.width) * 100;
+      const dyPct = ((moveEvent.clientY - startY) / rect.height) * 100;
+
+      const newX = Math.max(0, Math.min(100, Math.round(startXPercent + dxPct)));
+      const newY = Math.max(0, Math.min(100, Math.round(startYPercent + dyPct)));
+
       setWm((prev) => ({
         ...prev,
-        xPercent: x,
-        yPercent: y,
+        xPercent: newX,
+        yPercent: newY,
         templates: (prev.templates || []).map((t) =>
-          t.id === activeId ? { ...t, xPercent: x, yPercent: y } : t
+          t.id === targetId ? { ...t, xPercent: newX, yPercent: newY } : t
         ),
       }));
-    } else {
-      setWm((prev) => ({ ...prev, xPercent: x, yPercent: y }));
-    }
+    };
+
+    const onPointerUp = () => {
+      setDraggingId(null);
+      window.removeEventListener("pointermove", onPointerMove);
+      window.removeEventListener("pointerup", onPointerUp);
+    };
+
+    window.addEventListener("pointermove", onPointerMove);
+    window.addEventListener("pointerup", onPointerUp);
   }
 
   function saveWatermark() {
@@ -283,6 +334,7 @@ export function EventSettings({ event, onSaved }: { event: EventOut; onSaved: (e
                   return (
                     <div
                       key={t.id}
+                      onPointerDown={(e) => startDrag(e, t.id)}
                       onClick={(e) => {
                         e.stopPropagation();
                         selectTemplate(t);
@@ -294,31 +346,26 @@ export function EventSettings({ event, onSaved }: { event: EventOut; onSaved: (e
                         transform: `translate(-${xPct}%, -${yPct}%)`,
                         width: `${sizePct}%`,
                         opacity: opVal,
-                        pointerEvents: "auto",
-                        cursor: "pointer",
-                        transition: "opacity 0.15s ease",
+                        cursor: draggingId === t.id ? "grabbing" : "grab",
+                        touchAction: "none",
+                        userSelect: "none",
                       }}
-                      className={`group rounded-lg p-0.5 select-none ${
-                        isEditing
-                          ? "ring-2 ring-brand-500 ring-offset-1 ring-offset-black/50 shadow-md bg-white/10"
-                          : "hover:ring-1 hover:ring-white/60"
+                      className={`transition-opacity duration-150 select-none ${
+                        isEditing ? "ring-1 ring-white/50 rounded" : ""
                       }`}
-                      title={`Click to edit position/size of ${t.name}`}
+                      title={`Drag to reposition "${t.name}" or select to edit`}
                     >
                       <img
                         src={t.dataUrl}
                         alt={t.name}
+                        draggable={false}
                         style={{
                           width: "100%",
                           height: "auto",
                           display: "block",
+                          pointerEvents: "none",
                         }}
                       />
-                      {isEditing && (
-                        <span className="absolute -top-5 left-1/2 -translate-x-1/2 whitespace-nowrap rounded bg-brand-600 px-1.5 py-0.2 text-[8px] font-semibold text-white shadow pointer-events-none">
-                          Editing
-                        </span>
-                      )}
                     </div>
                   );
                 })
@@ -486,6 +533,60 @@ export function EventSettings({ event, onSaved }: { event: EventOut; onSaved: (e
                   )}
                 </div>
               )}
+            </div>
+
+            {/* 1-Click Quick Corner Placement */}
+            <div>
+              <div className="mb-1.5 flex items-center justify-between text-xs">
+                <span className="font-semibold uppercase tracking-wider text-muted flex items-center gap-1">
+                  <Move className="h-3 w-3 text-brand-600" /> Quick Position
+                </span>
+                <span className="text-[11px] text-muted">
+                  X: {wm.templates?.find((t) => t.id === (wm.activeTemplateId || wm.templates?.[0]?.id))?.xPercent ?? wm.xPercent ?? 88}%, Y: {wm.templates?.find((t) => t.id === (wm.activeTemplateId || wm.templates?.[0]?.id))?.yPercent ?? wm.yPercent ?? 88}%
+                </span>
+              </div>
+              <div className="grid grid-cols-5 gap-1.5">
+                <button
+                  type="button"
+                  onClick={() => setPosition(12, 12)}
+                  className="rounded-lg border border-line bg-surface py-1 text-xs font-medium text-ink hover:border-brand-300 hover:bg-brand-50/50 transition-colors text-center cursor-pointer"
+                  title="Top Left"
+                >
+                  ↖ Top-L
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setPosition(88, 12)}
+                  className="rounded-lg border border-line bg-surface py-1 text-xs font-medium text-ink hover:border-brand-300 hover:bg-brand-50/50 transition-colors text-center cursor-pointer"
+                  title="Top Right"
+                >
+                  ↗ Top-R
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setPosition(50, 50)}
+                  className="rounded-lg border border-line bg-surface py-1 text-xs font-medium text-ink hover:border-brand-300 hover:bg-brand-50/50 transition-colors text-center cursor-pointer"
+                  title="Center"
+                >
+                  ⦿ Center
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setPosition(12, 88)}
+                  className="rounded-lg border border-line bg-surface py-1 text-xs font-medium text-ink hover:border-brand-300 hover:bg-brand-50/50 transition-colors text-center cursor-pointer"
+                  title="Bottom Left"
+                >
+                  ↙ Btm-L
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setPosition(88, 88)}
+                  className="rounded-lg border border-line bg-surface py-1 text-xs font-medium text-ink hover:border-brand-300 hover:bg-brand-50/50 transition-colors text-center cursor-pointer"
+                  title="Bottom Right (Default)"
+                >
+                  ↘ Btm-R
+                </button>
+              </div>
             </div>
 
             {/* Size Slider */}
