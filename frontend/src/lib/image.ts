@@ -103,8 +103,17 @@ export class DownloadError extends Error {
   }
 }
 
+export interface WatermarkTemplateItem {
+  id: string;
+  name: string;
+  dataUrl: string;
+  sizeBytes?: number;
+}
+
 export interface WatermarkConfig {
   imageUrl?: string | null;
+  templates?: WatermarkTemplateItem[];
+  activeTemplateId?: string | null;
   xPercent?: number; // 0 to 100
   yPercent?: number; // 0 to 100
   sizePercent?: number; // 5 to 60 (relative to photo width)
@@ -136,21 +145,33 @@ export function saveEventWatermarkConfig(eventId: string, slug?: string | null, 
 export function getSavedWatermarkConfig(eventIdOrSlug?: string): WatermarkConfig | undefined {
   if (typeof window === "undefined") return undefined;
   try {
+    const syncActiveImage = (cfg: WatermarkConfig | undefined): WatermarkConfig | undefined => {
+      if (!cfg) return undefined;
+      if (Array.isArray(cfg.templates) && cfg.templates.length > 0) {
+        const active = cfg.templates.find((t) => t.id === cfg.activeTemplateId) || cfg.templates[0];
+        if (active?.dataUrl) {
+          cfg.imageUrl = active.dataUrl;
+          if (!cfg.activeTemplateId) cfg.activeTemplateId = active.id;
+        }
+      }
+      return cfg;
+    };
+
     if (eventIdOrSlug) {
       const saved = localStorage.getItem(`zigmaa_event_watermark_${eventIdOrSlug}`) || localStorage.getItem(`madx_event_watermark_${eventIdOrSlug}`);
-      if (saved) return JSON.parse(saved);
+      if (saved) return syncActiveImage(JSON.parse(saved));
     }
     // Also check current URL path to auto-detect event id or slug
     const pathParts = window.location.pathname.split("/").filter(Boolean);
     if (pathParts[0] === "e" && pathParts[1]) {
       const saved = localStorage.getItem(`zigmaa_event_watermark_${pathParts[1]}`) || localStorage.getItem(`madx_event_watermark_${pathParts[1]}`);
-      if (saved) return JSON.parse(saved);
+      if (saved) return syncActiveImage(JSON.parse(saved));
     } else if (pathParts[0] === "dashboard" && pathParts[1] === "events" && pathParts[2]) {
       const saved = localStorage.getItem(`zigmaa_event_watermark_${pathParts[2]}`) || localStorage.getItem(`madx_event_watermark_${pathParts[2]}`);
-      if (saved) return JSON.parse(saved);
+      if (saved) return syncActiveImage(JSON.parse(saved));
     }
     const defaultSaved = localStorage.getItem("zigmaa_default_watermark") || localStorage.getItem("madx_default_watermark");
-    if (defaultSaved) return JSON.parse(defaultSaved);
+    if (defaultSaved) return syncActiveImage(JSON.parse(defaultSaved));
   } catch {
     /* fallback to default */
   }

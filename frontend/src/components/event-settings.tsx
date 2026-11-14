@@ -1,12 +1,12 @@
 "use client";
 
 import { useRouter } from "next/navigation";
-import { ImagePlus, ScanFace, Sliders, Sparkles, Trash2 } from "lucide-react";
+import { ImagePlus, ScanFace, Sliders, Sparkles, Trash2, X } from "lucide-react";
 import { useRef, useState } from "react";
 import { adminApi, errorMessage } from "@/lib/api";
 import { ACCEPTED_IMAGE_TYPES, MAX_UPLOAD_MB } from "@/lib/config";
 import { formatNumber } from "@/lib/format";
-import { fileToDataUrl, getSavedWatermarkConfig, saveEventWatermarkConfig, type WatermarkConfig } from "@/lib/image";
+import { fileToDataUrl, getSavedWatermarkConfig, saveEventWatermarkConfig, type WatermarkConfig, type WatermarkTemplateItem } from "@/lib/image";
 import type { EventOut } from "@/lib/types";
 import { CoverImage } from "./event-card";
 import { EventForm } from "./event-form";
@@ -60,15 +60,82 @@ export function EventSettings({ event, onSaved }: { event: EventOut; onSaved: (e
     }
   }
 
-  async function changeTemplate(f: File | undefined) {
-    if (!f) return;
-    try {
-      const dataUrl = await fileToDataUrl(f);
-      setWm((prev) => ({ ...prev, imageUrl: dataUrl }));
-      toast.success("Watermark template loaded", "Click 'Save watermark settings' to apply.");
-    } catch {
-      toast.error("Could not read template file");
+  async function addTemplates(files: FileList | null) {
+    if (!files || files.length === 0) return;
+    const allowed = ["image/png", "image/svg+xml", "image/webp", "image/jpeg"];
+    const newItems: WatermarkTemplateItem[] = [];
+
+    for (let i = 0; i < files.length; i++) {
+      const f = files[i];
+      if (!allowed.includes(f.type)) {
+        toast.error("Unsupported file", `${f.name}: Use PNG, SVG, WebP or JPEG.`);
+        continue;
+      }
+      if (f.size > 10 * 1024 * 1024) {
+        toast.error("File too large", `${f.name}: Must be under 10 MB.`);
+        continue;
+      }
+      try {
+        const dataUrl = await fileToDataUrl(f);
+        newItems.push({
+          id: `${Date.now()}-${Math.random().toString(36).slice(2, 7)}-${f.name.replace(/[^a-zA-Z0-9.-]/g, "_")}`,
+          name: f.name,
+          sizeBytes: f.size,
+          dataUrl,
+        });
+      } catch {
+        toast.error("Could not read template file", f.name);
+      }
     }
+
+    if (newItems.length > 0) {
+      setWm((prev) => {
+        const existing = prev.templates || [];
+        const updated = [...existing, ...newItems];
+        const active = updated[updated.length - 1]; // select the newest uploaded template
+        return {
+          ...prev,
+          templates: updated,
+          activeTemplateId: active.id,
+          imageUrl: active.dataUrl,
+        };
+      });
+      toast.success(
+        newItems.length > 1 ? `${newItems.length} templates uploaded` : "Template uploaded",
+        "Click 'Save watermark settings' to apply."
+      );
+    }
+  }
+
+  function selectTemplate(item: WatermarkTemplateItem) {
+    setWm((prev) => ({
+      ...prev,
+      activeTemplateId: item.id,
+      imageUrl: item.dataUrl,
+    }));
+  }
+
+  function removeTemplateItem(id: string) {
+    setWm((prev) => {
+      const updated = (prev.templates || []).filter((t) => t.id !== id);
+      const nextActive = updated[0];
+      return {
+        ...prev,
+        templates: updated,
+        activeTemplateId: nextActive?.id || null,
+        imageUrl: nextActive?.dataUrl || null,
+      };
+    });
+  }
+
+  function resetTemplates() {
+    setWm((prev) => ({
+      ...prev,
+      imageUrl: null,
+      templates: [],
+      activeTemplateId: null,
+    }));
+    toast.success("Reset to default Zigmaa logo");
   }
 
   function handlePreviewClick(e: React.MouseEvent<HTMLDivElement>) {
@@ -180,41 +247,125 @@ export function EventSettings({ event, onSaved }: { event: EventOut; onSaved: (e
               </div>
             </div>
 
-            {/* Template / Watermark Upload Button */}
-            <div>
+            {/* Template / Watermark Upload Section */}
+            <div className="space-y-3">
               <input
                 ref={templateRef}
                 type="file"
+                multiple
                 accept="image/png,image/svg+xml,image/webp,image/jpeg"
                 className="sr-only"
                 tabIndex={-1}
                 onChange={(e) => {
-                  void changeTemplate(e.target.files?.[0]);
+                  void addTemplates(e.target.files);
                   e.target.value = "";
                 }}
               />
-              <div className="flex items-center gap-2">
-                <Button
-                  type="button"
-                  variant="outline"
-                  className="w-full"
-                  onClick={() => templateRef.current?.click()}
-                  icon={<Sparkles className="h-4 w-4 text-brand-600" />}
-                >
-                  {wm.imageUrl ? "Replace watermark template" : "Upload watermark template"}
-                </Button>
-                {wm.imageUrl && (
+
+              {wm.templates && wm.templates.length > 0 ? (
+                <div className="space-y-2.5">
+                  <div className="flex items-center justify-between text-xs">
+                    <span className="font-semibold uppercase tracking-wider text-muted">
+                      Saved Templates ({wm.templates.length})
+                    </span>
+                    <span className="text-[11px] text-muted">Click to select active</span>
+                  </div>
+
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 max-h-[220px] overflow-y-auto p-1">
+                    {wm.templates.map((t) => {
+                      const isActive = t.id === (wm.activeTemplateId || wm.templates![0]?.id);
+                      return (
+                        <div
+                          key={t.id}
+                          onClick={() => selectTemplate(t)}
+                          className={`relative flex items-center justify-between gap-2 rounded-xl border p-2 transition-all cursor-pointer select-none ${
+                            isActive
+                              ? "border-brand-500 bg-brand-50/40 ring-1 ring-brand-500 shadow-xs"
+                              : "border-line bg-surface hover:border-brand-300 hover:bg-canvas/50"
+                          }`}
+                        >
+                          <div className="flex items-center gap-2 min-w-0 flex-1">
+                            <div className="h-9 w-9 shrink-0 rounded-lg border border-line bg-[repeating-conic-gradient(#e8e4dc_0%_25%,#fdfbf7_0%_50%)] bg-[length:8px_8px] p-0.5 flex items-center justify-center overflow-hidden">
+                              <img src={t.dataUrl} alt={t.name} className="max-h-full max-w-full object-contain" />
+                            </div>
+                            <div className="min-w-0 flex-1">
+                              <div className="flex items-center gap-1">
+                                <p className="truncate text-xs font-semibold text-ink">{t.name}</p>
+                                {isActive && (
+                                  <span className="shrink-0 rounded-full bg-brand-100 px-1.5 py-0.2 text-[9px] font-semibold text-brand-700">
+                                    Active
+                                  </span>
+                                )}
+                              </div>
+                              {t.sizeBytes ? (
+                                <p className="text-[10px] text-muted">{(t.sizeBytes / 1024).toFixed(1)} KB</p>
+                              ) : null}
+                            </div>
+                          </div>
+                          <button
+                            type="button"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              removeTemplateItem(t.id);
+                            }}
+                            aria-label={`Remove ${t.name}`}
+                            className="grid h-6 w-6 shrink-0 place-items-center rounded-md text-muted hover:bg-red-50 hover:text-red-600 transition-colors"
+                            title="Remove template"
+                          >
+                            <X className="h-3 w-3" />
+                          </button>
+                        </div>
+                      );
+                    })}
+                  </div>
+
+                  <div className="flex items-center gap-2">
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="sm"
+                      className="w-full text-xs"
+                      onClick={() => templateRef.current?.click()}
+                      icon={<Sparkles className="h-3.5 w-3.5 text-brand-600" />}
+                    >
+                      + Add more templates
+                    </Button>
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="sm"
+                      className="text-xs"
+                      onClick={resetTemplates}
+                      title="Reset to default Zigmaa logo"
+                    >
+                      Reset
+                    </Button>
+                  </div>
+                </div>
+              ) : (
+                <div className="flex items-center gap-2">
                   <Button
                     type="button"
-                    variant="ghost"
-                    size="sm"
-                    onClick={() => setWm((prev) => ({ ...prev, imageUrl: null }))}
-                    title="Reset to default logo"
+                    variant="outline"
+                    className="w-full"
+                    onClick={() => templateRef.current?.click()}
+                    icon={<Sparkles className="h-4 w-4 text-brand-600" />}
                   >
-                    Reset
+                    {wm.imageUrl ? "Replace watermark template" : "Upload templates (Multiple)"}
                   </Button>
-                )}
-              </div>
+                  {wm.imageUrl && (
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="sm"
+                      onClick={resetTemplates}
+                      title="Reset to default logo"
+                    >
+                      Reset
+                    </Button>
+                  )}
+                </div>
+              )}
             </div>
 
             {/* Size Slider */}

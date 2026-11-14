@@ -9,9 +9,20 @@ import { Button } from "./ui/button";
 import { Field, Input, Textarea } from "./ui/primitives";
 import { Alert } from "./ui/states";
 
+export interface TemplateItem {
+  id: string;
+  name: string;
+  size: number;
+  preview: string;
+  file: File;
+}
+
 export interface EventFormValues extends EventCreate {
   cover?: File | null;
   template?: File | null;
+  templates?: File[];
+  templateItems?: TemplateItem[];
+  activeTemplateId?: string | null;
 }
 
 type FieldErrors = Partial<Record<"name" | "event_date" | "venue" | "description" | "cover" | "template", string>>;
@@ -44,6 +55,9 @@ export function EventForm({ initial, submitLabel, onSubmit, footerExtra, withCov
     preview: string | null;
     template: File | null;
     templatePreview: string | null;
+    templates: File[];
+    templateItems: TemplateItem[];
+    activeTemplateId: string | null;
   }) => void;
 }) {
   const [name, setName] = useState(initial?.name ?? "");
@@ -52,8 +66,8 @@ export function EventForm({ initial, submitLabel, onSubmit, footerExtra, withCov
   const [description, setDescription] = useState(initial?.description ?? "");
   const [cover, setCover] = useState<File | null>(null);
   const [preview, setPreview] = useState<string | null>(null);
-  const [template, setTemplate] = useState<File | null>(null);
-  const [templatePreview, setTemplatePreview] = useState<string | null>(null);
+  const [templates, setTemplates] = useState<TemplateItem[]>([]);
+  const [activeTemplateId, setActiveTemplateId] = useState<string | null>(null);
   const [errors, setErrors] = useState<FieldErrors>({});
   const [formError, setFormError] = useState<unknown>(null);
   const [busy, setBusy] = useState(false);
@@ -67,16 +81,24 @@ export function EventForm({ initial, submitLabel, onSubmit, footerExtra, withCov
     return () => URL.revokeObjectURL(url);
   }, [cover]);
 
-  useEffect(() => {
-    if (!template) { setTemplatePreview(null); return; }
-    const url = URL.createObjectURL(template);
-    setTemplatePreview(url);
-    return () => URL.revokeObjectURL(url);
-  }, [template]);
+  const activeTemplate = templates.find((t) => t.id === activeTemplateId) || templates[0] || null;
 
   useEffect(() => {
-    onValuesChange?.({ name, date, venue, description, cover, preview, template, templatePreview });
-  }, [name, date, venue, description, cover, preview, template, templatePreview, onValuesChange]);
+    const active = templates.find((t) => t.id === activeTemplateId) || templates[0] || null;
+    onValuesChange?.({
+      name,
+      date,
+      venue,
+      description,
+      cover,
+      preview,
+      template: active?.file || null,
+      templatePreview: active?.preview || null,
+      templates: templates.map((t) => t.file),
+      templateItems: templates,
+      activeTemplateId: active?.id || null,
+    });
+  }, [name, date, venue, description, cover, preview, templates, activeTemplateId, onValuesChange]);
 
   function pickCover(f: File | undefined) {
     if (!f) return;
@@ -92,19 +114,60 @@ export function EventForm({ initial, submitLabel, onSubmit, footerExtra, withCov
     setCover(f);
   }
 
-  function pickTemplate(f: File | undefined) {
-    if (!f) return;
+  function pickTemplates(fileList: FileList | null) {
+    if (!fileList || fileList.length === 0) return;
     const allowed = ["image/png", "image/svg+xml", "image/webp", "image/jpeg"];
-    if (!allowed.includes(f.type)) {
-      setErrors((e) => ({ ...e, template: "Use a PNG, SVG, WebP or JPEG image." }));
-      return;
+    const newItems: TemplateItem[] = [];
+    let errorMsg: string | undefined;
+
+    for (let i = 0; i < fileList.length; i++) {
+      const f = fileList[i];
+      if (!allowed.includes(f.type)) {
+        errorMsg = "Use PNG, SVG, WebP or JPEG images for templates.";
+        continue;
+      }
+      if (f.size > 10 * 1024 * 1024) {
+        errorMsg = "Each template must be under 10 MB.";
+        continue;
+      }
+      const id = `${Date.now()}-${Math.random().toString(36).slice(2, 7)}-${f.name.replace(/[^a-zA-Z0-9.-]/g, "_")}`;
+      const preview = URL.createObjectURL(f);
+      newItems.push({
+        id,
+        name: f.name,
+        size: f.size,
+        preview,
+        file: f,
+      });
     }
-    if (f.size > 10 * 1024 * 1024) {
-      setErrors((e) => ({ ...e, template: "Template must be under 10 MB." }));
+
+    if (errorMsg && newItems.length === 0) {
+      setErrors((e) => ({ ...e, template: errorMsg }));
       return;
     }
     setErrors((e) => ({ ...e, template: undefined }));
-    setTemplate(f);
+
+    setTemplates((prev) => {
+      const updated = [...prev, ...newItems];
+      if (!activeTemplateId && updated.length > 0) {
+        setActiveTemplateId(updated[0].id);
+      }
+      return updated;
+    });
+  }
+
+  function removeTemplate(id: string) {
+    setTemplates((prev) => {
+      const target = prev.find((t) => t.id === id);
+      if (target?.preview) {
+        try { URL.revokeObjectURL(target.preview); } catch {}
+      }
+      const updated = prev.filter((t) => t.id !== id);
+      if (activeTemplateId === id) {
+        setActiveTemplateId(updated[0]?.id || null);
+      }
+      return updated;
+    });
   }
 
   async function submit(e: FormEvent) {
@@ -124,7 +187,10 @@ export function EventForm({ initial, submitLabel, onSubmit, footerExtra, withCov
         venue: venue.trim() || null,
         description: description.trim() || null,
         cover,
-        template,
+        template: activeTemplate?.file || null,
+        templates: templates.map((t) => t.file),
+        templateItems: templates,
+        activeTemplateId: activeTemplate?.id || null,
       });
     } catch (err) {
       const fe = fieldErrorsFrom(err);
@@ -178,40 +244,79 @@ export function EventForm({ initial, submitLabel, onSubmit, footerExtra, withCov
           </Field>
 
           <Field
-            label="Template / Watermark overlay"
+            label={`Templates / Watermark overlays ${templates.length > 0 ? `(${templates.length})` : ""}`}
             htmlFor="ev-template"
             error={errors.template}
-            hint="Upload custom watermark logo or frame overlay (PNG with transparency recommended)."
+            hint="Upload custom watermark logos or frame overlays. Select multiple files at once (PNG with transparency recommended)."
           >
             <input
               ref={templateFileRef}
               id="ev-template"
               type="file"
+              multiple
               accept="image/png,image/svg+xml,image/webp,image/jpeg"
               className="sr-only"
               onChange={(e) => {
-                pickTemplate(e.target.files?.[0]);
+                pickTemplates(e.target.files);
                 e.target.value = "";
               }}
             />
-            {templatePreview ? (
-              <div className="relative flex items-center justify-between gap-3 rounded-xl border border-line bg-surface p-3 shadow-sm">
-                <div className="flex items-center gap-3 min-w-0">
-                  <div className="h-12 w-12 shrink-0 rounded-lg border border-line bg-[repeating-conic-gradient(#e8e4dc_0%_25%,#fdfbf7_0%_50%)] bg-[length:10px_10px] p-1 flex items-center justify-center overflow-hidden">
-                    <img src={templatePreview} alt="Template preview" className="max-h-full max-w-full object-contain" />
-                  </div>
-                  <div className="min-w-0">
-                    <p className="truncate text-sm font-medium text-ink">{template?.name || "Watermark overlay"}</p>
-                    <p className="text-xs text-muted">{template ? (template.size / 1024).toFixed(1) + " KB" : "Custom template"}</p>
-                  </div>
+            {templates.length > 0 ? (
+              <div className="space-y-3">
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5 max-h-[300px] overflow-y-auto p-1">
+                  {templates.map((t) => {
+                    const isActive = t.id === (activeTemplateId || templates[0]?.id);
+                    return (
+                      <div
+                        key={t.id}
+                        onClick={() => setActiveTemplateId(t.id)}
+                        className={`relative flex items-center justify-between gap-2.5 rounded-xl border p-2.5 transition-all cursor-pointer select-none ${
+                          isActive
+                            ? "border-brand-500 bg-brand-50/40 ring-1 ring-brand-500 shadow-xs"
+                            : "border-line bg-surface hover:border-brand-300 hover:bg-canvas/50"
+                        }`}
+                      >
+                        <div className="flex items-center gap-2.5 min-w-0 flex-1">
+                          <div className="h-10 w-10 shrink-0 rounded-lg border border-line bg-[repeating-conic-gradient(#e8e4dc_0%_25%,#fdfbf7_0%_50%)] bg-[length:8px_8px] p-0.5 flex items-center justify-center overflow-hidden">
+                            <img src={t.preview} alt={t.name} className="max-h-full max-w-full object-contain" />
+                          </div>
+                          <div className="min-w-0 flex-1">
+                            <div className="flex items-center gap-1.5">
+                              <p className="truncate text-xs font-semibold text-ink">{t.name}</p>
+                              {isActive && (
+                                <span className="shrink-0 rounded-full bg-brand-100 px-1.5 py-0.2 text-[10px] font-semibold text-brand-700">
+                                  Active
+                                </span>
+                              )}
+                            </div>
+                            <p className="text-[11px] text-muted">{(t.size / 1024).toFixed(1)} KB</p>
+                          </div>
+                        </div>
+                        <button
+                          type="button"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            removeTemplate(t.id);
+                          }}
+                          aria-label={`Remove ${t.name}`}
+                          className="grid h-7 w-7 shrink-0 place-items-center rounded-md text-muted hover:bg-red-50 hover:text-red-600 transition-colors"
+                          title="Remove template"
+                        >
+                          <X className="h-3.5 w-3.5" />
+                        </button>
+                      </div>
+                    );
+                  })}
                 </div>
+
                 <button
                   type="button"
-                  onClick={() => setTemplate(null)}
-                  aria-label="Remove template"
-                  className="grid h-8 w-8 place-items-center rounded-lg text-muted hover:bg-canvas hover:text-ink transition-colors"
+                  onClick={() => templateFileRef.current?.click()}
+                  className="flex w-full items-center justify-center gap-2 rounded-xl border border-dashed border-line bg-canvas/40 px-3 py-2 text-xs text-muted transition hover:border-brand-300 hover:bg-brand-50/30"
                 >
-                  <X className="h-4 w-4" />
+                  <Sparkles className="h-3.5 w-3.5 text-brand-500" aria-hidden />
+                  <span className="font-medium text-brand-700">+ Upload more templates</span>
+                  <span className="text-[11px] text-muted">(Multi-select supported)</span>
                 </button>
               </div>
             ) : (
@@ -222,7 +327,7 @@ export function EventForm({ initial, submitLabel, onSubmit, footerExtra, withCov
               >
                 <Sparkles className="h-4 w-4 text-brand-500" aria-hidden />
                 <span>
-                  <span className="font-medium text-brand-700">Upload template / watermark</span> (PNG, SVG)
+                  <span className="font-medium text-brand-700">Upload templates / watermarks</span> (PNG, SVG — multiple files supported)
                 </span>
               </button>
             )}

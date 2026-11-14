@@ -11,11 +11,11 @@ import {
 } from "lucide-react";
 import { useRef, useState } from "react";
 import { PageHeader } from "@/components/app-shell";
-import { EventForm } from "@/components/event-form";
+import { EventForm, type TemplateItem } from "@/components/event-form";
 import { Badge, Card, CardHeader } from "@/components/ui/primitives";
 import { useToast } from "@/components/ui/toast";
 import { adminApi, errorMessage } from "@/lib/api";
-import { fileToDataUrl, saveEventWatermarkConfig, type WatermarkConfig } from "@/lib/image";
+import { fileToDataUrl, saveEventWatermarkConfig, type WatermarkConfig, type WatermarkTemplateItem } from "@/lib/image";
 
 export default function NewEventPage() {
   const router = useRouter();
@@ -30,6 +30,9 @@ export default function NewEventPage() {
     preview: string | null;
     template: File | null;
     templatePreview: string | null;
+    templates: File[];
+    templateItems: TemplateItem[];
+    activeTemplateId: string | null;
   }>({
     name: "",
     date: "",
@@ -38,6 +41,9 @@ export default function NewEventPage() {
     preview: null,
     template: null,
     templatePreview: null,
+    templates: [],
+    templateItems: [],
+    activeTemplateId: null,
   });
 
   // Watermark customization state (Zigmaa defaults: bottom-right corner, 14% size, 40% opacity)
@@ -130,30 +136,53 @@ export default function NewEventPage() {
                     Cancel
                   </Link>
                 }
-                onValuesChange={({ name, date, venue, description, preview, template, templatePreview }) => {
-                  setLive({ name, date, venue, description, preview, template, templatePreview });
-                  if (templatePreview) {
-                    setWm((prev) => ({ ...prev, imageUrl: templatePreview }));
+                onValuesChange={(vals) => {
+                  setLive(vals);
+                  if (vals.templatePreview) {
+                    setWm((prev) => ({
+                      ...prev,
+                      imageUrl: vals.templatePreview,
+                      activeTemplateId: vals.activeTemplateId,
+                    }));
                   }
                 }}
-                onSubmit={async ({ cover, template, ...values }) => {
+                onSubmit={async ({ cover, template, templateItems, activeTemplateId, ...values }) => {
                   const ev = await adminApi.createEvent(values);
 
-                  // Convert template file to permanent Base64 data URL so it never expires
-                  let dataUrl = live.templatePreview || null;
-                  const templateFile = template || live.template;
-                  if (templateFile) {
+                  // Convert all uploaded template files to permanent Base64 data URLs
+                  const items = templateItems || live.templateItems || [];
+                  const savedTemplates: WatermarkTemplateItem[] = [];
+
+                  for (const item of items) {
                     try {
-                      dataUrl = await fileToDataUrl(templateFile);
+                      const dataUrl = await fileToDataUrl(item.file);
+                      savedTemplates.push({
+                        id: item.id,
+                        name: item.name,
+                        sizeBytes: item.size,
+                        dataUrl,
+                      });
                     } catch (e) {
                       console.warn("Could not convert template to data URL", e);
                     }
                   }
 
+                  const activeId = wm.activeTemplateId || activeTemplateId || live.activeTemplateId;
+                  const activeSaved = savedTemplates.find((t) => t.id === activeId) || savedTemplates[0];
+
+                  let activeDataUrl = activeSaved?.dataUrl || null;
+                  if (!activeDataUrl && (template || live.template)) {
+                    try {
+                      activeDataUrl = await fileToDataUrl((template || live.template)!);
+                    } catch {}
+                  }
+
                   // Persist watermark configuration for this event and as studio default
                   const finalConfig: WatermarkConfig = {
                     ...wm,
-                    imageUrl: dataUrl,
+                    imageUrl: activeDataUrl || wm.imageUrl || null,
+                    templates: savedTemplates.length > 0 ? savedTemplates : undefined,
+                    activeTemplateId: activeSaved?.id || null,
                   };
 
                   saveEventWatermarkConfig(ev.id, ev.slug, finalConfig);
@@ -256,6 +285,41 @@ export default function NewEventPage() {
                 </div>
               </div>
             </div>
+
+            {/* Template Selector Bar (When multiple templates are uploaded) */}
+            {live.templateItems.length > 1 && (
+              <div className="flex items-center gap-2 overflow-x-auto px-5 pt-3 pb-1 border-b border-line bg-canvas/30">
+                <span className="text-xs font-semibold text-muted shrink-0">Active watermark:</span>
+                <div className="flex items-center gap-1.5 flex-nowrap">
+                  {live.templateItems.map((t) => {
+                    const isActive = t.id === (wm.activeTemplateId || live.activeTemplateId || live.templateItems[0].id);
+                    return (
+                      <button
+                        key={t.id}
+                        type="button"
+                        onClick={() => {
+                          setWm((prev) => ({
+                            ...prev,
+                            imageUrl: t.preview,
+                            activeTemplateId: t.id,
+                          }));
+                        }}
+                        className={`inline-flex items-center gap-1.5 rounded-lg border px-2.5 py-1 text-xs transition-all cursor-pointer ${
+                          isActive
+                            ? "border-brand-500 bg-brand-50 text-brand-700 font-semibold ring-1 ring-brand-500 shadow-xs"
+                            : "border-line bg-surface text-ink hover:bg-canvas"
+                        }`}
+                      >
+                        <div className="h-4 w-4 shrink-0 rounded bg-[repeating-conic-gradient(#e8e4dc_0%_25%,#fdfbf7_0%_50%)] bg-[length:4px_4px] p-0.5 flex items-center justify-center overflow-hidden">
+                          <img src={t.preview} alt="" className="max-h-full max-w-full object-contain" />
+                        </div>
+                        <span className="truncate max-w-[120px]">{t.name}</span>
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+            )}
 
             {/* Customization Controls Panel */}
             <div className="p-5">
