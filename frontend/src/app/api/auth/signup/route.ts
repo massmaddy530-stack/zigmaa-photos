@@ -25,9 +25,12 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    if (!password || password.length < 8) {
+    const hasUpper = /[A-Z]/.test(password);
+    const hasLower = /[a-z]/.test(password);
+    const hasSymbol = /[^A-Za-z0-9]/.test(password);
+    if (!password || password.length < 8 || !hasUpper || !hasLower || !hasSymbol) {
       return NextResponse.json(
-        { ok: false, error: "Password must be at least 8 characters long." },
+        { ok: false, error: "Password must be at least 8 characters, include at least 1 uppercase letter, 1 lowercase letter, and 1 symbol." },
         { status: 400 }
       );
     }
@@ -96,3 +99,4 @@ export async function POST(req: NextRequest) {
     );
   }
 }
+

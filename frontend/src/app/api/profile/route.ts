@@ -107,9 +107,12 @@ export async function PATCH(req: NextRequest) {
         );
       }
 
-      if (newPassword.length < 8) {
+      const hasUpper = /[A-Z]/.test(newPassword);
+      const hasLower = /[a-z]/.test(newPassword);
+      const hasSymbol = /[^A-Za-z0-9]/.test(newPassword);
+      if (newPassword.length < 8 || !hasUpper || !hasLower || !hasSymbol) {
         return NextResponse.json(
-          { ok: false, error: "New password must be at least 8 characters long." },
+          { ok: false, error: "New password must be at least 8 characters, include 1 uppercase letter, 1 lowercase letter, and 1 symbol." },
           { status: 400 }
         );
       }
@@ -126,7 +129,8 @@ export async function PATCH(req: NextRequest) {
         const envPath = path.join(process.cwd(), ".env.local");
         let content = await fs.readFile(envPath, "utf-8").catch(() => "");
         if (content.includes("ADMIN_PASSWORD_HASH=")) {
-          content = content.replace(/ADMIN_PASSWORD_HASH="?[^"\n]+"?/, `ADMIN_PASSWORD_HASH="${newHash}"`);
+          const escapedHash = newHash.replace(/\$/g, "\\$");
+          content = content.replace(/ADMIN_PASSWORD_HASH="?[^"\n]+"?/, `ADMIN_PASSWORD_HASH="${escapedHash}"`);
           await fs.writeFile(envPath, content, "utf-8");
         }
       } catch (err) {

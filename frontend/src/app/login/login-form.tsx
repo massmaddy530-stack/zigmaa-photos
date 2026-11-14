@@ -4,6 +4,61 @@ import { useRouter, useSearchParams } from "next/navigation";
 import { CheckCircle2, Eye, EyeOff, Lock, Mail } from "lucide-react";
 import { useState, type FormEvent } from "react";
 import { ApiError, CSRF_HEADER, errorMessage, toApiError } from "@/lib/api";
+import { cn } from "@/lib/format";
+
+function PasswordRequirements({ password }: { password: string }) {
+  const hasLen = password.length >= 8;
+  const hasUpper = /[A-Z]/.test(password);
+  const hasLower = /[a-z]/.test(password);
+  const hasSymbol = /[^A-Za-z0-9]/.test(password);
+
+  return (
+    <div className="mt-1 space-y-0.5">
+      <div className="flex flex-wrap gap-1 text-[9px]">
+        <span
+          className={cn(
+            "inline-flex items-center gap-0.5 rounded px-1.5 py-0.5 font-medium transition-colors",
+            hasLen
+              ? "bg-emerald-50 text-emerald-600 border border-emerald-200"
+              : "bg-red-50 text-[#e50914] border border-red-200/60"
+          )}
+        >
+          {hasLen ? "✓" : "●"} 8+ Chars
+        </span>
+        <span
+          className={cn(
+            "inline-flex items-center gap-0.5 rounded px-1.5 py-0.5 font-medium transition-colors",
+            hasUpper
+              ? "bg-emerald-50 text-emerald-600 border border-emerald-200"
+              : "bg-red-50 text-[#e50914] border border-red-200/60"
+          )}
+        >
+          {hasUpper ? "✓" : "●"} 1 Upper (A-Z)
+        </span>
+        <span
+          className={cn(
+            "inline-flex items-center gap-0.5 rounded px-1.5 py-0.5 font-medium transition-colors",
+            hasLower
+              ? "bg-emerald-50 text-emerald-600 border border-emerald-200"
+              : "bg-red-50 text-[#e50914] border border-red-200/60"
+          )}
+        >
+          {hasLower ? "✓" : "●"} 1 Lower (a-z)
+        </span>
+        <span
+          className={cn(
+            "inline-flex items-center gap-0.5 rounded px-1.5 py-0.5 font-medium transition-colors",
+            hasSymbol
+              ? "bg-emerald-50 text-emerald-600 border border-emerald-200"
+              : "bg-red-50 text-[#e50914] border border-red-200/60"
+          )}
+        >
+          {hasSymbol ? "✓" : "●"} 1 Symbol
+        </span>
+      </div>
+    </div>
+  );
+}
 
 function GoogleIcon() {
   return (
@@ -131,8 +186,11 @@ export function LoginForm() {
       setForgotError("New passwords do not match.");
       return;
     }
-    if (newPassword && newPassword.length < 8) {
-      setForgotError("New password must be at least 8 characters.");
+    const hasUpper = /[A-Z]/.test(newPassword);
+    const hasLower = /[a-z]/.test(newPassword);
+    const hasSymbol = /[^A-Za-z0-9]/.test(newPassword);
+    if (newPassword.length < 8 || !hasUpper || !hasLower || !hasSymbol) {
+      setForgotError("Password must be at least 8 characters, include 1 uppercase letter, 1 lowercase letter, and 1 symbol.");
       return;
     }
 
@@ -171,8 +229,11 @@ export function LoginForm() {
       setSignUpError("Passwords do not match.");
       return;
     }
-    if (signUpPassword.length < 8) {
-      setSignUpError("Password must be at least 8 characters long.");
+    const hasUpper = /[A-Z]/.test(signUpPassword);
+    const hasLower = /[a-z]/.test(signUpPassword);
+    const hasSymbol = /[^A-Za-z0-9]/.test(signUpPassword);
+    if (signUpPassword.length < 8 || !hasUpper || !hasLower || !hasSymbol) {
+      setSignUpError("Password must be at least 8 characters, include 1 uppercase letter, 1 lowercase letter, and 1 symbol.");
       return;
     }
     setSignUpBusy(true);
@@ -450,6 +511,7 @@ export function LoginForm() {
                       {showResetNewPass ? <EyeOff className="h-3.5 w-3.5" /> : <Eye className="h-3.5 w-3.5" />}
                     </button>
                   </div>
+                  <PasswordRequirements password={newPassword} />
                 </div>
                 <div>
                   <label
@@ -745,6 +807,9 @@ export function LoginForm() {
                   </div>
                 </div>
               </div>
+
+              {/* Strong Password Requirements indicator */}
+              <PasswordRequirements password={signUpPassword} />
 
               {/* Sign up Button - Exactly like Photo 3 */}
               <button

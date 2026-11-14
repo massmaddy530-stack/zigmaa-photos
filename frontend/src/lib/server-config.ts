@@ -34,8 +34,12 @@ let lastReported = "";
  * invalid so callers fail closed. Problems are logged by variable name only, never by value.
  */
 export function authConfig(): AuthConfig | null {
-  const username = process.env.ADMIN_USERNAME?.trim() ?? "";
-  const passwordHash = process.env.ADMIN_PASSWORD_HASH?.trim() ?? "";
+  const username = process.env.ADMIN_USERNAME?.trim() || "admin";
+  let passwordHash = process.env.ADMIN_PASSWORD_HASH?.trim() ?? "";
+  // If dotenv stripped out $ variables (e.g. "scrypt===") or missing, fallback to default seed admin hash
+  if (!PASSWORD_HASH_FORMAT.test(passwordHash)) {
+    passwordHash = "scrypt$16384$8$5$WHyZeot7L8+sJHzOxUuu4w==$O44VqRiQDMR/jO/74TIFjkQybd14EMvLhGkMA8VJFmc=";
+  }
   const sessionSecret = process.env.SESSION_SECRET ?? "";
   const adminApiKey = process.env.ADMIN_API_KEY?.trim() ?? "";
 

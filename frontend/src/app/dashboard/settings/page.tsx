@@ -17,6 +17,7 @@ import {
   User,
 } from "lucide-react";
 import { CSRF_HEADER } from "@/lib/api";
+import { cn } from "@/lib/format";
 
 interface UserProfile {
   name: string;
@@ -30,7 +31,7 @@ export default function SettingsPage() {
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const [loading, setLoading] = useState(true);
-  const [profile, setProfile] = useState<UserProfile>({
+  const [, setProfile] = useState<UserProfile>({
     name: "Studio Admin",
     email: "massmaddy530@gmail.com",
     picture: "",
@@ -137,13 +138,18 @@ export default function SettingsPage() {
     setError(null);
     setSuccess(null);
 
-    if (newPassword && newPassword !== confirmPassword) {
-      setError("New passwords do not match.");
-      return;
-    }
-    if (newPassword && newPassword.length < 8) {
-      setError("New password must be at least 8 characters long.");
-      return;
+    if (newPassword) {
+      if (newPassword !== confirmPassword) {
+        setError("New passwords do not match.");
+        return;
+      }
+      const hasUpper = /[A-Z]/.test(newPassword);
+      const hasLower = /[a-z]/.test(newPassword);
+      const hasSymbol = /[^A-Za-z0-9]/.test(newPassword);
+      if (newPassword.length < 8 || !hasUpper || !hasLower || !hasSymbol) {
+        setError("New password must be at least 8 characters, include 1 uppercase letter, 1 lowercase letter, and 1 symbol.");
+        return;
+      }
     }
 
     setBusy(true);
@@ -218,17 +224,49 @@ export default function SettingsPage() {
             Manage your personal profile photo, display name, email, and security password.
           </p>
         </div>
-
-        {/* Quick Badge */}
-        <div className="inline-flex items-center gap-2 self-start rounded-2xl border border-slate-200 bg-white px-3 py-1.5 shadow-sm">
-          <span className="flex h-2.5 w-2.5 rounded-full bg-emerald-500 animate-pulse" />
-          <span className="text-xs font-semibold text-slate-700">
-            {profile.provider === "google" ? "Google Connected" : "Admin Studio Account"}
-          </span>
-        </div>
       </div>
 
-      {/* Status Messages */}
+      {/* Floating Status Notification (Always visible anywhere on the page without scrolling) */}
+      {(error || success) && (
+        <div className="fixed top-20 right-6 z-[100] max-w-md animate-in slide-in-from-top-4 fade-in duration-300">
+          {error && (
+            <div className="flex items-start gap-3 rounded-2xl border border-red-200 bg-white p-4 text-sm font-medium text-[#e50914] shadow-2xl shadow-red-900/10 ring-1 ring-red-500/20">
+              <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-red-100 text-xs font-bold text-[#e50914]">!</span>
+              <div className="flex-1 min-w-0">
+                <p className="font-semibold text-[#0f172a]">Error Updating Profile</p>
+                <p className="text-xs text-[#e50914] mt-0.5">{error}</p>
+              </div>
+              <button
+                type="button"
+                onClick={() => setError(null)}
+                className="text-[#94a3b8] hover:text-slate-600 text-xs font-bold ml-1"
+                aria-label="Dismiss"
+              >
+                ✕
+              </button>
+            </div>
+          )}
+          {success && (
+            <div className="flex items-start gap-3 rounded-2xl border border-emerald-200 bg-white p-4 text-sm font-medium text-emerald-800 shadow-2xl shadow-emerald-900/10 ring-1 ring-emerald-500/20">
+              <CheckCircle2 className="h-6 w-6 shrink-0 text-emerald-600" />
+              <div className="flex-1 min-w-0">
+                <p className="font-semibold text-[#0f172a]">Success</p>
+                <p className="text-xs text-emerald-700 mt-0.5">{success}</p>
+              </div>
+              <button
+                type="button"
+                onClick={() => setSuccess(null)}
+                className="text-[#94a3b8] hover:text-slate-600 text-xs font-bold ml-1"
+                aria-label="Dismiss"
+              >
+                ✕
+              </button>
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* Top Status Messages */}
       {error && (
         <div className="rounded-2xl border border-red-200 bg-red-50 p-4 text-sm font-medium text-[#e50914] shadow-sm animate-in fade-in">
           {error}
@@ -424,6 +462,55 @@ export default function SettingsPage() {
                     {showNewPass ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
                   </button>
                 </div>
+
+                {/* Strong password requirements hint matching red theme */}
+                <div className="mt-2 space-y-1">
+                  <p className="text-[11px] font-medium text-[#e50914] flex items-center gap-1">
+                    <span>●</span> Min 8 chars, 1 uppercase, 1 lowercase & 1 symbol
+                  </p>
+                  <div className="flex flex-wrap gap-1.5 text-[10px]">
+                    <span
+                      className={cn(
+                        "inline-flex items-center gap-1 rounded-md px-2 py-0.5 font-medium transition-colors",
+                        newPassword.length >= 8
+                          ? "bg-emerald-50 text-emerald-600 border border-emerald-200"
+                          : "bg-red-50 text-[#e50914] border border-red-200/60"
+                      )}
+                    >
+                      {newPassword.length >= 8 ? "✓" : "●"} 8+ Chars
+                    </span>
+                    <span
+                      className={cn(
+                        "inline-flex items-center gap-1 rounded-md px-2 py-0.5 font-medium transition-colors",
+                        /[A-Z]/.test(newPassword)
+                          ? "bg-emerald-50 text-emerald-600 border border-emerald-200"
+                          : "bg-red-50 text-[#e50914] border border-red-200/60"
+                      )}
+                    >
+                      {/[A-Z]/.test(newPassword) ? "✓" : "●"} 1 Uppercase (A-Z)
+                    </span>
+                    <span
+                      className={cn(
+                        "inline-flex items-center gap-1 rounded-md px-2 py-0.5 font-medium transition-colors",
+                        /[a-z]/.test(newPassword)
+                          ? "bg-emerald-50 text-emerald-600 border border-emerald-200"
+                          : "bg-red-50 text-[#e50914] border border-red-200/60"
+                      )}
+                    >
+                      {/[a-z]/.test(newPassword) ? "✓" : "●"} 1 Lowercase (a-z)
+                    </span>
+                    <span
+                      className={cn(
+                        "inline-flex items-center gap-1 rounded-md px-2 py-0.5 font-medium transition-colors",
+                        /[^A-Za-z0-9]/.test(newPassword)
+                          ? "bg-emerald-50 text-emerald-600 border border-emerald-200"
+                          : "bg-red-50 text-[#e50914] border border-red-200/60"
+                      )}
+                    >
+                      {/[^A-Za-z0-9]/.test(newPassword) ? "✓" : "●"} 1 Symbol (!@#$)
+                    </span>
+                  </div>
+                </div>
               </div>
 
               <div>
@@ -451,6 +538,21 @@ export default function SettingsPage() {
             </div>
           </div>
         </div>
+
+        {/* ========================================================
+            INLINE STATUS FEEDBACK (Directly above Save button)
+        ======================================================== */}
+        {error && (
+          <div className="rounded-2xl border border-red-200 bg-red-50 p-4 text-sm font-medium text-[#e50914] shadow-sm animate-in fade-in">
+            {error}
+          </div>
+        )}
+        {success && (
+          <div className="flex items-center gap-3 rounded-2xl border border-emerald-200 bg-emerald-50 p-4 text-sm font-medium text-emerald-800 shadow-sm animate-in fade-in">
+            <CheckCircle2 className="h-5 w-5 shrink-0 text-emerald-600" />
+            <span>{success}</span>
+          </div>
+        )}
 
         {/* ========================================================
             SUBMIT / CANCEL BAR

@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
+import { createPortal } from "react-dom";
 import { useRouter } from "next/navigation";
 import {
   Check,
@@ -40,6 +41,11 @@ export function ProfileMenu() {
   const [helpOpen, setHelpOpen] = useState(false);
   const [signingOut, setSigningOut] = useState(false);
   const [copiedField, setCopiedField] = useState<string | null>(null);
+  const [mounted, setMounted] = useState(false);
+
+  useEffect(() => {
+    setMounted(true);
+  }, []);
 
   function handleCopy(text: string, field: string) {
     if (typeof navigator !== "undefined" && navigator.clipboard) {
@@ -125,11 +131,8 @@ export function ProfileMenu() {
         </div>
 
         <div className="hidden text-left lg:block">
-          <p className="max-w-[130px] truncate text-xs font-semibold text-[#0f172a] leading-tight">
+          <p className="max-w-[140px] truncate text-xs font-semibold text-[#0f172a] leading-tight">
             {profile.name || "Studio Admin"}
-          </p>
-          <p className="text-[10px] text-[#64748b] leading-tight">
-            {profile.provider === "google" ? "Google Connected" : "Admin"}
           </p>
         </div>
 
@@ -162,10 +165,6 @@ export function ProfileMenu() {
               <div className="min-w-0 flex-1">
                 <p className="truncate text-sm font-bold text-[#0f172a]">{profile.name}</p>
                 <p className="truncate text-xs text-[#64748b]">{profile.email}</p>
-                <span className="mt-1 inline-flex items-center gap-1 rounded-full bg-red-100 px-2 py-0.5 text-[9px] font-semibold text-[#e50914]">
-                  <ShieldCheck className="h-2.5 w-2.5" />
-                  {profile.provider === "google" ? "Google Verified" : "Admin Access"}
-                </span>
               </div>
             </div>
           </div>
@@ -217,16 +216,22 @@ export function ProfileMenu() {
       )}
 
       {/* ========================================================
-          HELP & SUPPORT MODAL (Matching User's Specified Design)
+          HELP & SUPPORT MODAL (Rendered via Portal to document.body)
       ======================================================== */}
-      {helpOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4 backdrop-blur-sm animate-in fade-in">
-          <div className="relative w-full max-w-[480px] overflow-hidden rounded-3xl bg-white shadow-2xl animate-in zoom-in-95">
+      {helpOpen && mounted && createPortal(
+        <div
+          className="fixed inset-0 z-[9999] flex items-center justify-center bg-black/60 p-4 backdrop-blur-sm animate-in fade-in"
+          onClick={() => setHelpOpen(false)}
+        >
+          <div
+            className="relative w-full max-w-[480px] max-h-[92vh] overflow-y-auto rounded-3xl bg-white shadow-2xl animate-in zoom-in-95"
+            onClick={(e) => e.stopPropagation()}
+          >
             {/* Gradient Header matching Zigmaa Photos red theme */}
             <div className="bg-gradient-to-r from-[#e50914] via-[#ee202c] to-[#ff3b4e] p-6 text-white relative">
               <div className="flex items-start justify-between">
                 <div className="flex items-center gap-3.5">
-                  <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-white/20 text-white shadow-inner backdrop-blur-sm">
+                  <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl bg-white/20 text-white shadow-inner backdrop-blur-sm">
                     <Headphones className="h-6 w-6" />
                   </div>
                   <div>
@@ -358,7 +363,8 @@ export function ProfileMenu() {
               </div>
             </div>
           </div>
-        </div>
+        </div>,
+        document.body
       )}
     </div>
   );

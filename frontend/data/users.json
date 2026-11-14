@@ -1,24 +1,17 @@
 [
   {
-    "id": "admin-seed-1",
+    "id": "admin-seed-4",
     "email": "massmaddy530@gmail.com",
-    "name": "Mass Maddy (Studio Admin)",
-    "passwordHash": "scrypt$16384$8$5$WHyZeot7L8+sJHzOxUuu4w==$O44VqRiQDMR/jO/74TIFjkQybd14EMvLhGkMA8VJFmc=",
+    "name": "Mass Maddy",
+    "passwordHash": "scrypt$16384$8$5$3lDOiyOND/ViqEfjFqZchw==$+2i86f3jGATMexT03gB5QPp68Zjceb7w4QxlI1O125c=",
     "role": "admin",
-    "createdAt": 1700000000000
+    "createdAt": 1700000000000,
+    "picture": "data:image/jpeg;base64,/9j/4AAQSkZJRgABAQEASABIAAD/2wBDAP//////////////////////////////////////////////////////////////////////////////////////wgALCAABAAEBAREA/8QAFBABAAAAAAAAAAAAAAAAAAAAAP/aAAgBAQABPxA="
   },
   {
     "id": "admin-seed-2",
     "email": "madhavansep28@gmail.com",
     "name": "Madhavan R (Studio Admin)",
-    "passwordHash": "scrypt$16384$8$5$3lDOiyOND/ViqEfjFqZchw==$+2i86f3jGATMexT03gB5QPp68Zjceb7w4QxlI1O125c=",
-    "role": "admin",
-    "createdAt": 1700000000000
-  },
-  {
-    "id": "admin-seed-3",
-    "email": "zigmaatech@gmail.com",
-    "name": "Zigmaa Tech",
     "passwordHash": "scrypt$16384$8$5$3lDOiyOND/ViqEfjFqZchw==$+2i86f3jGATMexT03gB5QPp68Zjceb7w4QxlI1O125c=",
     "role": "admin",
     "createdAt": 1700000000000
@@ -30,5 +23,34 @@
     "passwordHash": "scrypt$16384$8$5$3lDOiyOND/ViqEfjFqZchw==$+2i86f3jGATMexT03gB5QPp68Zjceb7w4QxlI1O125c=",
     "role": "admin",
     "createdAt": 1700000000000
+  },
+  {
+    "id": "usr_1794569852282_uyu1w",
+    "email": "testuser1@zigmaa.com",
+    "passwordHash": "scrypt$16384$8$5$zxsw02tsiyWyBVnliWPffw==$FoRT4gHVEc/ueBSciD5FyhDeSZZLuosl48hUBHaU4Wg=",
+    "name": "Test User",
+    "company": "Studio Test",
+    "contact": "9876543210",
+    "role": "user",
+    "createdAt": 1794569852282
+  },
+  {
+    "id": "admin-seed-3",
+    "email": "zigmaatech@gmail.com",
+    "name": "Zigmaa Tech officeal",
+    "passwordHash": "scrypt$16384$8$5$UVJtg1kXm9Rd7b33pgUuXg==$BAFl0FM67Z9f05qiwTuDQPDISbprvS5KvbHpnK3uq4o=",
+    "role": "admin",
+    "createdAt": 1700000000000,
+    "picture": ""
+  },
+  {
+    "id": "usr_1794633975994_8t4ik",
+    "email": "mdthoufiq0507@gmail.com",
+    "passwordHash": "scrypt$16384$8$5$3LQhimP+G1Tm4cT+g2bx8A==$VcxpLppdg2eygm6jOvqFvCp/LtjzvY7k3zsBUWQwhuY=",
+    "name": "Mohamed Thoufiq",
+    "company": "ggdjhgd",
+    "contact": "9600471080",
+    "role": "user",
+    "createdAt": 1794633975994
   }
 ]
