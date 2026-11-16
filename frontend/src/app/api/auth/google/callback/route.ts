@@ -69,9 +69,31 @@ export async function GET(req: NextRequest) {
 
   const next = escapeHtml(safeNextPath(tx.next));
   const html = `<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="robots" content="noindex">`
-    + `<meta http-equiv="refresh" content="0;url=${next}"><title>Signing in · Zigmaa Photos</title></head>`
-    + `<body style="font-family:system-ui,sans-serif;background:#ffffff;color:#0f172a;padding:2rem">`
-    + `<p>Signed in. <a href="${next}" style="color:#e50914">Continue to Zigmaa Photos</a></p></body></html>`;
+    + `<meta http-equiv="refresh" content="0;url=${next}">`
+    + `<title>Signing in · Zigmaa Photos</title>`
+    + `<script>try{window.location.replace("${next}");}catch(e){window.location.href="${next}";}</script>`
+    + `<style>`
+    + `* { box-sizing: border-box; margin: 0; padding: 0; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; }`
+    + `body { display: flex; align-items: center; justify-content: center; min-height: 100vh; background: #0f172a; color: #f8fafc; text-align: center; padding: 1.5rem; }`
+    + `.card { max-width: 400px; width: 100%; background: rgba(30, 41, 59, 0.7); border: 1px solid rgba(255,255,255,0.1); border-radius: 1.25rem; padding: 2.5rem 2rem; box-shadow: 0 25px 50px -12px rgba(0,0,0,0.5); backdrop-filter: blur(12px); }`
+    + `.spinner { width: 44px; height: 44px; border: 3px solid rgba(229,9,20,0.2); border-top-color: #e50914; border-radius: 50%; animation: spin 0.8s linear infinite; margin: 0 auto 1.5rem; }`
+    + `@keyframes spin { to { transform: rotate(360deg); } }`
+    + `h1 { font-size: 1.25rem; font-weight: 700; margin-bottom: 0.5rem; }`
+    + `p { font-size: 0.875rem; color: #94a3b8; margin-bottom: 1.5rem; }`
+    + `a { display: inline-block; background: #e50914; color: #ffffff; text-decoration: none; font-size: 0.875rem; font-weight: 600; padding: 0.625rem 1.25rem; border-radius: 0.5rem; transition: background 0.15s; }`
+    + `a:hover { background: #b80710; }`
+    + `</style>`
+    + `</head><body>`
+    + `<div class="card">`
+    + `<div class="spinner"></div>`
+    + `<h1>Signing you in...</h1>`
+    + `<p>Signed in. Taking you to your dashboard.</p>`
+    + `<a href="${next}">Continue to Zigmaa Photos</a>`
+    + `</div>`
+    + `<script>`
+    + `setTimeout(function(){ window.location.href = "${next}"; }, 100);`
+    + `</script>`
+    + `</body></html>`;
   const res = new NextResponse(html, { status: 200, headers: { "Content-Type": "text/html; charset=utf-8", ...NO_STORE } });
   res.cookies.delete(LEGACY_SESSION_COOKIE);
   res.cookies.set(SESSION_COOKIE, await createSessionToken(auth, SESSION_MAX_AGE_S), {
