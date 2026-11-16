@@ -40,14 +40,28 @@ export interface TemplateDesignerModalProps {
 }
 
 export type TemplatePreset =
-  | "classic-arched-banner" // Flat background with curved top arch & classic typography (Exact Image 2 match!)
   | "minimalist-straight-banner" // Clean flat horizontal bar with gold accent line
-  | "royal-crest" // Luxury heraldic monogram crest
-  | "botanical-wreath" // Refined symmetrical laurel wreath
   | "transparent-signature"; // Transparent luxury script watermark
 
+export type SupportedFontFamily =
+  | "Playfair Display"
+  | "Cormorant Garamond"
+  | "Bodoni Moda"
+  | "Prata"
+  | "Cinzel"
+  | "Cinzel Decorative"
+  | "Marcellus"
+  | "Great Vibes"
+  | "Alex Brush"
+  | "Parisienne"
+  | "Italianno"
+  | "Pinyon Script"
+  | "Allura"
+  | "Dancing Script"
+  | "Montserrat";
+
 const GOOGLE_FONTS_DEF = `
-@import url('https://fonts.googleapis.com/css2?family=Alex+Brush&family=Cinzel:wght@400;600;700&family=Cormorant+Garamond:ital,wght@0,500;0,600;0,700;1,400;1,600;1,700&family=Great+Vibes&family=Montserrat:wght@400;500;600;700&family=Playfair+Display:ital,wght@0,400;0,600;0,700;1,400;1,600;1,700&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Alex+Brush&family=Allura&family=Bodoni+Moda:ital,opsz,wght@0,6..96,400..700;1,6..96,400..700&family=Cinzel+Decorative:wght@700&family=Cinzel:wght@400;600;700&family=Cormorant+Garamond:ital,wght@0,500;0,600;0,700;1,400;1,600;1,700&family=Dancing+Script:wght@600;700&family=Great+Vibes&family=Italianno&family=Marcellus&family=Montserrat:wght@400;500;600;700&family=Parisienne&family=Pinyon+Script&family=Playfair+Display:ital,wght@0,400;0,600;0,700;1,400;1,600;1,700&family=Prata&display=swap');
 `;
 
 function getRenderedCustomSvg(
@@ -159,8 +173,8 @@ export function TemplateDesignerModal({
   defaultEventName = "",
   defaultEventDate = "",
 }: TemplateDesignerModalProps) {
-  // Preset selection
-  const [preset, setPreset] = useState<TemplatePreset>("classic-arched-banner");
+  // Preset selection - Default to Straight Flat Banner
+  const [preset, setPreset] = useState<TemplatePreset>("minimalist-straight-banner");
 
   // Text content
   const [subtitle, setSubtitle] = useState("THE WEDDING OF");
@@ -169,28 +183,23 @@ export function TemplateDesignerModal({
   const [venueText, setVenueText] = useState("The Grand Palace, Chennai");
 
   // Typography options
-  const [fontFamily, setFontFamily] = useState<
-    "Playfair Display" | "Cormorant Garamond" | "Cinzel" | "Great Vibes" | "Alex Brush" | "Montserrat"
-  >("Playfair Display");
+  const [fontFamily, setFontFamily] = useState<SupportedFontFamily>("Playfair Display");
   const [isItalic, setIsItalic] = useState(true);
 
   // Font size sliders with high, realistic pixel ranges for 1200px vector canvas
   const [namesFontSize, setNamesFontSize] = useState(82); // px (45 - 130)
   const [subtitleFontSize, setSubtitleFontSize] = useState(20); // px (12 - 36)
   const [dateFontSize, setDateFontSize] = useState(18); // px (12 - 32)
-  const [letterSpacing, setLetterSpacing] = useState(5); // px (0 - 14)
-  const [arcHeight, setArcHeight] = useState(45); // px (0 flat - 65 deep curve)
 
   // Colors
-  const [bgColor, setBgColor] = useState("#faf6ee"); // Flat Warm Ivory Cream (Exact Image 2 match)
-  const [textColor, setTextColor] = useState("#581c25"); // Deep Burgundy / Wine (Exact Image 2 match)
+  const [bgColor, setBgColor] = useState("#faf6ee"); // Flat Warm Ivory Cream
+  const [textColor, setTextColor] = useState("#581c25"); // Deep Burgundy / Wine
   const [borderColor] = useState("#c49b66"); // Subtle Luxury Gold Border
 
   // Toggles
-  const [showBorder, setShowBorder] = useState(true);
-  const [showCalendarIcon, setShowCalendarIcon] = useState(true);
-  const [showDividers, setShowDividers] = useState(true);
-  const [showVenue, setShowVenue] = useState(false);
+  const [showBorder] = useState(true);
+  const [showDividers] = useState(true);
+  const [showVenue] = useState(false);
 
   // Gemini AI Prompt Bar state
   const toast = useToast();
@@ -206,7 +215,7 @@ export function TemplateDesignerModal({
   const [themeName, setThemeName] = useState<string>("");
   const customContainerRef = useRef<HTMLDivElement>(null);
 
-  // Handle AI Template Generation with Gemini
+  // Handle AI Template Generation with Gemini / OpenAI
   async function handleAiGenerate(promptToUse?: string) {
     const text = (promptToUse ?? aiPrompt).trim();
     if (!text) {
@@ -230,31 +239,26 @@ export function TemplateDesignerModal({
           if (data.subtitle) setSubtitle(data.subtitle);
           if (data.dateText) setDateText(data.dateText);
           if (data.venueText) setVenueText(data.venueText);
-          if (data.fontFamily) setFontFamily(data.fontFamily);
+          if (data.fontFamily) setFontFamily(data.fontFamily as SupportedFontFamily);
           if (data.textColor) setTextColor(data.textColor);
           if (data.bgColor) setBgColor(data.bgColor);
           toast.success("AI Graphic Generated!", `Custom ${data.themeName || "template"} created for "${data.names || text}"`);
         } else if (data.template) {
           const t = data.template;
           setIsCustomAi(false);
-          if (t.preset) setPreset(t.preset);
+          if (t.preset === "transparent-signature") setPreset("transparent-signature");
+          else setPreset("minimalist-straight-banner");
           if (t.subtitle) setSubtitle(t.subtitle);
           if (t.names) setNames(t.names);
           if (t.dateText) setDateText(t.dateText);
           if (t.venueText) setVenueText(t.venueText);
-          if (t.fontFamily) setFontFamily(t.fontFamily);
+          if (t.fontFamily) setFontFamily(t.fontFamily as SupportedFontFamily);
           if (typeof t.isItalic === "boolean") setIsItalic(t.isItalic);
           if (typeof t.namesFontSize === "number") setNamesFontSize(t.namesFontSize);
           if (typeof t.subtitleFontSize === "number") setSubtitleFontSize(t.subtitleFontSize);
           if (typeof t.dateFontSize === "number") setDateFontSize(t.dateFontSize);
-          if (typeof t.letterSpacing === "number") setLetterSpacing(t.letterSpacing);
-          if (typeof t.arcHeight === "number") setArcHeight(t.arcHeight);
           if (t.bgColor) setBgColor(t.bgColor);
           if (t.textColor) setTextColor(t.textColor);
-          if (typeof t.showBorder === "boolean") setShowBorder(t.showBorder);
-          if (typeof t.showCalendarIcon === "boolean") setShowCalendarIcon(t.showCalendarIcon);
-          if (typeof t.showDividers === "boolean") setShowDividers(t.showDividers);
-          if (typeof t.showVenue === "boolean") setShowVenue(t.showVenue);
 
           toast.success("AI Template Generated!", `Design updated for "${t.names}"`);
         }
@@ -303,7 +307,7 @@ export function TemplateDesignerModal({
 
     try {
       const width = parseInt(svgElement.getAttribute("width") || "1200", 10);
-      const height = parseInt(svgElement.getAttribute("height") || "320", 10);
+      const height = parseInt(svgElement.getAttribute("height") || "240", 10);
 
       const svgClone = svgElement.cloneNode(true) as SVGSVGElement;
       svgClone.setAttribute("width", String(width));
@@ -315,7 +319,6 @@ export function TemplateDesignerModal({
 
       const img = new Image();
       img.onload = () => {
-        // High-res canvas 2x scale for ultra crisp watermark
         const scale = 2;
         const canvas = document.createElement("canvas");
         canvas.width = width * scale;
@@ -323,83 +326,106 @@ export function TemplateDesignerModal({
         const ctx = canvas.getContext("2d");
         if (!ctx) return;
 
-        ctx.clearRect(0, 0, canvas.width, canvas.height);
-        ctx.scale(scale, scale);
-        ctx.drawImage(img, 0, 0);
+        ctx.imageSmoothingEnabled = true;
+        ctx.imageSmoothingQuality = "high";
+        ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
 
+        canvas.toBlob(
+          (blob) => {
+            URL.revokeObjectURL(blobUrl);
+            if (!blob) {
+              toast.error("Render failed", "Could not export template bitmap.");
+              return;
+            }
+
+            const file = new File([blob], "custom-template-watermark.png", {
+              type: "image/png",
+            });
+            const dataUrl = canvas.toDataURL("image/png");
+
+            const result: GeneratedTemplateResult = {
+              id: `tpl-${Date.now()}`,
+              name: isCustomAi
+                ? `AI Template (${themeName || "Custom"})`
+                : preset === "minimalist-straight-banner"
+                ? "Straight Flat Banner"
+                : "Transparent Signature",
+              preview: dataUrl,
+              dataUrl,
+              sizeBytes: blob.size,
+              file,
+              xPercent: 50,
+              yPercent: 88,
+              sizePercent: 100,
+              opacity: 100,
+            };
+
+            onApplyTemplate(result);
+            toast.success(
+              "Template Applied!",
+              "Your high-resolution vector watermark is now attached to this event."
+            );
+            onClose();
+          },
+          "image/png",
+          1.0
+        );
+      };
+
+      img.onerror = () => {
         URL.revokeObjectURL(blobUrl);
-
-        canvas.toBlob((pngBlob) => {
-          if (!pngBlob) return;
-          const dataUrl = canvas.toDataURL("image/png");
-          const safeName = names.replace(/[^a-zA-Z0-9]/g, "_").toLowerCase() || "template";
-          const file = new File([pngBlob], `template_${safeName}.png`, { type: "image/png" });
-          const id = `tpl_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`;
-
-          const isBanner = isCustomAi || preset === "classic-arched-banner" || preset === "minimalist-straight-banner";
-          onApplyTemplate({
-            id,
-            name: `${names} (${isCustomAi ? (themeName || "AI Artwork") : (preset === "classic-arched-banner" ? "Arched Banner" : preset)})`,
-            preview: dataUrl,
-            dataUrl,
-            sizeBytes: pngBlob.size,
-            file,
-            xPercent: 50, // Center aligned
-            yPercent: isBanner ? 90 : 85, // Placed on bottom of photo
-            sizePercent: isBanner ? 88 : 28, // Wide banner across bottom of image
-            opacity: 1.0, // Solid crisp banner
-          });
-
-          onClose();
-        }, "image/png");
+        toast.error("Export failed", "Failed to rasterize SVG design.");
       };
 
       img.src = blobUrl;
     } catch (err) {
-      console.error("Failed to export template PNG", err);
+      console.error("Export error:", err);
+      toast.error("Export failed", "Could not process template watermark.");
     }
   }
 
-  if (!isOpen) return null;
-
   return (
     <Modal open={isOpen} onClose={onClose} size="xl" bare>
-      <div className="relative w-full max-h-[92vh] flex flex-col rounded-2xl bg-white shadow-2xl overflow-hidden border border-line">
-        {/* Header */}
+      <div className="relative w-full max-h-[92vh] flex flex-col bg-surface border border-line rounded-2xl shadow-2xl overflow-hidden">
+        {/* Modal Header */}
         <div className="flex items-center justify-between border-b border-line px-6 py-4 bg-canvas/40 shrink-0">
-          <div className="flex items-center gap-2.5">
-            <div className="grid h-9 w-9 place-items-center rounded-xl bg-brand-50 text-brand-600 border border-brand-200">
+          <div className="flex items-center gap-3">
+            <div className="grid h-10 w-10 place-items-center rounded-xl bg-brand-50 border border-brand-200 text-brand-600">
               <Palette className="h-5 w-5" />
             </div>
             <div>
-              <h2 className="text-lg font-bold text-ink">Customize Template</h2>
+              <h2 className="text-base font-bold text-ink">Customize Template</h2>
               <p className="text-xs text-muted">
-                Design classic flat banners or watermark templates with custom fonts, colors, and layout.
+                Design classic flat banners or transparent watermark templates with custom fonts and colors.
               </p>
             </div>
           </div>
           <button
             type="button"
             onClick={onClose}
-            className="grid h-8 w-8 place-items-center rounded-lg text-muted hover:bg-canvas hover:text-ink transition-colors cursor-pointer"
+            aria-label="Close modal"
+            className="grid h-8 w-8 place-items-center rounded-lg text-muted hover:text-ink hover:bg-canvas transition-colors cursor-pointer"
           >
             <X className="h-4 w-4" />
           </button>
         </div>
 
-        {/* Gemini AI Prompt Bar */}
-        <div className="px-6 py-2.5 border-b border-line bg-gradient-to-r from-amber-50/60 via-brand-50/40 to-surface shrink-0 space-y-2">
-          <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2">
+        {/* AI Template Prompt Bar */}
+        <div className="border-b border-line bg-gradient-to-r from-brand-50/70 via-surface to-amber-50/50 px-6 py-3 space-y-2 shrink-0">
+          <div className="flex items-center gap-2">
             <div className="relative flex-1">
-              <div className="pointer-events-none absolute inset-y-0 left-0 flex items-center pl-3 text-brand-600">
-                <Sparkles className="h-4 w-4" />
-              </div>
+              <Sparkles className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-brand-500" />
               <input
                 type="text"
                 value={aiPrompt}
                 onChange={(e) => setAiPrompt(e.target.value)}
-                onKeyDown={(e) => e.key === "Enter" && handleAiGenerate()}
-                placeholder="Describe your template: e.g. Royal maroon & gold wedding banner for Arun & Keerthana 14 Feb 2026 Chennai..."
+                onKeyDown={(e) => {
+                  if (e.key === "Enter" && !isGenerating) {
+                    e.preventDefault();
+                    handleAiGenerate();
+                  }
+                }}
+                placeholder="Ask AI to generate any template (e.g. background bubble template, flowers, balloons, luxury banner)..."
                 className="w-full rounded-xl border border-brand-200 bg-white pl-9 pr-3 py-1.5 text-xs text-ink placeholder:text-muted/65 focus:outline-none focus:ring-2 focus:ring-brand-500/20 focus:border-brand-500 shadow-2xs"
               />
             </div>
@@ -431,8 +457,7 @@ export function TemplateDesignerModal({
               "Background bubble template for Rithvik birthday 17-11-2026",
               "Flower template with elegant roses for Naveen & Meera wedding 24 Dec 2026",
               "Festive party balloons with confetti for Birthday Celebration",
-              "Royal maroon and gold wedding banner for Arun & Keerthana 14 Feb 2026",
-              "Classic ivory arched banner for Naveen & Meera 22 August 2026 Jaipur",
+              "Straight flat ivory banner for Arun & Keerthana 14 Feb 2026",
               "Transparent gold calligraphy signature watermark",
             ].map((p) => (
               <button
@@ -469,8 +494,7 @@ export function TemplateDesignerModal({
             <div
               className="relative w-full max-w-lg aspect-[16/10] rounded-2xl border border-line flex flex-col justify-end overflow-hidden shadow-inner bg-[repeating-conic-gradient(#f0eee9_0%_25%,#ffffff_0%_50%)] bg-[length:14px_14px]"
             >
-
-              {/* RENDERED SVG TEMPLATES (Positioned along bottom just like final photo) */}
+              {/* RENDERED SVG TEMPLATES */}
               <div className="relative z-10 w-full flex items-end justify-center p-2">
                 {isCustomAi && customSvgRaw ? (
                   <div
@@ -493,30 +517,6 @@ export function TemplateDesignerModal({
                   />
                 ) : (
                   <>
-                    {preset === "classic-arched-banner" && (
-                      <ClassicArchedBannerSVG
-                        ref={svgRef}
-                        subtitle={subtitle}
-                        names={names}
-                        dateText={dateText}
-                        venueText={venueText}
-                        fontFamily={fontFamily}
-                        isItalic={isItalic}
-                        namesFontSize={namesFontSize}
-                        subtitleFontSize={subtitleFontSize}
-                        dateFontSize={dateFontSize}
-                        letterSpacing={letterSpacing}
-                        arcHeight={arcHeight}
-                        bgColor={bgColor}
-                        textColor={textColor}
-                        borderColor={borderColor}
-                        showBorder={showBorder}
-                        showCalendarIcon={showCalendarIcon}
-                        showDividers={showDividers}
-                        showVenue={showVenue}
-                      />
-                    )}
-
                     {preset === "minimalist-straight-banner" && (
                       <MinimalistStraightBannerSVG
                         ref={svgRef}
@@ -529,44 +529,12 @@ export function TemplateDesignerModal({
                         namesFontSize={namesFontSize}
                         subtitleFontSize={subtitleFontSize}
                         dateFontSize={dateFontSize}
-                        letterSpacing={letterSpacing}
                         bgColor={bgColor}
                         textColor={textColor}
                         borderColor={borderColor}
                         showBorder={showBorder}
-                        showCalendarIcon={showCalendarIcon}
                         showDividers={showDividers}
                         showVenue={showVenue}
-                      />
-                    )}
-
-                    {preset === "royal-crest" && (
-                      <RoyalCrestSVG
-                        ref={svgRef}
-                        subtitle={subtitle}
-                        names={names}
-                        dateText={dateText}
-                        fontFamily={fontFamily}
-                        namesFontSize={namesFontSize}
-                        subtitleFontSize={subtitleFontSize}
-                        dateFontSize={dateFontSize}
-                        textColor={textColor}
-                        borderColor={borderColor}
-                      />
-                    )}
-
-                    {preset === "botanical-wreath" && (
-                      <BotanicalWreathSVG
-                        ref={svgRef}
-                        subtitle={subtitle}
-                        names={names}
-                        dateText={dateText}
-                        fontFamily={fontFamily}
-                        namesFontSize={namesFontSize}
-                        subtitleFontSize={subtitleFontSize}
-                        dateFontSize={dateFontSize}
-                        textColor={textColor}
-                        borderColor={borderColor}
                       />
                     )}
 
@@ -581,7 +549,6 @@ export function TemplateDesignerModal({
                         namesFontSize={namesFontSize}
                         subtitleFontSize={subtitleFontSize}
                         dateFontSize={dateFontSize}
-                        letterSpacing={letterSpacing}
                         textColor={textColor}
                         showDividers={showDividers}
                       />
@@ -622,7 +589,7 @@ export function TemplateDesignerModal({
               </div>
             )}
 
-            {/* 1. Template Presets */}
+            {/* 1. Template Presets (Straight Flat & Transparent Only) */}
             <div>
               <label className="text-xs font-bold uppercase tracking-wider text-muted flex items-center gap-1.5 mb-2">
                 <Layers className="h-3.5 w-3.5 text-brand-600" />
@@ -634,30 +601,11 @@ export function TemplateDesignerModal({
                   type="button"
                   onClick={() => {
                     setIsCustomAi(false);
-                    setPreset("classic-arched-banner");
-                    setBgColor("#faf6ee");
-                    setTextColor("#581c25");
-                    setIsItalic(true);
-                  }}
-                  className={`flex flex-col text-left p-2.5 rounded-xl border transition-all cursor-pointer ${
-                    !isCustomAi && preset === "classic-arched-banner"
-                      ? "border-brand-500 bg-brand-50/50 ring-1 ring-brand-500 shadow-xs"
-                      : "border-line bg-surface hover:border-brand-300"
-                  }`}
-                >
-                  <span className="text-xs font-bold text-ink">Classic Arched Banner</span>
-                  <span className="text-[10px] text-muted mt-0.5">Flat cream curved bottom card (Photo match)</span>
-                </button>
-
-                <button
-                  type="button"
-                  onClick={() => {
-                    setIsCustomAi(false);
                     setPreset("minimalist-straight-banner");
                     setBgColor("#faf6ee");
                     setTextColor("#581c25");
                   }}
-                  className={`flex flex-col text-left p-2.5 rounded-xl border transition-all cursor-pointer ${
+                  className={`flex flex-col text-left p-3 rounded-xl border transition-all cursor-pointer ${
                     !isCustomAi && preset === "minimalist-straight-banner"
                       ? "border-brand-500 bg-brand-50/50 ring-1 ring-brand-500 shadow-xs"
                       : "border-line bg-surface hover:border-brand-300"
@@ -671,28 +619,12 @@ export function TemplateDesignerModal({
                   type="button"
                   onClick={() => {
                     setIsCustomAi(false);
-                    setPreset("royal-crest");
-                    setTextColor("#dfb15b");
-                  }}
-                  className={`flex flex-col text-left p-2.5 rounded-xl border transition-all cursor-pointer ${
-                    !isCustomAi && preset === "royal-crest"
-                      ? "border-brand-500 bg-brand-50/50 ring-1 ring-brand-500 shadow-xs"
-                      : "border-line bg-surface hover:border-brand-300"
-                  }`}
-                >
-                  <span className="text-xs font-bold text-ink">Royal Monogram Crest</span>
-                  <span className="text-[10px] text-muted mt-0.5">Luxury heraldic shield with initials</span>
-                </button>
-
-                <button
-                  type="button"
-                  onClick={() => {
-                    setIsCustomAi(false);
                     setPreset("transparent-signature");
+                    setBgColor("transparent");
                     setTextColor("#ffffff");
                     setIsItalic(true);
                   }}
-                  className={`flex flex-col text-left p-2.5 rounded-xl border transition-all cursor-pointer ${
+                  className={`flex flex-col text-left p-3 rounded-xl border transition-all cursor-pointer ${
                     !isCustomAi && preset === "transparent-signature"
                       ? "border-brand-500 bg-brand-50/50 ring-1 ring-brand-500 shadow-xs"
                       : "border-line bg-surface hover:border-brand-300"
@@ -777,19 +709,35 @@ export function TemplateDesignerModal({
                 </button>
               </div>
 
+              {/* Font Family Selection with Expanded Luxury & Script Fonts */}
               <div>
                 <span className="text-[11px] font-medium text-muted block mb-1">Font Family</span>
                 <select
                   value={fontFamily}
-                  onChange={(e) => setFontFamily(e.target.value as typeof fontFamily)}
+                  onChange={(e) => setFontFamily(e.target.value as SupportedFontFamily)}
                   className="w-full rounded-lg border border-line bg-surface px-3 py-1.5 text-xs text-ink focus:outline-none focus:ring-1 focus:ring-brand-500 cursor-pointer"
                 >
-                  <option value="Playfair Display">Playfair Display (Classic Luxury Wedding Serif - Photo match)</option>
-                  <option value="Cormorant Garamond">Cormorant Garamond (Royal Elegant Serif)</option>
-                  <option value="Cinzel">Cinzel (Imperial Roman Serif)</option>
-                  <option value="Great Vibes">Great Vibes (Graceful Flowing Calligraphy)</option>
-                  <option value="Alex Brush">Alex Brush (Delicate Luxury Script)</option>
-                  <option value="Montserrat">Montserrat (Clean Modern Sans)</option>
+                  <optgroup label="Luxury Classical Serifs">
+                    <option value="Playfair Display">Playfair Display (Classic Luxury Wedding Serif)</option>
+                    <option value="Cormorant Garamond">Cormorant Garamond (Royal Classical Serif)</option>
+                    <option value="Bodoni Moda">Bodoni Moda (High Fashion Vogue Serif)</option>
+                    <option value="Prata">Prata (Refined Elegant Didone Serif)</option>
+                    <option value="Cinzel">Cinzel (Imperial Roman Serif)</option>
+                    <option value="Cinzel Decorative">Cinzel Decorative (Ornate Classical Display)</option>
+                    <option value="Marcellus">Marcellus (Subtle Flare Roman Serif)</option>
+                  </optgroup>
+                  <optgroup label="Elegant Calligraphy & Scripts">
+                    <option value="Great Vibes">Great Vibes (Graceful Flowing Calligraphy)</option>
+                    <option value="Alex Brush">Alex Brush (Delicate Luxury Script)</option>
+                    <option value="Parisienne">Parisienne (Romantic French Cursive)</option>
+                    <option value="Italianno">Italianno (Slanted Elegant Flourish)</option>
+                    <option value="Pinyon Script">Pinyon Script (Vintage French Calligraphy)</option>
+                    <option value="Allura">Allura (Soft Ribbon Calligraphy)</option>
+                    <option value="Dancing Script">Dancing Script (Casual Lively Script)</option>
+                  </optgroup>
+                  <optgroup label="Modern Sans-Serif">
+                    <option value="Montserrat">Montserrat (Clean Minimalist Sans)</option>
+                  </optgroup>
                 </select>
               </div>
 
@@ -858,40 +806,6 @@ export function TemplateDesignerModal({
                     className="w-full accent-brand-500 h-1.5 bg-line rounded-lg cursor-pointer"
                   />
                 </div>
-
-                {/* Letter Spacing */}
-                <div>
-                  <div className="flex items-center justify-between text-[11px] text-muted mb-1">
-                    <span>Letter Spacing</span>
-                    <span className="font-mono text-ink font-semibold">{letterSpacing}px</span>
-                  </div>
-                  <input
-                    type="range"
-                    min={0}
-                    max={14}
-                    value={letterSpacing}
-                    onChange={(e) => setLetterSpacing(Number(e.target.value))}
-                    className="w-full accent-brand-500 h-1.5 bg-line rounded-lg cursor-pointer"
-                  />
-                </div>
-
-                {/* Top Curve Arch Height (for arched banner) */}
-                {preset === "classic-arched-banner" && (
-                  <div>
-                    <div className="flex items-center justify-between text-[11px] text-muted mb-1">
-                      <span>Top Arch Curve Height</span>
-                      <span className="font-mono text-ink font-semibold">{arcHeight}px</span>
-                    </div>
-                    <input
-                      type="range"
-                      min={0}
-                      max={65}
-                      value={arcHeight}
-                      onChange={(e) => setArcHeight(Number(e.target.value))}
-                      className="w-full accent-brand-500 h-1.5 bg-line rounded-lg cursor-pointer"
-                    />
-                  </div>
-                )}
               </div>
             </div>
 
@@ -1014,9 +928,8 @@ export function TemplateDesignerModal({
               setNamesFontSize(82);
               setSubtitleFontSize(20);
               setDateFontSize(18);
-              setLetterSpacing(5);
-              setArcHeight(45);
-              setPreset("classic-arched-banner");
+              setPreset("minimalist-straight-banner");
+              setIsCustomAi(false);
             }}
             className="inline-flex items-center gap-1.5 text-xs text-muted hover:text-ink transition-colors cursor-pointer"
           >
@@ -1044,9 +957,10 @@ export function TemplateDesignerModal({
 }
 
 // ------------------------------------------------------------------------------------------------
-// 1. CLASSIC ARCHED BOTTOM BANNER (PHOTO MATCH - IMAGE 2)
+// 1. STRAIGHT FLAT BANNER (Clean, horizontal bottom bar with gold accent line & NO calendar icon)
 // ------------------------------------------------------------------------------------------------
-interface ClassicArchedBannerSVGProps {
+interface MinimalistStraightBannerSVGProps {
+  ref: React.RefObject<SVGSVGElement | null>;
   subtitle: string;
   names: string;
   dateText: string;
@@ -1056,208 +970,14 @@ interface ClassicArchedBannerSVGProps {
   namesFontSize: number;
   subtitleFontSize: number;
   dateFontSize: number;
-  letterSpacing: number;
-  arcHeight?: number;
   bgColor: string;
   textColor: string;
-  borderColor: string;
-  showBorder: boolean;
-  showCalendarIcon: boolean;
-  showDividers: boolean;
-  showVenue: boolean;
+  borderColor?: string;
+  showBorder?: boolean;
+  showDividers?: boolean;
+  showVenue?: boolean;
 }
 
-const ClassicArchedBannerSVG = ({
-  ref,
-  subtitle,
-  names,
-  dateText,
-  venueText,
-  fontFamily,
-  isItalic,
-  namesFontSize,
-  subtitleFontSize,
-  dateFontSize,
-  letterSpacing,
-  arcHeight = 45,
-  bgColor,
-  textColor,
-  borderColor,
-  showBorder,
-  showCalendarIcon,
-  showDividers,
-  showVenue,
-}: ClassicArchedBannerSVGProps & { ref: React.RefObject<SVGSVGElement | null> }) => {
-  const bannerHeight = 280;
-  const topY = 60 - arcHeight;
-  const subtitleY = Math.max(topY + 36, 52);
-  const namesY = subtitleY + namesFontSize * 0.95;
-  const dateY = namesY + 44;
-  const venueY = dateY + 28;
-
-  const fontStack = `'${fontFamily}', 'Playfair Display', 'Cormorant Garamond', Georgia, serif`;
-
-  return (
-    <svg
-      ref={ref}
-      xmlns="http://www.w3.org/2000/svg"
-      viewBox={`0 0 1200 ${bannerHeight}`}
-      width="1200"
-      height={bannerHeight}
-      className="max-h-[260px] w-auto max-w-full drop-shadow-md"
-      style={{ overflow: "visible" }}
-    >
-      <defs>
-        <style>{GOOGLE_FONTS_DEF}</style>
-      </defs>
-
-      {/* Flat Background Card with Curved Top Arch (Exact Image 2 match) */}
-      {bgColor !== "transparent" && (
-        <path
-          d={`M 0,60 Q 600,${topY} 1200,60 L 1200,${bannerHeight} L 0,${bannerHeight} Z`}
-          fill={bgColor}
-        />
-      )}
-
-      {/* Curved Double Hairline Border along top arch */}
-      {showBorder && (
-        <g stroke={borderColor || textColor} fill="none">
-          {/* Outer primary arch hairline */}
-          <path
-            d={`M 0,60 Q 600,${topY} 1200,60`}
-            strokeWidth="1.8"
-            opacity="0.85"
-          />
-          {/* Inner secondary hairline */}
-          <path
-            d={`M 0,64 Q 600,${topY + 4} 1200,64`}
-            strokeWidth="1"
-            opacity="0.45"
-          />
-        </g>
-      )}
-
-      {/* 1. Subtitle: THE WEDDING OF */}
-      <text
-        x="600"
-        y={subtitleY}
-        textAnchor="middle"
-        fill={textColor}
-        style={{
-          fontFamily: "'Cinzel', 'Playfair Display', Georgia, serif",
-          fontSize: `${subtitleFontSize}px`,
-          letterSpacing: `${letterSpacing}px`,
-          fontWeight: 600,
-          opacity: 0.9,
-        }}
-      >
-        {subtitle.toUpperCase()}
-      </text>
-
-      {/* 2. Couple Names: Arun & Keerthana */}
-      <text
-        x="600"
-        y={namesY}
-        textAnchor="middle"
-        fill={textColor}
-        style={{
-          fontFamily: fontStack,
-          fontSize: `${namesFontSize}px`,
-          fontStyle: isItalic ? "italic" : "normal",
-          fontWeight: isItalic ? 500 : 600,
-        }}
-      >
-        {names}
-      </text>
-
-      {/* 3. Date Row with Calendar Icon and Hairline Dividers: ─── 🗓 14 FEBRUARY 2026 ─── */}
-      <g fill={textColor}>
-        {showDividers && (
-          <line
-            x1="360"
-            y1={dateY - 5}
-            x2={showCalendarIcon ? "470" : "510"}
-            y2={dateY - 5}
-            stroke={textColor}
-            strokeWidth="1"
-            opacity="0.4"
-          />
-        )}
-
-        {showCalendarIcon && (
-          <g
-            transform={`translate(488, ${dateY - 17}) scale(0.95)`}
-            fill="none"
-            stroke={textColor}
-            strokeWidth="1.6"
-            strokeLinecap="round"
-            strokeLinejoin="round"
-            opacity="0.85"
-          >
-            <rect x="0" y="3" width="16" height="15" rx="2.5" />
-            <line x1="0" y1="8" x2="16" y2="8" />
-            <line x1="4" y1="0.5" x2="4" y2="4.5" />
-            <line x1="12" y1="0.5" x2="12" y2="4.5" />
-            <circle cx="5" cy="12" r="0.8" fill={textColor} />
-            <circle cx="8" cy="12" r="0.8" fill={textColor} />
-            <circle cx="11" cy="12" r="0.8" fill={textColor} />
-          </g>
-        )}
-
-        <text
-          x="600"
-          y={dateY}
-          textAnchor="middle"
-          fill={textColor}
-          style={{
-            fontFamily: "'Cinzel', 'Playfair Display', Georgia, serif",
-            fontSize: `${dateFontSize}px`,
-            letterSpacing: "3px",
-            fontWeight: 600,
-            opacity: 0.95,
-          }}
-        >
-          {dateText.toUpperCase()}
-        </text>
-
-        {showDividers && (
-          <line
-            x1={showCalendarIcon ? "730" : "690"}
-            y1={dateY - 5}
-            x2="840"
-            y2={dateY - 5}
-            stroke={textColor}
-            strokeWidth="1"
-            opacity="0.4"
-          />
-        )}
-      </g>
-
-      {/* 4. Optional Venue Tagline */}
-      {showVenue && venueText && (
-        <text
-          x="600"
-          y={venueY}
-          textAnchor="middle"
-          fill={textColor}
-          style={{
-            fontFamily: "'Montserrat', sans-serif",
-            fontSize: "13px",
-            letterSpacing: "2.5px",
-            fontWeight: 500,
-            opacity: 0.75,
-          }}
-        >
-          {venueText.toUpperCase()}
-        </text>
-      )}
-    </svg>
-  );
-};
-
-// ------------------------------------------------------------------------------------------------
-// 2. MINIMALIST STRAIGHT BANNER
-// ------------------------------------------------------------------------------------------------
 const MinimalistStraightBannerSVG = ({
   ref,
   subtitle,
@@ -1269,15 +989,13 @@ const MinimalistStraightBannerSVG = ({
   namesFontSize,
   subtitleFontSize,
   dateFontSize,
-  letterSpacing,
   bgColor,
   textColor,
   borderColor,
-  showBorder,
-  showCalendarIcon,
-  showDividers,
-  showVenue,
-}: ClassicArchedBannerSVGProps & { ref: React.RefObject<SVGSVGElement | null> }) => {
+  showBorder = true,
+  showDividers = true,
+  showVenue = false,
+}: MinimalistStraightBannerSVGProps) => {
   const bannerHeight = 240;
   const subtitleY = 55;
   const namesY = subtitleY + namesFontSize * 0.95;
@@ -1299,7 +1017,7 @@ const MinimalistStraightBannerSVG = ({
       </defs>
 
       {bgColor !== "transparent" && (
-        <rect x="0" y="0" width="1200" height={bannerHeight} fill={bgColor} />
+        <rect id="svg-bg" x="0" y="0" width="1200" height={bannerHeight} fill={bgColor} />
       )}
 
       {showBorder && (
@@ -1310,6 +1028,7 @@ const MinimalistStraightBannerSVG = ({
       )}
 
       <text
+        id="svg-subtitle"
         x="600"
         y={subtitleY}
         textAnchor="middle"
@@ -1317,7 +1036,7 @@ const MinimalistStraightBannerSVG = ({
         style={{
           fontFamily: "'Cinzel', 'Playfair Display', Georgia, serif",
           fontSize: `${subtitleFontSize}px`,
-          letterSpacing: `${letterSpacing}px`,
+          letterSpacing: "4px",
           fontWeight: 600,
           opacity: 0.9,
         }}
@@ -1326,6 +1045,7 @@ const MinimalistStraightBannerSVG = ({
       </text>
 
       <text
+        id="svg-names"
         x="600"
         y={namesY}
         textAnchor="middle"
@@ -1342,15 +1062,10 @@ const MinimalistStraightBannerSVG = ({
 
       <g fill={textColor}>
         {showDividers && (
-          <line x1="360" y1={dateY - 5} x2="470" y2={dateY - 5} stroke={textColor} strokeWidth="1" opacity="0.4" />
-        )}
-        {showCalendarIcon && (
-          <g transform={`translate(488, ${dateY - 17}) scale(0.95)`} fill="none" stroke={textColor} strokeWidth="1.6">
-            <rect x="0" y="3" width="16" height="15" rx="2.5" />
-            <line x1="0" y1="8" x2="16" y2="8" />
-          </g>
+          <line x1="380" y1={dateY - 5} x2="475" y2={dateY - 5} stroke={textColor} strokeWidth="1" opacity="0.4" />
         )}
         <text
+          id="svg-date"
           x="600"
           y={dateY}
           textAnchor="middle"
@@ -1365,7 +1080,7 @@ const MinimalistStraightBannerSVG = ({
           {dateText.toUpperCase()}
         </text>
         {showDividers && (
-          <line x1="730" y1={dateY - 5} x2="840" y2={dateY - 5} stroke={textColor} strokeWidth="1" opacity="0.4" />
+          <line x1="725" y1={dateY - 5} x2="820" y2={dateY - 5} stroke={textColor} strokeWidth="1" opacity="0.4" />
         )}
       </g>
 
@@ -1392,219 +1107,22 @@ const MinimalistStraightBannerSVG = ({
 };
 
 // ------------------------------------------------------------------------------------------------
-// 3. ROYAL MONOGRAM CREST
+// 2. TRANSPARENT SIGNATURE (Clean overlay script watermark without background box)
 // ------------------------------------------------------------------------------------------------
-const RoyalCrestSVG = ({
-  ref,
-  subtitle,
-  names,
-  dateText,
-  fontFamily,
-  namesFontSize,
-  subtitleFontSize,
-  dateFontSize,
-  textColor,
-  borderColor,
-}: {
+interface TransparentSignatureSVGProps {
   ref: React.RefObject<SVGSVGElement | null>;
   subtitle: string;
   names: string;
   dateText: string;
   fontFamily: string;
+  isItalic: boolean;
   namesFontSize: number;
   subtitleFontSize: number;
   dateFontSize: number;
   textColor: string;
-  borderColor: string;
-}) => {
-  const initials = names
-    .split("&")
-    .map((s) => s.trim()[0] || "")
-    .join(" & ");
+  showDividers?: boolean;
+}
 
-  return (
-    <svg
-      ref={ref}
-      xmlns="http://www.w3.org/2000/svg"
-      viewBox="0 0 600 500"
-      width="600"
-      height="500"
-      className="max-h-[260px] w-auto max-w-full drop-shadow-md"
-      style={{ overflow: "visible" }}
-    >
-      <defs>
-        <style>{GOOGLE_FONTS_DEF}</style>
-      </defs>
-
-      {/* Royal Crest Shield Frame */}
-      <g stroke={borderColor || textColor} fill="none" strokeWidth="2" opacity="0.85">
-        <path d="M 300,40 L 410,100 L 410,210 Q 410,310 300,360 Q 190,310 190,210 L 190,100 Z" />
-        <path d="M 300,52 L 398,106 L 398,206 Q 398,296 300,344 Q 202,296 202,206 L 202,106 Z" strokeWidth="1" opacity="0.5" />
-      </g>
-
-      {/* Monogram Initials inside Shield */}
-      <text
-        x="300"
-        y="215"
-        textAnchor="middle"
-        fill={textColor}
-        style={{
-          fontFamily: `'${fontFamily}', 'Playfair Display', serif`,
-          fontSize: "64px",
-          fontWeight: 600,
-        }}
-      >
-        {initials || "A & K"}
-      </text>
-
-      {/* Subtitle */}
-      <text
-        x="300"
-        y="405"
-        textAnchor="middle"
-        fill={textColor}
-        style={{
-          fontFamily: "'Cinzel', Georgia, serif",
-          fontSize: `${subtitleFontSize}px`,
-          letterSpacing: "4px",
-          fontWeight: 600,
-        }}
-      >
-        {subtitle.toUpperCase()}
-      </text>
-
-      {/* Names */}
-      <text
-        x="300"
-        y="445"
-        textAnchor="middle"
-        fill={textColor}
-        style={{
-          fontFamily: `'${fontFamily}', 'Playfair Display', Georgia, serif`,
-          fontSize: `${Math.min(namesFontSize, 48)}px`,
-          fontWeight: 500,
-        }}
-      >
-        {names}
-      </text>
-
-      {/* Date */}
-      <text
-        x="300"
-        y="475"
-        textAnchor="middle"
-        fill={textColor}
-        style={{
-          fontFamily: "'Cinzel', Georgia, serif",
-          fontSize: `${dateFontSize}px`,
-          letterSpacing: "3px",
-          fontWeight: 600,
-          opacity: 0.85,
-        }}
-      >
-        {dateText.toUpperCase()}
-      </text>
-    </svg>
-  );
-};
-
-// ------------------------------------------------------------------------------------------------
-// 4. REFINED BOTANICAL WREATH
-// ------------------------------------------------------------------------------------------------
-const BotanicalWreathSVG = ({
-  ref,
-  subtitle,
-  names,
-  dateText,
-  fontFamily,
-  namesFontSize,
-  subtitleFontSize,
-  dateFontSize,
-  textColor,
-  borderColor,
-}: {
-  ref: React.RefObject<SVGSVGElement | null>;
-  subtitle: string;
-  names: string;
-  dateText: string;
-  fontFamily: string;
-  namesFontSize: number;
-  subtitleFontSize: number;
-  dateFontSize: number;
-  textColor: string;
-  borderColor: string;
-}) => {
-  return (
-    <svg
-      ref={ref}
-      xmlns="http://www.w3.org/2000/svg"
-      viewBox="0 0 600 500"
-      width="600"
-      height="500"
-      className="max-h-[260px] w-auto max-w-full drop-shadow-md"
-      style={{ overflow: "visible" }}
-    >
-      <defs>
-        <style>{GOOGLE_FONTS_DEF}</style>
-      </defs>
-
-      {/* Clean Symmetrical Laurel Wreath Ring */}
-      <g stroke={borderColor || textColor} fill="none" strokeWidth="1.5" opacity="0.8">
-        <circle cx="300" cy="220" r="140" strokeDasharray="6,4" />
-        <path d="M 180,220 C 180,140 240,80 300,80 C 360,80 420,140 420,220 C 420,300 360,360 300,360" />
-      </g>
-
-      <text
-        x="300"
-        y="180"
-        textAnchor="middle"
-        fill={textColor}
-        style={{
-          fontFamily: "'Cinzel', Georgia, serif",
-          fontSize: `${subtitleFontSize}px`,
-          letterSpacing: "4px",
-          fontWeight: 600,
-        }}
-      >
-        {subtitle.toUpperCase()}
-      </text>
-
-      <text
-        x="300"
-        y="230"
-        textAnchor="middle"
-        fill={textColor}
-        style={{
-          fontFamily: `'${fontFamily}', 'Playfair Display', serif`,
-          fontSize: `${Math.min(namesFontSize, 52)}px`,
-          fontStyle: "italic",
-          fontWeight: 600,
-        }}
-      >
-        {names}
-      </text>
-
-      <text
-        x="300"
-        y="275"
-        textAnchor="middle"
-        fill={textColor}
-        style={{
-          fontFamily: "'Cinzel', Georgia, serif",
-          fontSize: `${dateFontSize}px`,
-          letterSpacing: "3px",
-          fontWeight: 600,
-        }}
-      >
-        {dateText.toUpperCase()}
-      </text>
-    </svg>
-  );
-};
-
-// ------------------------------------------------------------------------------------------------
-// 5. TRANSPARENT LUXURY SIGNATURE
-// ------------------------------------------------------------------------------------------------
 const TransparentSignatureSVG = ({
   ref,
   subtitle,
@@ -1615,23 +1133,9 @@ const TransparentSignatureSVG = ({
   namesFontSize,
   subtitleFontSize,
   dateFontSize,
-  letterSpacing,
   textColor,
-  showDividers,
-}: {
-  ref: React.RefObject<SVGSVGElement | null>;
-  subtitle: string;
-  names: string;
-  dateText: string;
-  fontFamily: string;
-  isItalic: boolean;
-  namesFontSize: number;
-  subtitleFontSize: number;
-  dateFontSize: number;
-  letterSpacing: number;
-  textColor: string;
-  showDividers: boolean;
-}) => {
+  showDividers = true,
+}: TransparentSignatureSVGProps) => {
   return (
     <svg
       ref={ref}
@@ -1647,6 +1151,7 @@ const TransparentSignatureSVG = ({
       </defs>
 
       <text
+        id="svg-subtitle"
         x="500"
         y="50"
         textAnchor="middle"
@@ -1654,7 +1159,7 @@ const TransparentSignatureSVG = ({
         style={{
           fontFamily: "'Cinzel', 'Playfair Display', Georgia, serif",
           fontSize: `${subtitleFontSize}px`,
-          letterSpacing: `${letterSpacing}px`,
+          letterSpacing: "4px",
           fontWeight: 600,
           opacity: 0.9,
         }}
@@ -1663,6 +1168,7 @@ const TransparentSignatureSVG = ({
       </text>
 
       <text
+        id="svg-names"
         x="500"
         y="125"
         textAnchor="middle"
@@ -1682,6 +1188,7 @@ const TransparentSignatureSVG = ({
       )}
 
       <text
+        id="svg-date"
         x="500"
         y="190"
         textAnchor="middle"

@@ -440,32 +440,30 @@ function buildDynamicSvgFallback(prompt: string) {
     };
   }
 
-  // Default: Classic Flat Warm Ivory Arched Banner (Exact Image 2 Match)
-  const svg = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 280" width="1200" height="280">
+  // Default: Clean Straight Flat Ivory Banner
+  const svg = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 260" width="1200" height="260">
     <defs>
       <linearGradient id="ivoryGrad" x1="0%" y1="0%" x2="0%" y2="100%">
         <stop offset="0%" stop-color="#faf6ee"/>
         <stop offset="100%" stop-color="#f5efe1"/>
       </linearGradient>
     </defs>
-    <!-- Upward curved top banner card -->
-    <path id="svg-bg" d="M 0,45 Q 600,0 1200,45 L 1200,280 L 0,280 Z" fill="url(#ivoryGrad)" stroke="#c49b66" stroke-width="2"/>
-    <path d="M 12,54 Q 600,12 1188,54" fill="none" stroke="#c49b66" stroke-width="1" stroke-opacity="0.6"/>
+    <!-- Straight flat banner card with gold accent lines -->
+    <rect id="svg-bg" x="0" y="0" width="1200" height="260" fill="url(#ivoryGrad)"/>
+    <line x1="0" y1="2" x2="1200" y2="2" stroke="#c49b66" stroke-width="2" stroke-opacity="0.8"/>
+    <line x1="0" y1="6" x2="1200" y2="6" stroke="#c49b66" stroke-width="1" stroke-opacity="0.4"/>
     <!-- Central Typography -->
-    <text id="svg-subtitle" x="600" y="110" text-anchor="middle" font-family="'Montserrat', sans-serif" font-size="18" font-weight="600" letter-spacing="6" fill="#581c25">${subtitle}</text>
-    <text id="svg-names" x="600" y="185" text-anchor="middle" font-family="'Playfair Display', serif" font-size="78" font-style="italic" font-weight="700" fill="#581c25">${names}</text>
-    <g transform="translate(600, 235)">
-      <!-- Calendar Icon & Date -->
-      <path d="M -115,-12 L -95,-12 L -95,4 L -115,4 Z M -115,-6 L -95,-6 M -111,-15 L -111,-12 M -99,-15 L -99,-12" fill="none" stroke="#581c25" stroke-width="1.5"/>
+    <text id="svg-subtitle" x="600" y="65" text-anchor="middle" font-family="'Cinzel', Georgia, serif" font-size="18" font-weight="600" letter-spacing="6" fill="#581c25">${subtitle}</text>
+    <text id="svg-names" x="600" y="145" text-anchor="middle" font-family="'Playfair Display', serif" font-size="72" font-style="italic" font-weight="700" fill="#581c25">${names}</text>
+    <g transform="translate(600, 195)">
+      <line x1="-240" y1="-5" x2="-100" y2="-5" stroke="#c49b66" stroke-width="1" stroke-opacity="0.5"/>
       <text id="svg-date" x="0" y="0" text-anchor="middle" font-family="'Montserrat', sans-serif" font-size="16" letter-spacing="4" fill="#581c25">${dateText}</text>
-      <!-- Dividers -->
-      <line x1="-280" y1="-5" x2="-130" y2="-5" stroke="#c49b66" stroke-width="1" stroke-opacity="0.7"/>
-      <line x1="130" y1="-5" x2="280" y2="-5" stroke="#c49b66" stroke-width="1" stroke-opacity="0.7"/>
+      <line x1="100" y1="-5" x2="240" y2="-5" stroke="#c49b66" stroke-width="1" stroke-opacity="0.5"/>
     </g>
   </svg>`;
 
   return {
-    themeName: "Classic Ivory Arched Banner",
+    themeName: "Straight Flat Ivory Banner",
     names,
     subtitle,
     dateText,
