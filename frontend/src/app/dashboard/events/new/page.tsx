@@ -12,6 +12,7 @@ import {
 import { useRef, useState } from "react";
 import { PageHeader } from "@/components/app-shell";
 import { EventForm, type TemplateItem } from "@/components/event-form";
+import { TemplateDesignerModal, type GeneratedTemplateResult } from "@/components/template-designer-modal";
 import { Badge, Card, CardHeader } from "@/components/ui/primitives";
 import { useToast } from "@/components/ui/toast";
 import { adminApi, errorMessage } from "@/lib/api";
@@ -26,6 +27,7 @@ export default function NewEventPage() {
   const [templateItems, setTemplateItems] = useState<TemplateItem[]>([]);
   const [activeTemplateId, setActiveTemplateId] = useState<string | null>(null);
   const [draggingId, setDraggingId] = useState<string | null>(null);
+  const [showDesigner, setShowDesigner] = useState(false);
 
   const [live, setLive] = useState<{
     name: string;
@@ -63,6 +65,33 @@ export default function NewEventPage() {
       );
     }
     setWm((prev) => ({ ...prev, xPercent, yPercent }));
+  }
+
+  function handleApplyAiTemplate(res: GeneratedTemplateResult) {
+    const newItem: TemplateItem = {
+      id: res.id,
+      name: res.name,
+      size: res.sizeBytes,
+      preview: res.preview,
+      file: res.file,
+      xPercent: res.xPercent,
+      yPercent: res.yPercent,
+      sizePercent: res.sizePercent,
+      opacity: res.opacity,
+      enabled: true,
+    };
+    setTemplateItems((prev) => [...prev, newItem]);
+    setActiveTemplateId(newItem.id);
+    setWm((prev) => ({
+      ...prev,
+      imageUrl: res.dataUrl,
+      xPercent: res.xPercent,
+      yPercent: res.yPercent,
+      sizePercent: res.sizePercent,
+      opacity: res.opacity,
+      activeTemplateId: newItem.id,
+    }));
+    toast.success("AI Template applied", `"${res.name}" added to photo.`);
   }
 
   // Handle clicking anywhere on the preview image to accurately place currently selected watermark
@@ -289,6 +318,15 @@ export default function NewEventPage() {
                   <Badge tone="brand" dot>
                     Live preview
                   </Badge>
+                  <button
+                    type="button"
+                    onClick={() => setShowDesigner(true)}
+                    className="inline-flex items-center gap-1 rounded-lg border border-brand-300 bg-brand-50 px-2.5 py-1 text-xs font-semibold text-brand-700 hover:bg-brand-100 transition-colors cursor-pointer shadow-xs"
+                    title="Open AI Template & Watermark Studio"
+                  >
+                    <Sparkles className="h-3 w-3 text-brand-600" />
+                    ✨ AI Studio
+                  </button>
                   <button
                     type="button"
                     onClick={resetDefaults}
@@ -580,6 +618,14 @@ export default function NewEventPage() {
           </Card>
         </div>
       </div>
+      {/* AI Template Studio Modal */}
+      <TemplateDesignerModal
+        isOpen={showDesigner}
+        onClose={() => setShowDesigner(false)}
+        onApplyTemplate={handleApplyAiTemplate}
+        defaultEventName={live.name}
+        defaultEventDate={live.date}
+      />
     </div>
   );
 }

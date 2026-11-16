@@ -89,7 +89,8 @@ function qs(query?: RequestOpts["query"]): string {
 
 async function request<T>(url: string, opts: RequestOpts = {}, extraHeaders: Record<string, string> = {}): Promise<T> {
   const controller = new AbortController();
-  const timer = setTimeout(() => controller.abort("timeout"), opts.timeoutMs ?? 30_000);
+  // 90s timeout to gracefully allow Render free-tier cold starts to boot up
+  const timer = setTimeout(() => controller.abort("timeout"), opts.timeoutMs ?? 90_000);
   opts.signal?.addEventListener("abort", () => controller.abort(opts.signal?.reason));
   const headers: Record<string, string> = { Accept: "application/json", ...extraHeaders };
   let body = opts.body;

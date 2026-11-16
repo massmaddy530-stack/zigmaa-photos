@@ -1,7 +1,7 @@
 "use client";
 
 import { useRouter } from "next/navigation";
-import { Eye, EyeOff, ImagePlus, Move, ScanFace, Sliders, Sparkles, Trash2, X } from "lucide-react";
+import { Eye, EyeOff, ImagePlus, Move, ScanFace, Sliders, Sparkles, Trash2, Upload, X } from "lucide-react";
 import { useRef, useState } from "react";
 import { adminApi, errorMessage } from "@/lib/api";
 import { ACCEPTED_IMAGE_TYPES, MAX_UPLOAD_MB } from "@/lib/config";
@@ -10,6 +10,7 @@ import { fileToDataUrl, getSavedWatermarkConfig, saveEventWatermarkConfig, type 
 import type { EventOut } from "@/lib/types";
 import { CoverImage } from "./event-card";
 import { EventForm } from "./event-form";
+import { TemplateDesignerModal, type GeneratedTemplateResult } from "./template-designer-modal";
 import { Button } from "./ui/button";
 import { ConfirmDialog } from "./ui/modal";
 import { Card, CardHeader, Field, Input } from "./ui/primitives";
@@ -27,6 +28,7 @@ export function EventSettings({ event, onSaved }: { event: EventOut; onSaved: (e
   const [busy, setBusy] = useState(false);
   const [confirmName, setConfirmName] = useState("");
   const [draggingId, setDraggingId] = useState<string | null>(null);
+  const [showDesigner, setShowDesigner] = useState(false);
 
   // Load existing watermark configuration or defaults
   const [wm, setWm] = useState<WatermarkConfig>(() => {
@@ -171,6 +173,33 @@ export function EventSettings({ event, onSaved }: { event: EventOut; onSaved: (e
       opacity: 0.40,
     }));
     toast.success("Reset to default Zigmaa logo");
+  }
+
+  function handleApplyAiTemplate(res: GeneratedTemplateResult) {
+    const newItem: WatermarkTemplateItem = {
+      id: res.id,
+      name: res.name,
+      sizeBytes: res.sizeBytes,
+      dataUrl: res.dataUrl,
+      xPercent: res.xPercent,
+      yPercent: res.yPercent,
+      sizePercent: res.sizePercent,
+      opacity: res.opacity,
+      enabled: true,
+      color: "original",
+    };
+    const updated = [...(wm.templates || []), newItem];
+    setWm((prev) => ({
+      ...prev,
+      templates: updated,
+      activeTemplateId: newItem.id,
+      imageUrl: newItem.dataUrl,
+      sizePercent: newItem.sizePercent,
+      opacity: newItem.opacity,
+      xPercent: newItem.xPercent,
+      yPercent: newItem.yPercent,
+    }));
+    toast.success("AI Template added", "Click 'Save watermark settings' to apply to downloads.");
   }
 
   function setPosition(xPercent: number, yPercent: number) {
@@ -415,7 +444,14 @@ export function EventSettings({ event, onSaved }: { event: EventOut; onSaved: (e
                     <span className="font-semibold uppercase tracking-wider text-muted">
                       Templates ({wm.templates.filter((t) => t.enabled !== false).length}/{wm.templates.length} visible)
                     </span>
-                    <span className="text-[11px] text-muted">Click to select &amp; position</span>
+                    <button
+                      type="button"
+                      onClick={resetTemplates}
+                      className="text-[11px] text-muted hover:text-red-600 transition-colors underline cursor-pointer"
+                      title="Clear custom templates and restore default logo"
+                    >
+                      Reset to default
+                    </button>
                   </div>
 
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 max-h-[220px] overflow-y-auto p-1">
@@ -486,51 +522,49 @@ export function EventSettings({ event, onSaved }: { event: EventOut; onSaved: (e
                     })}
                   </div>
 
-                  <div className="flex items-center gap-2">
+                  <div className="grid grid-cols-2 gap-2">
                     <Button
                       type="button"
                       variant="outline"
                       size="sm"
-                      className="w-full text-xs"
-                      onClick={() => templateRef.current?.click()}
+                      className="text-xs bg-brand-50/70 border-brand-300 text-brand-700 hover:bg-brand-100 font-semibold"
+                      onClick={() => setShowDesigner(true)}
                       icon={<Sparkles className="h-3.5 w-3.5 text-brand-600" />}
                     >
-                      + Add more templates
+                      ✨ AI Studio
                     </Button>
                     <Button
                       type="button"
-                      variant="ghost"
+                      variant="outline"
                       size="sm"
                       className="text-xs"
-                      onClick={resetTemplates}
-                      title="Reset to default Zigmaa logo"
+                      onClick={() => templateRef.current?.click()}
+                      icon={<Upload className="h-3.5 w-3.5" />}
                     >
-                      Reset
+                      + Upload
                     </Button>
                   </div>
                 </div>
               ) : (
-                <div className="flex items-center gap-2">
+                <div className="grid grid-cols-2 gap-2">
                   <Button
                     type="button"
                     variant="outline"
-                    className="w-full"
-                    onClick={() => templateRef.current?.click()}
+                    className="text-xs bg-brand-50/70 border-brand-300 text-brand-700 hover:bg-brand-100 font-semibold"
+                    onClick={() => setShowDesigner(true)}
                     icon={<Sparkles className="h-4 w-4 text-brand-600" />}
                   >
-                    {wm.imageUrl ? "Replace watermark template" : "Upload templates (Multiple)"}
+                    ✨ AI Studio
                   </Button>
-                  {wm.imageUrl && (
-                    <Button
-                      type="button"
-                      variant="ghost"
-                      size="sm"
-                      onClick={resetTemplates}
-                      title="Reset to default logo"
-                    >
-                      Reset
-                    </Button>
-                  )}
+                  <Button
+                    type="button"
+                    variant="outline"
+                    className="text-xs"
+                    onClick={() => templateRef.current?.click()}
+                    icon={<ImagePlus className="h-4 w-4 text-brand-600" />}
+                  >
+                    Upload files
+                  </Button>
                 </div>
               )}
             </div>
@@ -710,6 +744,15 @@ export function EventSettings({ event, onSaved }: { event: EventOut; onSaved: (e
           {confirmName && confirmName !== event.name && <p className="mt-1.5 text-xs text-red-600">The name doesn&apos;t match.</p>}
         </div>
       </ConfirmDialog>
+
+      {/* AI Template Studio Modal */}
+      <TemplateDesignerModal
+        isOpen={showDesigner}
+        onClose={() => setShowDesigner(false)}
+        onApplyTemplate={handleApplyAiTemplate}
+        defaultEventName={event.name}
+        defaultEventDate={event.event_date || ""}
+      />
     </div>
   );
 }

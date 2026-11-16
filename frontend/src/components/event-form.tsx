@@ -1,10 +1,11 @@
 "use client";
 
-import { Eye, EyeOff, ImagePlus, Sparkles, X } from "lucide-react";
+import { Eye, EyeOff, ImagePlus, Sparkles, Upload, X } from "lucide-react";
 import { useEffect, useRef, useState, type FormEvent, type ReactNode } from "react";
 import { ApiError, errorMessage } from "@/lib/api";
 import { ACCEPTED_IMAGE_TYPES, MAX_UPLOAD_MB } from "@/lib/config";
 import type { EventCreate, EventOut } from "@/lib/types";
+import { TemplateDesignerModal, type GeneratedTemplateResult } from "./template-designer-modal";
 import { Button } from "./ui/button";
 import { Field, Input, Textarea } from "./ui/primitives";
 import { Alert } from "./ui/states";
@@ -113,6 +114,7 @@ export function EventForm({
   const [errors, setErrors] = useState<FieldErrors>({});
   const [formError, setFormError] = useState<unknown>(null);
   const [busy, setBusy] = useState(false);
+  const [showDesigner, setShowDesigner] = useState(false);
   const fileRef = useRef<HTMLInputElement>(null);
   const templateFileRef = useRef<HTMLInputElement>(null);
 
@@ -226,6 +228,24 @@ export function EventForm({
     if (activeTemplateId === id) {
       changeActiveTemplate(updated[0]?.id || null);
     }
+  }
+
+  function handleApplyAiTemplate(res: GeneratedTemplateResult) {
+    const newItem: TemplateItem = {
+      id: res.id,
+      name: res.name,
+      size: res.sizeBytes,
+      preview: res.preview,
+      file: res.file,
+      xPercent: res.xPercent,
+      yPercent: res.yPercent,
+      sizePercent: res.sizePercent,
+      opacity: res.opacity,
+      enabled: true,
+    };
+    const updated = [...templates, newItem];
+    updateTemplates(updated);
+    changeActiveTemplate(newItem.id);
   }
 
   async function submit(e: FormEvent) {
@@ -387,31 +407,59 @@ export function EventForm({
                   })}
                 </div>
 
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 pt-1">
+                  <button
+                    type="button"
+                    onClick={() => setShowDesigner(true)}
+                    className="flex items-center justify-center gap-1.5 rounded-xl border border-brand-300 bg-brand-50/70 px-3 py-2 text-xs font-semibold text-brand-700 hover:bg-brand-100 transition-colors shadow-xs cursor-pointer"
+                  >
+                    <Sparkles className="h-3.5 w-3.5 text-brand-600" />
+                    <span>✨ AI Template Studio</span>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => templateFileRef.current?.click()}
+                    className="flex items-center justify-center gap-1.5 rounded-xl border border-dashed border-line bg-canvas/40 px-3 py-2 text-xs text-muted hover:border-brand-300 hover:bg-brand-50/30 transition-colors cursor-pointer"
+                  >
+                    <Upload className="h-3.5 w-3.5" />
+                    <span>+ Upload custom files</span>
+                  </button>
+                </div>
+              </div>
+            ) : (
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
+                <button
+                  type="button"
+                  onClick={() => setShowDesigner(true)}
+                  className="flex flex-col items-center justify-center gap-1.5 rounded-xl border-2 border-brand-300 bg-brand-50/50 p-4 text-xs font-semibold text-brand-700 hover:bg-brand-100/70 transition-all cursor-pointer shadow-xs text-center"
+                >
+                  <Sparkles className="h-5 w-5 text-brand-600" />
+                  <span className="font-bold text-sm">✨ AI Template Studio</span>
+                  <span className="text-[11px] font-normal text-muted">Generate luxury floral arch or monogram</span>
+                </button>
                 <button
                   type="button"
                   onClick={() => templateFileRef.current?.click()}
-                  className="flex w-full items-center justify-center gap-2 rounded-xl border border-dashed border-line bg-canvas/40 px-3 py-2 text-xs text-muted transition hover:border-brand-300 hover:bg-brand-50/30"
+                  className="flex flex-col items-center justify-center gap-1.5 rounded-xl border-2 border-dashed border-line bg-canvas/40 p-4 text-xs text-muted hover:border-brand-300 hover:bg-brand-50/30 transition-all cursor-pointer text-center"
                 >
-                  <Sparkles className="h-3.5 w-3.5 text-brand-500" aria-hidden />
-                  <span className="font-medium text-brand-700">+ Upload more templates</span>
-                  <span className="text-[11px] text-muted">(Multi-select supported)</span>
+                  <ImagePlus className="h-5 w-5 text-brand-500" />
+                  <span className="font-medium text-brand-700">Upload custom watermark</span>
+                  <span className="text-[11px] text-muted">PNG, SVG with transparency</span>
                 </button>
               </div>
-            ) : (
-              <button
-                type="button"
-                onClick={() => templateFileRef.current?.click()}
-                className="flex w-full items-center justify-center gap-2.5 rounded-xl border border-dashed border-line bg-canvas/40 px-4 py-4 text-sm text-muted transition hover:border-brand-300 hover:bg-brand-50/30"
-              >
-                <Sparkles className="h-4 w-4 text-brand-500" aria-hidden />
-                <span>
-                  <span className="font-medium text-brand-700">Upload templates / watermarks</span> (PNG, SVG — multiple files supported)
-                </span>
-              </button>
             )}
           </Field>
         </>
       )}
+
+      {/* AI Template Studio Modal */}
+      <TemplateDesignerModal
+        isOpen={showDesigner}
+        onClose={() => setShowDesigner(false)}
+        onApplyTemplate={handleApplyAiTemplate}
+        defaultEventName={name}
+        defaultEventDate={date}
+      />
       <div className="flex flex-wrap items-center justify-end gap-2 pt-2">
         {footerExtra}
         <Button type="submit" loading={busy}>{submitLabel}</Button>
