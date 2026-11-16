@@ -104,6 +104,9 @@ function getRenderedCustomSvg(
             `font-size="${params.namesFontSize}"`
           );
         }
+        if (!updatedOpen.includes("dominant-baseline")) {
+          updatedOpen = updatedOpen.replace(/<text/i, '<text dominant-baseline="central"');
+        }
         if (typeof params.isItalic === "boolean") {
           if (updatedOpen.includes("font-style=")) {
             updatedOpen = updatedOpen.replace(
@@ -363,6 +366,16 @@ export function TemplateDesignerModal({
       svgClone.setAttribute("width", String(width));
       svgClone.setAttribute("height", String(height));
 
+      // Inject Google Fonts style into clone for high-res rasterization
+      let defs = svgClone.querySelector("defs");
+      if (!defs) {
+        defs = document.createElementNS("http://www.w3.org/2000/svg", "defs");
+        svgClone.insertBefore(defs, svgClone.firstChild);
+      }
+      const styleEl = document.createElementNS("http://www.w3.org/2000/svg", "style");
+      styleEl.textContent = GOOGLE_FONTS_DEF;
+      defs.appendChild(styleEl);
+
       const svgString = new XMLSerializer().serializeToString(svgClone);
       const svgBlob = new Blob([svgString], { type: "image/svg+xml;charset=utf-8" });
       const blobUrl = URL.createObjectURL(svgBlob);
@@ -452,20 +465,17 @@ export function TemplateDesignerModal({
 
     if (customBgImage) {
       // If user uploaded a custom background image (e.g. from ChatGPT DALL-E)
-      const subtitleY = 52;
-      const namesY = subtitleY + namesFontSize * 0.92;
-      const dateY = namesY + 42;
+      const subtitleY = 48;
+      const namesY = 118;
+      const dateY = 178;
       const fontStack = `'${fontFamily}', 'Playfair Display', Georgia, serif`;
 
       return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 240" width="1200" height="240">
-        <defs>
-          <style>${GOOGLE_FONTS_DEF}</style>
-        </defs>
         <image href="${customBgImage}" x="0" y="0" width="1200" height="240" preserveAspectRatio="xMidYMid slice" />
         <text id="svg-subtitle" x="600" y="${subtitleY}" text-anchor="middle" fill="${textColor}" style="font-family: 'Cinzel', serif; font-size: ${subtitleFontSize}px; letter-spacing: 4px; font-weight: 600; opacity: 0.95;">
           ${subtitle.toUpperCase()}
         </text>
-        <text id="svg-names" x="600" y="${namesY}" text-anchor="middle" fill="${textColor}" style="font-family: ${fontStack}; font-size: ${namesFontSize}px; font-style: ${isItalic ? "italic" : "normal"}; font-weight: ${isItalic ? 500 : 600};">
+        <text id="svg-names" x="600" y="${namesY}" text-anchor="middle" dominant-baseline="central" fill="${textColor}" style="font-family: ${fontStack}; font-size: ${namesFontSize}px; font-style: ${isItalic ? "italic" : "normal"}; font-weight: ${isItalic ? 500 : 600};">
           ${names}
         </text>
         <g fill="${textColor}">
@@ -476,7 +486,7 @@ export function TemplateDesignerModal({
           <line x1="725" y1="${dateY - 5}" x2="820" y2="${dateY - 5}" stroke="${textColor}" stroke-width="1" opacity="0.5" />
         </g>
         ${venueText ? `
-          <text id="svg-venue" x="600" y="${dateY + 26}" text-anchor="middle" fill="${textColor}" style="font-family: 'Montserrat', sans-serif; font-size: 11px; letter-spacing: 2px; font-weight: 500; opacity: 0.8;">
+          <text id="svg-venue" x="600" y="${dateY + 28}" text-anchor="middle" fill="${textColor}" style="font-family: 'Montserrat', sans-serif; font-size: 11px; letter-spacing: 2px; font-weight: 500; opacity: 0.8;">
             ${venueText.toUpperCase()}
           </text>
         ` : ""}

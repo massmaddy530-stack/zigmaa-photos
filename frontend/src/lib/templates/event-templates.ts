@@ -47,20 +47,19 @@ export const EVENT_CATEGORIES: EventCategory[] = [
   { id: "temple_cultural", label: "Temple & Cultural", emoji: "🛕", description: "Temple gopuram, Bharatanatyam salangai, diyas & bells" },
 ];
 
-const FONTS_IMPORT = `@import url('https://fonts.googleapis.com/css2?family=Alex+Brush&family=Allura&family=Bodoni+Moda:ital,opsz,wght@0,6..96,400..700;1,6..96,400..700&family=Cinzel+Decorative:wght@700&family=Cinzel:wght@400;600;700&family=Cormorant+Garamond:ital,wght@0,500;0,600;0,700;1,400;1,600;1,700&family=Dancing+Script:wght@600;700&family=Great+Vibes&family=Italianno&family=Marcellus&family=Montserrat:wght@400;500;600;700&family=Parisienne&family=Pinyon+Script&family=Playfair+Display:ital,wght@0,400;0,600;0,700;1,400;1,600;1,700&family=Prata&display=swap');`;
 
 // Helper to wrap standard typography into any template
 function renderTypography(params: TemplateRenderParams) {
-  const subtitleY = 52;
-  const namesY = subtitleY + params.namesFontSize * 0.92;
-  const dateY = namesY + 42;
+  const subtitleY = 48;
+  const namesY = 118;
+  const dateY = 178;
   const fontStack = `'${params.fontFamily}', 'Playfair Display', Georgia, serif`;
 
   return `
     <text id="svg-subtitle" x="600" y="${subtitleY}" text-anchor="middle" fill="${params.textColor}" style="font-family: 'Cinzel', 'Playfair Display', Georgia, serif; font-size: ${params.subtitleFontSize}px; letter-spacing: 4px; font-weight: 600; opacity: 0.9;">
       ${params.subtitle.toUpperCase()}
     </text>
-    <text id="svg-names" x="600" y="${namesY}" text-anchor="middle" fill="${params.textColor}" style="font-family: ${fontStack}; font-size: ${params.namesFontSize}px; font-style: ${params.isItalic ? 'italic' : 'normal'}; font-weight: ${params.isItalic ? 500 : 600};">
+    <text id="svg-names" x="600" y="${namesY}" text-anchor="middle" dominant-baseline="central" fill="${params.textColor}" style="font-family: ${fontStack}; font-size: ${params.namesFontSize}px; font-style: ${params.isItalic ? 'italic' : 'normal'}; font-weight: ${params.isItalic ? 500 : 600};">
       ${params.names}
     </text>
     <g fill="${params.textColor}">
@@ -71,7 +70,7 @@ function renderTypography(params: TemplateRenderParams) {
       <line x1="725" y1="${dateY - 5}" x2="820" y2="${dateY - 5}" stroke="${params.textColor}" stroke-width="1" opacity="0.4" />
     </g>
     ${params.venueText ? `
-      <text id="svg-venue" x="600" y="${dateY + 26}" text-anchor="middle" fill="${params.textColor}" style="font-family: 'Montserrat', sans-serif; font-size: 11px; letter-spacing: 2px; font-weight: 500; opacity: 0.75;">
+      <text id="svg-venue" x="600" y="${dateY + 28}" text-anchor="middle" fill="${params.textColor}" style="font-family: 'Montserrat', sans-serif; font-size: 11px; letter-spacing: 2px; font-weight: 500; opacity: 0.75;">
         ${params.venueText.toUpperCase()}
       </text>
     ` : ''}
@@ -87,7 +86,6 @@ function renderBg(bgColor: string, height: number = 240, rx: number = 0) {
 // Helper SVG Defs (Gradients & Filters)
 const COMMON_DEFS = `
   <defs>
-    <style>${FONTS_IMPORT}</style>
     <linearGradient id="goldLuxe" x1="0%" y1="0%" x2="100%" y2="100%">
       <stop offset="0%" stop-color="#f6d365" />
       <stop offset="50%" stop-color="#fda085" />
