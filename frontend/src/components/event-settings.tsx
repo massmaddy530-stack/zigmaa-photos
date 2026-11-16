@@ -1,7 +1,7 @@
 "use client";
 
 import { useRouter } from "next/navigation";
-import { Eye, EyeOff, ImagePlus, Move, ScanFace, Sliders, Sparkles, Trash2, Upload, X } from "lucide-react";
+import { Eye, EyeOff, ImagePlus, Move, Palette, ScanFace, Sliders, Sparkles, Trash2, Upload, X } from "lucide-react";
 import { useRef, useState } from "react";
 import { adminApi, errorMessage } from "@/lib/api";
 import { ACCEPTED_IMAGE_TYPES, MAX_UPLOAD_MB } from "@/lib/config";
@@ -529,9 +529,9 @@ export function EventSettings({ event, onSaved }: { event: EventOut; onSaved: (e
                       size="sm"
                       className="text-xs bg-brand-50/70 border-brand-300 text-brand-700 hover:bg-brand-100 font-semibold"
                       onClick={() => setShowDesigner(true)}
-                      icon={<Sparkles className="h-3.5 w-3.5 text-brand-600" />}
+                      icon={<Palette className="h-3.5 w-3.5 text-brand-600" />}
                     >
-                      ✨ AI Studio
+                      🎨 Customize Template
                     </Button>
                     <Button
                       type="button"
@@ -552,9 +552,9 @@ export function EventSettings({ event, onSaved }: { event: EventOut; onSaved: (e
                     variant="outline"
                     className="text-xs bg-brand-50/70 border-brand-300 text-brand-700 hover:bg-brand-100 font-semibold"
                     onClick={() => setShowDesigner(true)}
-                    icon={<Sparkles className="h-4 w-4 text-brand-600" />}
+                    icon={<Palette className="h-4 w-4 text-brand-600" />}
                   >
-                    ✨ AI Studio
+                    🎨 Customize Template
                   </Button>
                   <Button
                     type="button"

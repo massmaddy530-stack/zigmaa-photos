@@ -3,16 +3,15 @@
 import { useEffect, useRef, useState } from "react";
 import {
   Check,
-  Crown,
   Eye,
-  Flower2,
   Palette,
   RotateCcw,
   Sliders,
-  Sparkles,
   Type,
   X,
-  Camera,
+  Layers,
+  Minus,
+  Plus,
 } from "lucide-react";
 import { Button } from "./ui/button";
 import { Modal } from "./ui/modal";
@@ -39,11 +38,15 @@ export interface TemplateDesignerModalProps {
 }
 
 export type TemplatePreset =
-  | "floral-lilies-banner" // Exact user uploaded design!
-  | "royal-crest"
-  | "botanical-wreath"
-  | "studio-badge"
-  | "minimalist-frame";
+  | "classic-arched-banner" // Flat background with curved top arch & classic typography (Exact Image 2 match!)
+  | "minimalist-straight-banner" // Clean flat horizontal bar with gold accent line
+  | "royal-crest" // Luxury heraldic monogram crest
+  | "botanical-wreath" // Refined symmetrical laurel wreath
+  | "transparent-signature"; // Transparent luxury script watermark
+
+const GOOGLE_FONTS_DEF = `
+@import url('https://fonts.googleapis.com/css2?family=Alex+Brush&family=Cinzel:wght@400;600;700&family=Cormorant+Garamond:ital,wght@0,500;0,600;0,700;1,400;1,600;1,700&family=Great+Vibes&family=Montserrat:wght@400;500;600;700&family=Playfair+Display:ital,wght@0,400;0,600;0,700;1,400;1,600;1,700&display=swap');
+`;
 
 export function TemplateDesignerModal({
   isOpen,
@@ -53,35 +56,40 @@ export function TemplateDesignerModal({
   defaultEventDate = "",
 }: TemplateDesignerModalProps) {
   // Preset selection
-  const [preset, setPreset] = useState<TemplatePreset>("floral-lilies-banner");
+  const [preset, setPreset] = useState<TemplatePreset>("classic-arched-banner");
 
   // Text content
   const [subtitle, setSubtitle] = useState("THE WEDDING OF");
-  const [names, setNames] = useState("Naveen & Meera");
-  const [dateText, setDateText] = useState("22 AUGUST 2026");
-  const [venueText, setVenueText] = useState("Jaipur, India");
+  const [names, setNames] = useState("Arun & Keerthana");
+  const [dateText, setDateText] = useState("14 FEBRUARY 2026");
+  const [venueText, setVenueText] = useState("The Grand Palace, Chennai");
 
   // Typography options
   const [fontFamily, setFontFamily] = useState<
-    "Great Vibes" | "Alex Brush" | "Cinzel" | "Playfair Display" | "Montserrat"
-  >("Great Vibes");
-  const [namesFontSize, setNamesFontSize] = useState(48); // px
-  const [subtitleFontSize, setSubtitleFontSize] = useState(13); // px
-  const [letterSpacing, setLetterSpacing] = useState(3); // px
+    "Playfair Display" | "Cormorant Garamond" | "Cinzel" | "Great Vibes" | "Alex Brush" | "Montserrat"
+  >("Playfair Display");
+  const [isItalic, setIsItalic] = useState(true);
 
-  // Color options
-  const [color, setColor] = useState("#c58f87"); // Rose Gold default matching user photo
-  const [showArch, setShowArch] = useState(true);
-  const [showFloral, setShowFloral] = useState(true);
-  const [showEmblem, setShowEmblem] = useState(true);
+  // Font size sliders with high, realistic pixel ranges for 1200px vector canvas
+  const [namesFontSize, setNamesFontSize] = useState(82); // px (45 - 130)
+  const [subtitleFontSize, setSubtitleFontSize] = useState(20); // px (12 - 36)
+  const [dateFontSize, setDateFontSize] = useState(18); // px (12 - 32)
+  const [letterSpacing, setLetterSpacing] = useState(5); // px (0 - 14)
+  const [arcHeight, setArcHeight] = useState(45); // px (0 flat - 65 deep curve)
+
+  // Colors
+  const [bgColor, setBgColor] = useState("#faf6ee"); // Flat Warm Ivory Cream (Exact Image 2 match)
+  const [textColor, setTextColor] = useState("#581c25"); // Deep Burgundy / Wine (Exact Image 2 match)
+  const [borderColor] = useState("#c49b66"); // Subtle Luxury Gold Border
+
+  // Toggles
+  const [showBorder, setShowBorder] = useState(true);
+  const [showCalendarIcon, setShowCalendarIcon] = useState(true);
   const [showDividers, setShowDividers] = useState(true);
+  const [showVenue, setShowVenue] = useState(false);
 
-  // Preview background: "dark" | "photo" | "light"
-  const [previewBg, setPreviewBg] = useState<"dark" | "photo" | "light">("dark");
-
-  // AI Prompt bar
-  const [aiPrompt, setAiPrompt] = useState("");
-  const [isGenerating, setIsGenerating] = useState(false);
+  // Preview background: "photo" | "dark" | "grid"
+  const [previewBg, setPreviewBg] = useState<"photo" | "dark" | "grid">("photo");
 
   // SVG ref for exporting to PNG
   const svgRef = useRef<SVGSVGElement>(null);
@@ -91,7 +99,6 @@ export function TemplateDesignerModal({
     if (defaultEventName && defaultEventName.trim()) {
       const trimmed = defaultEventName.trim();
       setNames(trimmed);
-      setAiPrompt(trimmed);
     }
     if (defaultEventDate) {
       try {
@@ -101,101 +108,30 @@ export function TemplateDesignerModal({
             day: "numeric",
             month: "long",
             year: "numeric",
-          }).toUpperCase();
-          setDateText(formatted);
+          });
+          setDateText(formatted.toUpperCase());
         }
-      } catch {}
+      } catch {
+        // keep fallback
+      }
     }
   }, [defaultEventName, defaultEventDate]);
 
-  // AI Smart Auto-Fill / Prompt handler
-  function handleAiGenerate() {
-    if (!aiPrompt.trim()) return;
-    setIsGenerating(true);
-
-    setTimeout(() => {
-      const promptLower = aiPrompt.toLowerCase();
-
-      // Detect names: Look for " & ", " and ", or two names
-      let detectedNames = names;
-      if (aiPrompt.includes("&")) {
-        detectedNames = aiPrompt.split(/wedding|reception|engagement/i)[0].trim();
-      } else if (aiPrompt.includes(" and ")) {
-        detectedNames = aiPrompt.replace(" and ", " & ").split(/wedding|reception|engagement/i)[0].trim();
-      } else {
-        detectedNames = aiPrompt.replace(/wedding|photoshoot|event|celebration/gi, "").trim();
-      }
-      if (detectedNames) setNames(detectedNames);
-
-      // Detect Event Type / Subtitle
-      if (promptLower.includes("engagement")) {
-        setSubtitle("THE ENGAGEMENT OF");
-      } else if (promptLower.includes("reception")) {
-        setSubtitle("THE RECEPTION OF");
-      } else if (promptLower.includes("save the date")) {
-        setSubtitle("SAVE THE DATE");
-      } else if (promptLower.includes("birthday") || promptLower.includes("celebration")) {
-        setSubtitle("CELEBRATING");
-      } else {
-        setSubtitle("THE WEDDING OF");
-      }
-
-      // Detect Color Palette
-      if (promptLower.includes("rose gold") || promptLower.includes("pink") || promptLower.includes("blush")) {
-        setColor("#c58f87"); // Rose Gold
-      } else if (promptLower.includes("gold") || promptLower.includes("royal") || promptLower.includes("yellow")) {
-        setColor("#dfb15b"); // Royal Gold
-      } else if (promptLower.includes("white") || promptLower.includes("silver")) {
-        setColor("#ffffff"); // White
-      } else if (promptLower.includes("black") || promptLower.includes("dark")) {
-        setColor("#1c1917"); // Dark
-      }
-
-      // Detect Style Preset
-      if (promptLower.includes("royal") || promptLower.includes("crest") || promptLower.includes("heraldic")) {
-        setPreset("royal-crest");
-        setFontFamily("Cinzel");
-      } else if (promptLower.includes("wreath") || promptLower.includes("botanical") || promptLower.includes("circle")) {
-        setPreset("botanical-wreath");
-        setFontFamily("Alex Brush");
-      } else if (promptLower.includes("minimal") || promptLower.includes("modern") || promptLower.includes("clean")) {
-        setPreset("minimalist-frame");
-        setFontFamily("Montserrat");
-      } else if (promptLower.includes("studio") || promptLower.includes("camera") || promptLower.includes("photo")) {
-        setPreset("studio-badge");
-        setFontFamily("Montserrat");
-      } else {
-        setPreset("floral-lilies-banner");
-        setFontFamily("Great Vibes");
-      }
-
-      setIsGenerating(false);
-    }, 300);
-  }
-
-  // Preset Colors
-  const COLOR_PALETTES = [
-    { label: "Rose Gold", value: "#c58f87" },
-    { label: "Royal Gold", value: "#dfb15b" },
-    { label: "Pure White", value: "#ffffff" },
-    { label: "Matte Dark", value: "#1c1917" },
-    { label: "Champagne", value: "#e6c99c" },
-    { label: "Silver / Chrome", value: "#e2e8f0" },
-  ];
-
-  // Export SVG to high-res transparent PNG and apply
+  // Export SVG to high-res PNG and apply as watermark
   async function handleApply() {
     if (!svgRef.current) return;
 
     try {
-      const svgEl = svgRef.current;
-      const width = Number(svgEl.getAttribute("width")) || 1200;
-      const height = Number(svgEl.getAttribute("height")) || 280;
+      const svgElement = svgRef.current;
+      const width = parseInt(svgElement.getAttribute("width") || "1200", 10);
+      const height = parseInt(svgElement.getAttribute("height") || "280", 10);
 
-      // Clone SVG and serialize
-      const svgString = new XMLSerializer().serializeToString(svgEl);
+      const svgClone = svgElement.cloneNode(true) as SVGSVGElement;
+      svgClone.setAttribute("width", String(width));
+      svgClone.setAttribute("height", String(height));
+
+      const svgString = new XMLSerializer().serializeToString(svgClone);
       const svgBlob = new Blob([svgString], { type: "image/svg+xml;charset=utf-8" });
-      const URL = window.URL || window.webkitURL || window;
       const blobUrl = URL.createObjectURL(svgBlob);
 
       const img = new Image();
@@ -217,23 +153,22 @@ export function TemplateDesignerModal({
         canvas.toBlob((pngBlob) => {
           if (!pngBlob) return;
           const dataUrl = canvas.toDataURL("image/png");
-          const safeName = names.replace(/[^a-zA-Z0-9]/g, "_").toLowerCase() || "ai_template";
+          const safeName = names.replace(/[^a-zA-Z0-9]/g, "_").toLowerCase() || "template";
           const file = new File([pngBlob], `template_${safeName}.png`, { type: "image/png" });
-          const id = `tpl_ai_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`;
+          const id = `tpl_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`;
 
-          // Banner templates look best at bottom-center or bottom-right
-          const isBanner = preset === "floral-lilies-banner" || preset === "minimalist-frame";
+          const isBanner = preset === "classic-arched-banner" || preset === "minimalist-straight-banner";
           onApplyTemplate({
             id,
-            name: `${names} (${preset === "floral-lilies-banner" ? "Lilies Banner" : preset})`,
+            name: `${names} (${preset === "classic-arched-banner" ? "Arched Banner" : preset})`,
             preview: dataUrl,
             dataUrl,
             sizeBytes: pngBlob.size,
             file,
-            xPercent: 50, // Center placed
-            yPercent: isBanner ? 88 : 85,
-            sizePercent: isBanner ? 38 : 22,
-            opacity: 0.85,
+            xPercent: 50, // Center aligned
+            yPercent: isBanner ? 90 : 85, // Placed on bottom of photo
+            sizePercent: isBanner ? 88 : 28, // Wide banner across bottom of image
+            opacity: 1.0, // Solid crisp banner
           });
 
           onClose();
@@ -255,12 +190,12 @@ export function TemplateDesignerModal({
         <div className="flex items-center justify-between border-b border-line px-6 py-4 bg-canvas/40 shrink-0">
           <div className="flex items-center gap-2.5">
             <div className="grid h-9 w-9 place-items-center rounded-xl bg-brand-50 text-brand-600 border border-brand-200">
-              <Sparkles className="h-5 w-5" />
+              <Palette className="h-5 w-5" />
             </div>
             <div>
-              <h2 className="text-lg font-bold text-ink">AI Template & Watermark Studio</h2>
+              <h2 className="text-lg font-bold text-ink">Customize Template</h2>
               <p className="text-xs text-muted">
-                Create luxury wedding monograms, floral arched banners, and studio templates with instant transparent export.
+                Design classic flat banners or watermark templates with custom fonts, colors, and layout.
               </p>
             </div>
           </div>
@@ -269,112 +204,122 @@ export function TemplateDesignerModal({
             onClick={onClose}
             className="grid h-8 w-8 place-items-center rounded-lg text-muted hover:bg-canvas hover:text-ink transition-colors cursor-pointer"
           >
-            <X className="h-5 w-5" />
+            <X className="h-4 w-4" />
           </button>
         </div>
 
-        {/* AI Magic Prompt Input Bar */}
-        <div className="px-6 py-3 border-b border-line bg-gradient-to-r from-brand-50/50 via-canvas to-amber-50/30 flex items-center gap-3 shrink-0">
-          <div className="relative flex-1">
-            <Sparkles className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-brand-500" />
-            <input
-              type="text"
-              value={aiPrompt}
-              onChange={(e) => setAiPrompt(e.target.value)}
-              onKeyDown={(e) => e.key === "Enter" && handleAiGenerate()}
-              placeholder="e.g. Royal Wedding for Naveen & Meera, Rose Gold with Floral Lilies Arch..."
-              className="w-full rounded-xl border border-brand-200 bg-white pl-9 pr-3 py-1.5 text-xs text-ink placeholder:text-muted focus:outline-none focus:ring-2 focus:ring-brand-500/20 focus:border-brand-500 shadow-xs"
-            />
-          </div>
-          <Button
-            type="button"
-            size="sm"
-            onClick={handleAiGenerate}
-            loading={isGenerating}
-            className="bg-brand-600 hover:bg-brand-700 text-white text-xs font-semibold shrink-0 cursor-pointer shadow-xs"
-            icon={<Sparkles className="h-3.5 w-3.5" />}
-          >
-            AI Magic Auto-Fill
-          </Button>
-        </div>
-
         {/* Main Body: 2 Columns (Left: Live Preview Canvas, Right: Full Controls) */}
-        <div className="flex-1 grid grid-cols-1 lg:grid-cols-12 overflow-y-auto divide-y lg:divide-y-0 lg:divide-x divide-line">
-          {/* Left Column: Canvas Preview (7 cols) */}
-          <div className="lg:col-span-7 p-6 flex flex-col items-center justify-center bg-canvas/30 select-none">
-            {/* Background Style Switcher */}
-            <div className="w-full mb-3 flex items-center justify-between">
-              <span className="text-xs font-semibold text-muted uppercase tracking-wider flex items-center gap-1.5">
-                <Eye className="h-3.5 w-3.5 text-brand-600" /> Live Vector Preview
+        <div className="grid grid-cols-1 lg:grid-cols-12 min-h-0 flex-1 overflow-hidden">
+          {/* Left Column: Live Preview Canvas (7 cols) */}
+          <div className="lg:col-span-7 p-6 flex flex-col items-center justify-center bg-canvas/30 select-none overflow-y-auto">
+            {/* Preview Background Toggles */}
+            <div className="mb-3 flex items-center justify-between w-full max-w-lg text-xs">
+              <span className="font-semibold text-muted flex items-center gap-1.5 uppercase tracking-wider text-[11px]">
+                <Eye className="h-3.5 w-3.5 text-brand-600" />
+                Live Preview
               </span>
-              <div className="flex items-center gap-1 rounded-lg border border-line bg-surface p-0.5 text-xs">
-                <button
-                  type="button"
-                  onClick={() => setPreviewBg("dark")}
-                  className={`px-2.5 py-0.5 rounded text-[11px] font-medium transition-colors cursor-pointer ${
-                    previewBg === "dark" ? "bg-slate-900 text-white shadow-xs" : "text-muted hover:text-ink"
-                  }`}
-                >
-                  Dark Canvas
-                </button>
+              <div className="flex items-center gap-1 bg-surface border border-line rounded-lg p-0.5">
                 <button
                   type="button"
                   onClick={() => setPreviewBg("photo")}
-                  className={`px-2.5 py-0.5 rounded text-[11px] font-medium transition-colors cursor-pointer ${
-                    previewBg === "photo" ? "bg-brand-600 text-white shadow-xs" : "text-muted hover:text-ink"
+                  className={`px-2 py-0.5 rounded text-[11px] font-medium transition-colors cursor-pointer ${
+                    previewBg === "photo"
+                      ? "bg-brand-600 text-white shadow-xs"
+                      : "text-muted hover:text-ink"
                   }`}
                 >
                   On Photo
                 </button>
                 <button
                   type="button"
-                  onClick={() => setPreviewBg("light")}
-                  className={`px-2.5 py-0.5 rounded text-[11px] font-medium transition-colors cursor-pointer ${
-                    previewBg === "light" ? "bg-white text-ink border border-line shadow-xs" : "text-muted hover:text-ink"
+                  onClick={() => setPreviewBg("dark")}
+                  className={`px-2 py-0.5 rounded text-[11px] font-medium transition-colors cursor-pointer ${
+                    previewBg === "dark"
+                      ? "bg-brand-600 text-white shadow-xs"
+                      : "text-muted hover:text-ink"
                   }`}
                 >
-                  Transparent Grid
+                  Dark Canvas
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setPreviewBg("grid")}
+                  className={`px-2 py-0.5 rounded text-[11px] font-medium transition-colors cursor-pointer ${
+                    previewBg === "grid"
+                      ? "bg-brand-600 text-white shadow-xs"
+                      : "text-muted hover:text-ink"
+                  }`}
+                >
+                  Grid
                 </button>
               </div>
             </div>
 
-            {/* Live Template Container */}
+            {/* Canvas Container */}
             <div
-              className={`w-full rounded-2xl border border-line p-6 flex items-center justify-center shadow-inner transition-colors min-h-[320px] max-h-[460px] overflow-hidden relative ${
-                previewBg === "dark"
-                  ? "bg-[#0b0f19]"
-                  : previewBg === "photo"
-                  ? "bg-cover bg-center"
-                  : "bg-[repeating-conic-gradient(#e2e8f0_0%_25%,#ffffff_0%_50%)] bg-[length:16px_16px]"
-              }`}
-              style={
+              className={`relative w-full max-w-lg aspect-[16/10] rounded-2xl border border-line flex flex-col justify-end overflow-hidden shadow-inner transition-all ${
                 previewBg === "photo"
-                  ? { backgroundImage: "url('/default-cover.jpg')" }
-                  : undefined
-              }
+                  ? "bg-cover bg-center"
+                  : previewBg === "dark"
+                  ? "bg-[#18181b]"
+                  : "bg-[repeating-conic-gradient(#f0eee9_0%_25%,#ffffff_0%_50%)] bg-[length:14px_14px]"
+              }`}
+              style={{
+                backgroundImage:
+                  previewBg === "photo" ? "url(/default-cover.jpg)" : undefined,
+              }}
             >
               {/* Dimmer overlay for photo preview */}
               {previewBg === "photo" && (
-                <div className="absolute inset-0 bg-black/45 backdrop-blur-[1px]" />
+                <div className="absolute inset-0 bg-black/25 pointer-events-none" />
               )}
 
-              {/* RENDERED SVG TEMPLATES */}
-              <div className="relative z-10 w-full flex items-center justify-center overflow-x-auto p-2">
-                {preset === "floral-lilies-banner" && (
-                  <FloralLiliesBannerSVG
+              {/* RENDERED SVG TEMPLATES (Positioned along bottom just like final photo) */}
+              <div className="relative z-10 w-full flex items-end justify-center p-2">
+                {preset === "classic-arched-banner" && (
+                  <ClassicArchedBannerSVG
                     ref={svgRef}
                     subtitle={subtitle}
                     names={names}
                     dateText={dateText}
+                    venueText={venueText}
                     fontFamily={fontFamily}
+                    isItalic={isItalic}
                     namesFontSize={namesFontSize}
                     subtitleFontSize={subtitleFontSize}
+                    dateFontSize={dateFontSize}
                     letterSpacing={letterSpacing}
-                    color={color}
-                    showArch={showArch}
-                    showFloral={showFloral}
-                    showEmblem={showEmblem}
+                    arcHeight={arcHeight}
+                    bgColor={bgColor}
+                    textColor={textColor}
+                    borderColor={borderColor}
+                    showBorder={showBorder}
+                    showCalendarIcon={showCalendarIcon}
                     showDividers={showDividers}
+                    showVenue={showVenue}
+                  />
+                )}
+
+                {preset === "minimalist-straight-banner" && (
+                  <MinimalistStraightBannerSVG
+                    ref={svgRef}
+                    subtitle={subtitle}
+                    names={names}
+                    dateText={dateText}
+                    venueText={venueText}
+                    fontFamily={fontFamily}
+                    isItalic={isItalic}
+                    namesFontSize={namesFontSize}
+                    subtitleFontSize={subtitleFontSize}
+                    dateFontSize={dateFontSize}
+                    letterSpacing={letterSpacing}
+                    bgColor={bgColor}
+                    textColor={textColor}
+                    borderColor={borderColor}
+                    showBorder={showBorder}
+                    showCalendarIcon={showCalendarIcon}
+                    showDividers={showDividers}
+                    showVenue={showVenue}
                   />
                 )}
 
@@ -387,7 +332,9 @@ export function TemplateDesignerModal({
                     fontFamily={fontFamily}
                     namesFontSize={namesFontSize}
                     subtitleFontSize={subtitleFontSize}
-                    color={color}
+                    dateFontSize={dateFontSize}
+                    textColor={textColor}
+                    borderColor={borderColor}
                   />
                 )}
 
@@ -400,127 +347,117 @@ export function TemplateDesignerModal({
                     fontFamily={fontFamily}
                     namesFontSize={namesFontSize}
                     subtitleFontSize={subtitleFontSize}
-                    color={color}
+                    dateFontSize={dateFontSize}
+                    textColor={textColor}
+                    borderColor={borderColor}
                   />
                 )}
 
-                {preset === "studio-badge" && (
-                  <StudioBadgeSVG
-                    ref={svgRef}
-                    names={names}
-                    dateText={dateText}
-                    venueText={venueText}
-                    color={color}
-                  />
-                )}
-
-                {preset === "minimalist-frame" && (
-                  <MinimalistFrameSVG
+                {preset === "transparent-signature" && (
+                  <TransparentSignatureSVG
                     ref={svgRef}
                     subtitle={subtitle}
                     names={names}
                     dateText={dateText}
                     fontFamily={fontFamily}
+                    isItalic={isItalic}
                     namesFontSize={namesFontSize}
-                    color={color}
+                    subtitleFontSize={subtitleFontSize}
+                    dateFontSize={dateFontSize}
+                    letterSpacing={letterSpacing}
+                    textColor={textColor}
+                    showDividers={showDividers}
                   />
                 )}
               </div>
             </div>
 
             <p className="mt-3 text-[11px] text-muted text-center">
-              ✓ 100% transparent vector output. Watermark seamlessly blends onto event photos on download.
+              ✓ High-res vector render. Automatically attached to event watermark settings on apply.
             </p>
           </div>
 
           {/* Right Column: Customization Controls (5 cols) */}
           <div className="lg:col-span-5 p-6 space-y-5 overflow-y-auto max-h-[75vh]">
-            {/* 1. Template Presets Tabs */}
+            {/* 1. Template Presets */}
             <div>
               <label className="text-xs font-bold uppercase tracking-wider text-muted flex items-center gap-1.5 mb-2">
-                <Crown className="h-3.5 w-3.5 text-brand-600" />
-                <span>Design Preset</span>
+                <Layers className="h-3.5 w-3.5 text-brand-600" />
+                <span>Template Style</span>
               </label>
+
               <div className="grid grid-cols-2 gap-2">
                 <button
                   type="button"
                   onClick={() => {
-                    setPreset("floral-lilies-banner");
-                    setFontFamily("Great Vibes");
+                    setPreset("classic-arched-banner");
+                    setBgColor("#faf6ee");
+                    setTextColor("#581c25");
+                    setIsItalic(true);
                   }}
-                  className={`p-2.5 rounded-xl border text-left transition-all cursor-pointer ${
-                    preset === "floral-lilies-banner"
-                      ? "border-brand-500 bg-brand-50/50 ring-1 ring-brand-500 font-semibold text-brand-900"
-                      : "border-line bg-surface hover:border-brand-300 text-ink"
+                  className={`flex flex-col text-left p-2.5 rounded-xl border transition-all cursor-pointer ${
+                    preset === "classic-arched-banner"
+                      ? "border-brand-500 bg-brand-50/50 ring-1 ring-brand-500 shadow-xs"
+                      : "border-line bg-surface hover:border-brand-300"
                   }`}
                 >
-                  <div className="flex items-center gap-1.5 text-xs">
-                    <Flower2 className="h-3.5 w-3.5 text-rose-500" />
-                    <span>Floral Lilies Banner</span>
-                  </div>
-                  <span className="text-[10px] text-muted block mt-0.5">Arched lilies header (Photo match)</span>
+                  <span className="text-xs font-bold text-ink">Classic Arched Banner</span>
+                  <span className="text-[10px] text-muted mt-0.5">Flat cream curved bottom card (Photo match)</span>
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => {
+                    setPreset("minimalist-straight-banner");
+                    setBgColor("#faf6ee");
+                    setTextColor("#581c25");
+                  }}
+                  className={`flex flex-col text-left p-2.5 rounded-xl border transition-all cursor-pointer ${
+                    preset === "minimalist-straight-banner"
+                      ? "border-brand-500 bg-brand-50/50 ring-1 ring-brand-500 shadow-xs"
+                      : "border-line bg-surface hover:border-brand-300"
+                  }`}
+                >
+                  <span className="text-xs font-bold text-ink">Straight Flat Banner</span>
+                  <span className="text-[10px] text-muted mt-0.5">Clean horizontal bottom bar with gold line</span>
                 </button>
 
                 <button
                   type="button"
                   onClick={() => {
                     setPreset("royal-crest");
-                    setFontFamily("Cinzel");
+                    setTextColor("#dfb15b");
                   }}
-                  className={`p-2.5 rounded-xl border text-left transition-all cursor-pointer ${
+                  className={`flex flex-col text-left p-2.5 rounded-xl border transition-all cursor-pointer ${
                     preset === "royal-crest"
-                      ? "border-brand-500 bg-brand-50/50 ring-1 ring-brand-500 font-semibold text-brand-900"
-                      : "border-line bg-surface hover:border-brand-300 text-ink"
+                      ? "border-brand-500 bg-brand-50/50 ring-1 ring-brand-500 shadow-xs"
+                      : "border-line bg-surface hover:border-brand-300"
                   }`}
                 >
-                  <div className="flex items-center gap-1.5 text-xs">
-                    <Crown className="h-3.5 w-3.5 text-amber-500" />
-                    <span>Royal Heraldic Crest</span>
-                  </div>
-                  <span className="text-[10px] text-muted block mt-0.5">Luxury monogram emblem</span>
+                  <span className="text-xs font-bold text-ink">Royal Monogram Crest</span>
+                  <span className="text-[10px] text-muted mt-0.5">Luxury heraldic shield with initials</span>
                 </button>
 
                 <button
                   type="button"
                   onClick={() => {
-                    setPreset("botanical-wreath");
-                    setFontFamily("Alex Brush");
+                    setPreset("transparent-signature");
+                    setTextColor("#ffffff");
+                    setIsItalic(true);
                   }}
-                  className={`p-2.5 rounded-xl border text-left transition-all cursor-pointer ${
-                    preset === "botanical-wreath"
-                      ? "border-brand-500 bg-brand-50/50 ring-1 ring-brand-500 font-semibold text-brand-900"
-                      : "border-line bg-surface hover:border-brand-300 text-ink"
+                  className={`flex flex-col text-left p-2.5 rounded-xl border transition-all cursor-pointer ${
+                    preset === "transparent-signature"
+                      ? "border-brand-500 bg-brand-50/50 ring-1 ring-brand-500 shadow-xs"
+                      : "border-line bg-surface hover:border-brand-300"
                   }`}
                 >
-                  <div className="flex items-center gap-1.5 text-xs">
-                    <Flower2 className="h-3.5 w-3.5 text-emerald-500" />
-                    <span>Botanical Wreath</span>
-                  </div>
-                  <span className="text-[10px] text-muted block mt-0.5">Delicate circular floral ring</span>
-                </button>
-
-                <button
-                  type="button"
-                  onClick={() => {
-                    setPreset("studio-badge");
-                    setFontFamily("Montserrat");
-                  }}
-                  className={`p-2.5 rounded-xl border text-left transition-all cursor-pointer ${
-                    preset === "studio-badge"
-                      ? "border-brand-500 bg-brand-50/50 ring-1 ring-brand-500 font-semibold text-brand-900"
-                      : "border-line bg-surface hover:border-brand-300 text-ink"
-                  }`}
-                >
-                  <div className="flex items-center gap-1.5 text-xs">
-                    <Camera className="h-3.5 w-3.5 text-brand-600" />
-                    <span>Studio Signature Badge</span>
-                  </div>
-                  <span className="text-[10px] text-muted block mt-0.5">Photography branding badge</span>
+                  <span className="text-xs font-bold text-ink">Transparent Signature</span>
+                  <span className="text-[10px] text-muted mt-0.5">Overlay script without background box</span>
                 </button>
               </div>
             </div>
 
-            {/* 2. Text Content Inputs */}
+            {/* 2. Text Content Fields */}
             <div className="space-y-3">
               <label className="text-xs font-bold uppercase tracking-wider text-muted flex items-center gap-1.5">
                 <Type className="h-3.5 w-3.5 text-brand-600" />
@@ -533,7 +470,7 @@ export function TemplateDesignerModal({
                   type="text"
                   value={subtitle}
                   onChange={(e) => setSubtitle(e.target.value)}
-                  placeholder="e.g. THE WEDDING OF"
+                  placeholder="THE WEDDING OF"
                   className="w-full rounded-lg border border-line bg-surface px-3 py-1.5 text-xs text-ink focus:outline-none focus:ring-1 focus:ring-brand-500"
                 />
               </div>
@@ -544,8 +481,8 @@ export function TemplateDesignerModal({
                   type="text"
                   value={names}
                   onChange={(e) => setNames(e.target.value)}
-                  placeholder="e.g. Naveen & Meera"
-                  className="w-full rounded-lg border border-line bg-surface px-3 py-1.5 text-xs font-semibold text-ink focus:outline-none focus:ring-1 focus:ring-brand-500"
+                  placeholder="Arun & Keerthana"
+                  className="w-full rounded-lg border border-line bg-surface px-3 py-1.5 text-xs text-ink font-semibold focus:outline-none focus:ring-1 focus:ring-brand-500"
                 />
               </div>
 
@@ -556,8 +493,8 @@ export function TemplateDesignerModal({
                     type="text"
                     value={dateText}
                     onChange={(e) => setDateText(e.target.value)}
-                    placeholder="e.g. 22 AUGUST 2026"
-                    className="w-full rounded-lg border border-line bg-surface px-2.5 py-1.5 text-xs text-ink focus:outline-none focus:ring-1 focus:ring-brand-500"
+                    placeholder="14 FEBRUARY 2026"
+                    className="w-full rounded-lg border border-line bg-surface px-3 py-1.5 text-xs text-ink focus:outline-none focus:ring-1 focus:ring-brand-500"
                   />
                 </div>
                 <div>
@@ -566,176 +503,288 @@ export function TemplateDesignerModal({
                     type="text"
                     value={venueText}
                     onChange={(e) => setVenueText(e.target.value)}
-                    placeholder="e.g. Jaipur, India"
-                    className="w-full rounded-lg border border-line bg-surface px-2.5 py-1.5 text-xs text-ink focus:outline-none focus:ring-1 focus:ring-brand-500"
+                    placeholder="Chennai, India"
+                    className="w-full rounded-lg border border-line bg-surface px-3 py-1.5 text-xs text-ink focus:outline-none focus:ring-1 focus:ring-brand-500"
                   />
                 </div>
               </div>
             </div>
 
-            {/* 3. Font Family & Sizing */}
+            {/* 3. Typography & Font Selection */}
             <div className="space-y-3">
-              <label className="text-xs font-bold uppercase tracking-wider text-muted flex items-center gap-1.5">
-                <Sliders className="h-3.5 w-3.5 text-brand-600" />
-                <span>Typography & Font Style</span>
-              </label>
+              <div className="flex items-center justify-between">
+                <label className="text-xs font-bold uppercase tracking-wider text-muted flex items-center gap-1.5">
+                  <Sliders className="h-3.5 w-3.5 text-brand-600" />
+                  <span>Typography</span>
+                </label>
+                <button
+                  type="button"
+                  onClick={() => setIsItalic(!isItalic)}
+                  className={`px-2 py-0.5 rounded text-[11px] font-medium border transition-colors cursor-pointer ${
+                    isItalic
+                      ? "border-brand-500 bg-brand-50 text-brand-700 font-bold"
+                      : "border-line text-muted hover:text-ink"
+                  }`}
+                >
+                  Italic Script ({isItalic ? "ON" : "OFF"})
+                </button>
+              </div>
 
               <div>
-                <span className="text-[11px] font-medium text-muted block mb-1">Names Font Style</span>
+                <span className="text-[11px] font-medium text-muted block mb-1">Font Family</span>
                 <select
                   value={fontFamily}
                   onChange={(e) => setFontFamily(e.target.value as typeof fontFamily)}
                   className="w-full rounded-lg border border-line bg-surface px-3 py-1.5 text-xs text-ink focus:outline-none focus:ring-1 focus:ring-brand-500 cursor-pointer"
                 >
-                  <option value="Great Vibes">Great Vibes (Luxury Wedding Cursive)</option>
-                  <option value="Alex Brush">Alex Brush (Delicate Calligraphy)</option>
-                  <option value="Cinzel">Cinzel (Royal Roman Serif)</option>
-                  <option value="Playfair Display">Playfair Display (Editorial Serif)</option>
+                  <option value="Playfair Display">Playfair Display (Classic Luxury Wedding Serif - Photo match)</option>
+                  <option value="Cormorant Garamond">Cormorant Garamond (Royal Elegant Serif)</option>
+                  <option value="Cinzel">Cinzel (Imperial Roman Serif)</option>
+                  <option value="Great Vibes">Great Vibes (Graceful Flowing Calligraphy)</option>
+                  <option value="Alex Brush">Alex Brush (Delicate Luxury Script)</option>
                   <option value="Montserrat">Montserrat (Clean Modern Sans)</option>
                 </select>
               </div>
 
-              {/* Sliders: Names Size, Subtitle Size & Letter Spacing */}
-              <div className="grid grid-cols-3 gap-2.5 pt-1">
+              {/* FONT SIZING SLIDERS (Full range, directly modifies SVG) */}
+              <div className="space-y-2.5 pt-1 bg-surface border border-line rounded-xl p-3">
+                {/* Names Size */}
                 <div>
                   <div className="flex items-center justify-between text-[11px] text-muted mb-1">
-                    <span>Names</span>
-                    <span className="font-mono text-ink font-semibold">{namesFontSize}px</span>
+                    <span className="font-semibold text-ink">Names Font Size</span>
+                    <div className="flex items-center gap-1.5">
+                      <button
+                        type="button"
+                        onClick={() => setNamesFontSize(Math.max(45, namesFontSize - 4))}
+                        className="grid h-5 w-5 place-items-center rounded bg-canvas border border-line text-ink hover:bg-brand-50"
+                      >
+                        <Minus className="h-3 w-3" />
+                      </button>
+                      <span className="font-mono text-ink font-bold w-10 text-center">{namesFontSize}px</span>
+                      <button
+                        type="button"
+                        onClick={() => setNamesFontSize(Math.min(130, namesFontSize + 4))}
+                        className="grid h-5 w-5 place-items-center rounded bg-canvas border border-line text-ink hover:bg-brand-50"
+                      >
+                        <Plus className="h-3 w-3" />
+                      </button>
+                    </div>
                   </div>
                   <input
                     type="range"
-                    min={28}
-                    max={72}
+                    min={45}
+                    max={130}
                     value={namesFontSize}
                     onChange={(e) => setNamesFontSize(Number(e.target.value))}
                     className="w-full accent-brand-500 h-1.5 bg-line rounded-lg cursor-pointer"
                   />
                 </div>
 
+                {/* Subtitle Size */}
                 <div>
                   <div className="flex items-center justify-between text-[11px] text-muted mb-1">
-                    <span>Subtitle</span>
+                    <span>Subtitle Size</span>
                     <span className="font-mono text-ink font-semibold">{subtitleFontSize}px</span>
                   </div>
                   <input
                     type="range"
-                    min={9}
-                    max={20}
+                    min={12}
+                    max={36}
                     value={subtitleFontSize}
                     onChange={(e) => setSubtitleFontSize(Number(e.target.value))}
                     className="w-full accent-brand-500 h-1.5 bg-line rounded-lg cursor-pointer"
                   />
                 </div>
 
+                {/* Date Size */}
                 <div>
                   <div className="flex items-center justify-between text-[11px] text-muted mb-1">
-                    <span>Spacing</span>
+                    <span>Date Size</span>
+                    <span className="font-mono text-ink font-semibold">{dateFontSize}px</span>
+                  </div>
+                  <input
+                    type="range"
+                    min={12}
+                    max={32}
+                    value={dateFontSize}
+                    onChange={(e) => setDateFontSize(Number(e.target.value))}
+                    className="w-full accent-brand-500 h-1.5 bg-line rounded-lg cursor-pointer"
+                  />
+                </div>
+
+                {/* Letter Spacing */}
+                <div>
+                  <div className="flex items-center justify-between text-[11px] text-muted mb-1">
+                    <span>Letter Spacing</span>
                     <span className="font-mono text-ink font-semibold">{letterSpacing}px</span>
                   </div>
                   <input
                     type="range"
-                    min={1}
-                    max={8}
+                    min={0}
+                    max={14}
                     value={letterSpacing}
                     onChange={(e) => setLetterSpacing(Number(e.target.value))}
                     className="w-full accent-brand-500 h-1.5 bg-line rounded-lg cursor-pointer"
                   />
                 </div>
+
+                {/* Top Curve Arch Height (for arched banner) */}
+                {preset === "classic-arched-banner" && (
+                  <div>
+                    <div className="flex items-center justify-between text-[11px] text-muted mb-1">
+                      <span>Top Arch Curve Height</span>
+                      <span className="font-mono text-ink font-semibold">{arcHeight}px</span>
+                    </div>
+                    <input
+                      type="range"
+                      min={0}
+                      max={65}
+                      value={arcHeight}
+                      onChange={(e) => setArcHeight(Number(e.target.value))}
+                      className="w-full accent-brand-500 h-1.5 bg-line rounded-lg cursor-pointer"
+                    />
+                  </div>
+                )}
               </div>
             </div>
 
-            {/* 4. Color Palette */}
-            <div>
-              <label className="text-xs font-bold uppercase tracking-wider text-muted flex items-center justify-between mb-2">
+            {/* 4. Colors (Background & Text) */}
+            <div className="space-y-3">
+              <label className="text-xs font-bold uppercase tracking-wider text-muted flex items-center justify-between">
                 <span className="flex items-center gap-1.5">
-                  <Palette className="h-3.5 w-3.5 text-brand-600" /> Color Theme
+                  <Palette className="h-3.5 w-3.5 text-brand-600" /> Color Themes
                 </span>
-                <span className="font-mono text-[11px] uppercase text-ink font-semibold">{color}</span>
               </label>
 
-              <div className="flex items-center gap-2 flex-wrap">
-                {COLOR_PALETTES.map((pal) => (
-                  <button
-                    key={pal.value}
-                    type="button"
-                    onClick={() => setColor(pal.value)}
-                    className={`flex items-center gap-1.5 rounded-lg border px-2.5 py-1 text-xs transition-all cursor-pointer ${
-                      color.toLowerCase() === pal.value.toLowerCase()
-                        ? "border-brand-500 bg-brand-50/50 ring-1 ring-brand-500 font-semibold text-brand-900"
-                        : "border-line bg-surface hover:bg-canvas text-ink"
-                    }`}
-                  >
-                    <span
-                      className="h-3 w-3 rounded-full border border-black/20 shrink-0"
-                      style={{ backgroundColor: pal.value }}
-                    />
-                    <span>{pal.label}</span>
-                  </button>
-                ))}
+              {/* Banner Background Color (for banner styles) */}
+              {(preset === "classic-arched-banner" || preset === "minimalist-straight-banner") && (
+                <div>
+                  <span className="text-[11px] font-medium text-muted block mb-1.5">
+                    Banner Background Color
+                  </span>
+                  <div className="flex items-center gap-1.5 flex-wrap">
+                    {[
+                      { name: "Ivory Cream", val: "#faf6ee" },
+                      { name: "Champagne", val: "#f6f0df" },
+                      { name: "White", val: "#ffffff" },
+                      { name: "Deep Maroon", val: "#4a141b" },
+                      { name: "Midnight", val: "#141416" },
+                      { name: "Transparent", val: "transparent" },
+                    ].map((b) => (
+                      <button
+                        key={b.val}
+                        type="button"
+                        onClick={() => setBgColor(b.val)}
+                        className={`px-2 py-1 rounded-lg text-[11px] font-medium border transition-all cursor-pointer flex items-center gap-1.5 ${
+                          bgColor === b.val
+                            ? "border-brand-500 bg-brand-50 text-brand-800 ring-1 ring-brand-500 font-bold"
+                            : "border-line bg-surface text-ink hover:border-brand-300"
+                        }`}
+                      >
+                        <span
+                          className="h-3 w-3 rounded-full border border-black/10 shrink-0"
+                          style={{
+                            background:
+                              b.val === "transparent"
+                                ? "repeating-conic-gradient(#bbb 0% 25%, #fff 0% 50%) 50% / 6px 6px"
+                                : b.val,
+                          }}
+                        />
+                        <span>{b.name}</span>
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              )}
 
-                {/* Custom Color Picker */}
-                <label className="flex items-center gap-1.5 rounded-lg border border-line bg-surface px-2.5 py-1 text-xs cursor-pointer hover:bg-canvas">
-                  <input
-                    type="color"
-                    value={color}
-                    onChange={(e) => setColor(e.target.value)}
-                    className="sr-only"
-                  />
-                  <span
-                    className="h-3 w-3 rounded-full border border-black/20 shrink-0"
-                    style={{ backgroundColor: color }}
-                  />
-                  <span>Custom Hex</span>
-                </label>
-              </div>
-            </div>
-
-            {/* 5. Toggles for Banner Layout Elements */}
-            {preset === "floral-lilies-banner" && (
-              <div className="pt-2 border-t border-line">
-                <span className="text-[11px] font-bold uppercase tracking-wider text-muted block mb-2">
-                  Decorative Elements
+              {/* Text & Accent Color */}
+              <div>
+                <span className="text-[11px] font-medium text-muted block mb-1.5">
+                  Text & Accent Color
                 </span>
-                <div className="grid grid-cols-2 gap-2 text-xs">
-                  <label className="flex items-center gap-2 cursor-pointer select-none">
+                <div className="flex items-center gap-1.5 flex-wrap">
+                  {[
+                    { name: "Wine Burgundy", val: "#581c25" },
+                    { name: "Warm Gold", val: "#c49b66" },
+                    { name: "Royal Gold", val: "#996515" },
+                    { name: "Matte Charcoal", val: "#1a1a1a" },
+                    { name: "Pure White", val: "#ffffff" },
+                  ].map((c) => (
+                    <button
+                      key={c.val}
+                      type="button"
+                      onClick={() => setTextColor(c.val)}
+                      className={`px-2 py-1 rounded-lg text-[11px] font-medium border transition-all cursor-pointer flex items-center gap-1.5 ${
+                        textColor === c.val
+                          ? "border-brand-500 bg-brand-50 text-brand-800 ring-1 ring-brand-500 font-bold"
+                          : "border-line bg-surface text-ink hover:border-brand-300"
+                      }`}
+                    >
+                      <span
+                        className="h-3 w-3 rounded-full border border-black/10 shrink-0"
+                        style={{ background: c.val }}
+                      />
+                      <span>{c.name}</span>
+                    </button>
+                  ))}
+                  {/* Custom color input */}
+                  <label className="flex items-center gap-1.5 px-2 py-1 rounded-lg border border-line bg-surface text-[11px] text-ink cursor-pointer hover:border-brand-300">
                     <input
-                      type="checkbox"
-                      checked={showFloral}
-                      onChange={(e) => setShowFloral(e.target.checked)}
-                      className="rounded accent-brand-500 h-3.5 w-3.5"
+                      type="color"
+                      value={textColor.startsWith("#") ? textColor : "#581c25"}
+                      onChange={(e) => setTextColor(e.target.value)}
+                      className="h-3.5 w-3.5 cursor-pointer rounded border-0 bg-transparent p-0"
                     />
-                    <span>Corner Floral Lilies</span>
-                  </label>
-                  <label className="flex items-center gap-2 cursor-pointer select-none">
-                    <input
-                      type="checkbox"
-                      checked={showArch}
-                      onChange={(e) => setShowArch(e.target.checked)}
-                      className="rounded accent-brand-500 h-3.5 w-3.5"
-                    />
-                    <span>Scalloped Arch Frame</span>
-                  </label>
-                  <label className="flex items-center gap-2 cursor-pointer select-none">
-                    <input
-                      type="checkbox"
-                      checked={showEmblem}
-                      onChange={(e) => setShowEmblem(e.target.checked)}
-                      className="rounded accent-brand-500 h-3.5 w-3.5"
-                    />
-                    <span>Intertwined Hearts ♡♡</span>
-                  </label>
-                  <label className="flex items-center gap-2 cursor-pointer select-none">
-                    <input
-                      type="checkbox"
-                      checked={showDividers}
-                      onChange={(e) => setShowDividers(e.target.checked)}
-                      className="rounded accent-brand-500 h-3.5 w-3.5"
-                    />
-                    <span>Divider Lines</span>
+                    <span>Custom</span>
                   </label>
                 </div>
               </div>
-            )}
+            </div>
+
+            {/* 5. Elements Toggles */}
+            <div className="space-y-2">
+              <label className="text-xs font-bold uppercase tracking-wider text-muted block">
+                Element Toggles
+              </label>
+              <div className="grid grid-cols-2 gap-2 text-xs">
+                <label className="flex items-center gap-2 cursor-pointer select-none">
+                  <input
+                    type="checkbox"
+                    checked={showBorder}
+                    onChange={(e) => setShowBorder(e.target.checked)}
+                    className="accent-brand-600 rounded"
+                  />
+                  <span>Curved Top Border</span>
+                </label>
+                <label className="flex items-center gap-2 cursor-pointer select-none">
+                  <input
+                    type="checkbox"
+                    checked={showCalendarIcon}
+                    onChange={(e) => setShowCalendarIcon(e.target.checked)}
+                    className="accent-brand-600 rounded"
+                  />
+                  <span>Calendar Icon</span>
+                </label>
+                <label className="flex items-center gap-2 cursor-pointer select-none">
+                  <input
+                    type="checkbox"
+                    checked={showDividers}
+                    onChange={(e) => setShowDividers(e.target.checked)}
+                    className="accent-brand-600 rounded"
+                  />
+                  <span>Date Divider Lines</span>
+                </label>
+                <label className="flex items-center gap-2 cursor-pointer select-none">
+                  <input
+                    type="checkbox"
+                    checked={showVenue}
+                    onChange={(e) => setShowVenue(e.target.checked)}
+                    className="accent-brand-600 rounded"
+                  />
+                  <span>Venue Tagline</span>
+                </label>
+              </div>
+            </div>
           </div>
         </div>
 
@@ -744,12 +793,20 @@ export function TemplateDesignerModal({
           <button
             type="button"
             onClick={() => {
-              setNames("Naveen & Meera");
+              setNames("Arun & Keerthana");
               setSubtitle("THE WEDDING OF");
-              setDateText("22 AUGUST 2026");
-              setColor("#c58f87");
-              setFontFamily("Great Vibes");
-              setPreset("floral-lilies-banner");
+              setDateText("14 FEBRUARY 2026");
+              setVenueText("The Grand Palace, Chennai");
+              setBgColor("#faf6ee");
+              setTextColor("#581c25");
+              setFontFamily("Playfair Display");
+              setIsItalic(true);
+              setNamesFontSize(82);
+              setSubtitleFontSize(20);
+              setDateFontSize(18);
+              setLetterSpacing(5);
+              setArcHeight(45);
+              setPreset("classic-arched-banner");
             }}
             className="inline-flex items-center gap-1.5 text-xs text-muted hover:text-ink transition-colors cursor-pointer"
           >
@@ -776,603 +833,659 @@ export function TemplateDesignerModal({
   );
 }
 
-// -------------------------------------------------------------------------------------------------
-// SVG PRESET 1: Floral Lilies Banner (The exact match for the user's uploaded photo!)
-// -------------------------------------------------------------------------------------------------
-import { forwardRef } from "react";
-
-interface FloralLiliesBannerProps {
+// ------------------------------------------------------------------------------------------------
+// 1. CLASSIC ARCHED BOTTOM BANNER (PHOTO MATCH - IMAGE 2)
+// ------------------------------------------------------------------------------------------------
+interface ClassicArchedBannerSVGProps {
   subtitle: string;
   names: string;
   dateText: string;
+  venueText?: string;
   fontFamily: string;
+  isItalic: boolean;
   namesFontSize: number;
   subtitleFontSize: number;
+  dateFontSize: number;
   letterSpacing: number;
-  color: string;
-  showArch: boolean;
-  showFloral: boolean;
-  showEmblem: boolean;
+  arcHeight?: number;
+  bgColor: string;
+  textColor: string;
+  borderColor: string;
+  showBorder: boolean;
+  showCalendarIcon: boolean;
   showDividers: boolean;
+  showVenue: boolean;
 }
 
-const FloralLiliesBannerSVG = forwardRef<SVGSVGElement, FloralLiliesBannerProps>(
-  (
-    {
-      subtitle,
-      names,
-      dateText,
-      fontFamily,
-      namesFontSize,
-      subtitleFontSize,
-      letterSpacing,
-      color,
-      showArch,
-      showFloral,
-      showEmblem,
-      showDividers,
-    },
-    ref
-  ) => {
-    return (
-      <svg
-        ref={ref}
-        xmlns="http://www.w3.org/2000/svg"
-        viewBox="0 0 1200 280"
-        width="1200"
-        height="280"
-        className="max-h-[260px] w-auto max-w-full drop-shadow-md"
-        style={{ overflow: "visible" }}
-      >
-        <defs>
-          <linearGradient id="goldGlow" x1="0%" y1="0%" x2="100%" y2="100%">
-            <stop offset="0%" stopColor={color} stopOpacity="1" />
-            <stop offset="50%" stopColor={color} stopOpacity="0.85" />
-            <stop offset="100%" stopColor={color} stopOpacity="1" />
-          </linearGradient>
-        </defs>
+const ClassicArchedBannerSVG = ({
+  ref,
+  subtitle,
+  names,
+  dateText,
+  venueText,
+  fontFamily,
+  isItalic,
+  namesFontSize,
+  subtitleFontSize,
+  dateFontSize,
+  letterSpacing,
+  arcHeight = 45,
+  bgColor,
+  textColor,
+  borderColor,
+  showBorder,
+  showCalendarIcon,
+  showDividers,
+  showVenue,
+}: ClassicArchedBannerSVGProps & { ref: React.RefObject<SVGSVGElement | null> }) => {
+  const bannerHeight = 280;
+  const topY = 60 - arcHeight;
+  const subtitleY = Math.max(topY + 36, 52);
+  const namesY = subtitleY + namesFontSize * 0.95;
+  const dateY = namesY + 44;
+  const venueY = dateY + 28;
 
-        {/* 1. SCALLOPED ARCH FRAME */}
-        {showArch && (
+  const fontStack = `'${fontFamily}', 'Playfair Display', 'Cormorant Garamond', Georgia, serif`;
+
+  return (
+    <svg
+      ref={ref}
+      xmlns="http://www.w3.org/2000/svg"
+      viewBox={`0 0 1200 ${bannerHeight}`}
+      width="1200"
+      height={bannerHeight}
+      className="max-h-[260px] w-auto max-w-full drop-shadow-md"
+      style={{ overflow: "visible" }}
+    >
+      <defs>
+        <style>{GOOGLE_FONTS_DEF}</style>
+      </defs>
+
+      {/* Flat Background Card with Curved Top Arch (Exact Image 2 match) */}
+      {bgColor !== "transparent" && (
+        <path
+          d={`M 0,60 Q 600,${topY} 1200,60 L 1200,${bannerHeight} L 0,${bannerHeight} Z`}
+          fill={bgColor}
+        />
+      )}
+
+      {/* Curved Double Hairline Border along top arch */}
+      {showBorder && (
+        <g stroke={borderColor || textColor} fill="none">
+          {/* Outer primary arch hairline */}
           <path
-            d="M 120,240 C 140,160 170,105 260,85 C 310,75 360,50 440,42 C 520,34 600,28 600,28 C 600,28 680,34 760,42 C 840,50 890,75 940,85 C 1030,105 1060,160 1080,240"
-            fill="none"
-            stroke={color}
-            strokeWidth="2.2"
-            strokeLinecap="round"
+            d={`M 0,60 Q 600,${topY} 1200,60`}
+            strokeWidth="1.8"
             opacity="0.85"
           />
-        )}
-
-        {/* 2. BOTANICAL LILIES - LEFT CORNER */}
-        {showFloral && (
-          <g transform="translate(10, 40) scale(0.9)" stroke={color} fill="none" strokeWidth="1.8" opacity="0.9">
-            {/* Main Lily Petals */}
-            <path d="M 90,160 C 60,130 30,120 10,130 C -5,140 10,170 50,180 Z" />
-            <path d="M 90,160 C 80,110 85,70 105,50 C 120,40 130,70 115,130 Z" />
-            <path d="M 90,160 C 120,130 160,115 190,125 C 205,135 180,165 130,175 Z" />
-            <path d="M 90,160 C 50,180 20,205 15,225 C 10,240 40,240 85,210 Z" />
-            <path d="M 90,160 C 110,195 135,230 155,240 C 170,245 180,225 140,195 Z" />
-
-            {/* Lily Stamens & Anthers */}
-            <path d="M 90,160 C 85,135 88,115 95,100" strokeWidth="1.2" />
-            <circle cx="95" cy="98" r="2.5" fill={color} />
-            <path d="M 90,160 C 95,135 105,120 115,105" strokeWidth="1.2" />
-            <circle cx="116" cy="103" r="2.5" fill={color} />
-            <path d="M 90,160 C 105,145 125,135 140,128" strokeWidth="1.2" />
-            <circle cx="142" cy="127" r="2.5" fill={color} />
-
-            {/* Buds & Tendril Leaves */}
-            <path d="M 30,80 C 45,60 55,40 50,20 C 40,15 30,35 25,60 Z" />
-            <path d="M 50,85 C 65,70 90,55 95,35 C 85,30 70,50 55,75 Z" />
-            <path d="M 40,90 C 20,105 10,120 5,140" strokeWidth="1.2" />
-            <path d="M 70,120 C 55,90 40,60 20,30" strokeWidth="1.2" />
-            <circle cx="18" cy="26" r="3" fill={color} opacity="0.7" />
-            <circle cx="48" cy="18" r="3" fill={color} opacity="0.7" />
-          </g>
-        )}
-
-        {/* 3. BOTANICAL LILIES - RIGHT CORNER (Mirrored) */}
-        {showFloral && (
-          <g transform="translate(1190, 40) scale(-0.9, 0.9)" stroke={color} fill="none" strokeWidth="1.8" opacity="0.9">
-            {/* Main Lily Petals */}
-            <path d="M 90,160 C 60,130 30,120 10,130 C -5,140 10,170 50,180 Z" />
-            <path d="M 90,160 C 80,110 85,70 105,50 C 120,40 130,70 115,130 Z" />
-            <path d="M 90,160 C 120,130 160,115 190,125 C 205,135 180,165 130,175 Z" />
-            <path d="M 90,160 C 50,180 20,205 15,225 C 10,240 40,240 85,210 Z" />
-            <path d="M 90,160 C 110,195 135,230 155,240 C 170,245 180,225 140,195 Z" />
-
-            {/* Lily Stamens & Anthers */}
-            <path d="M 90,160 C 85,135 88,115 95,100" strokeWidth="1.2" />
-            <circle cx="95" cy="98" r="2.5" fill={color} />
-            <path d="M 90,160 C 95,135 105,120 115,105" strokeWidth="1.2" />
-            <circle cx="116" cy="103" r="2.5" fill={color} />
-            <path d="M 90,160 C 105,145 125,135 140,128" strokeWidth="1.2" />
-            <circle cx="142" cy="127" r="2.5" fill={color} />
-
-            {/* Buds & Tendril Leaves */}
-            <path d="M 30,80 C 45,60 55,40 50,20 C 40,15 30,35 25,60 Z" />
-            <path d="M 50,85 C 65,70 90,55 95,35 C 85,30 70,50 55,75 Z" />
-            <path d="M 40,90 C 20,105 10,120 5,140" strokeWidth="1.2" />
-            <path d="M 70,120 C 55,90 40,60 20,30" strokeWidth="1.2" />
-            <circle cx="18" cy="26" r="3" fill={color} opacity="0.7" />
-            <circle cx="48" cy="18" r="3" fill={color} opacity="0.7" />
-          </g>
-        )}
-
-        {/* 4. TOP SUBTITLE LINE WITH DIAMOND STARS: ✦ THE WEDDING OF ✦ */}
-        <g fill={color} opacity="0.95">
-          {/* Left Diamond Star */}
-          <path d="M 425,65 Q 430,65 430,60 Q 430,65 435,65 Q 430,65 430,70 Q 430,65 425,65 Z" />
-          {/* Subtitle Text */}
-          <text
-            x="600"
-            y="69"
-            textAnchor="middle"
-            fill={color}
-            style={{
-              fontFamily: "'Cinzel', 'Playfair Display', Georgia, serif",
-              fontSize: `${subtitleFontSize}px`,
-              letterSpacing: `${letterSpacing}px`,
-              fontWeight: 600,
-            }}
-          >
-            {subtitle.toUpperCase()}
-          </text>
-          {/* Right Diamond Star */}
-          <path d="M 765,65 Q 770,65 770,60 Q 770,65 775,65 Q 770,65 770,70 Q 770,65 765,65 Z" />
+          {/* Inner secondary hairline */}
+          <path
+            d={`M 0,64 Q 600,${topY + 4} 1200,64`}
+            strokeWidth="1"
+            opacity="0.45"
+          />
         </g>
+      )}
 
-        {/* 5. MAIN NAMES: Naveen & Meera (Luxury Cursive Script) */}
+      {/* 1. Subtitle: THE WEDDING OF */}
+      <text
+        x="600"
+        y={subtitleY}
+        textAnchor="middle"
+        fill={textColor}
+        style={{
+          fontFamily: "'Cinzel', 'Playfair Display', Georgia, serif",
+          fontSize: `${subtitleFontSize}px`,
+          letterSpacing: `${letterSpacing}px`,
+          fontWeight: 600,
+          opacity: 0.9,
+        }}
+      >
+        {subtitle.toUpperCase()}
+      </text>
+
+      {/* 2. Couple Names: Arun & Keerthana */}
+      <text
+        x="600"
+        y={namesY}
+        textAnchor="middle"
+        fill={textColor}
+        style={{
+          fontFamily: fontStack,
+          fontSize: `${namesFontSize}px`,
+          fontStyle: isItalic ? "italic" : "normal",
+          fontWeight: isItalic ? 500 : 600,
+        }}
+      >
+        {names}
+      </text>
+
+      {/* 3. Date Row with Calendar Icon and Hairline Dividers: ─── 🗓 14 FEBRUARY 2026 ─── */}
+      <g fill={textColor}>
+        {showDividers && (
+          <line
+            x1="360"
+            y1={dateY - 5}
+            x2={showCalendarIcon ? "470" : "510"}
+            y2={dateY - 5}
+            stroke={textColor}
+            strokeWidth="1"
+            opacity="0.4"
+          />
+        )}
+
+        {showCalendarIcon && (
+          <g
+            transform={`translate(488, ${dateY - 17}) scale(0.95)`}
+            fill="none"
+            stroke={textColor}
+            strokeWidth="1.6"
+            strokeLinecap="round"
+            strokeLinejoin="round"
+            opacity="0.85"
+          >
+            <rect x="0" y="3" width="16" height="15" rx="2.5" />
+            <line x1="0" y1="8" x2="16" y2="8" />
+            <line x1="4" y1="0.5" x2="4" y2="4.5" />
+            <line x1="12" y1="0.5" x2="12" y2="4.5" />
+            <circle cx="5" cy="12" r="0.8" fill={textColor} />
+            <circle cx="8" cy="12" r="0.8" fill={textColor} />
+            <circle cx="11" cy="12" r="0.8" fill={textColor} />
+          </g>
+        )}
+
         <text
           x="600"
-          y="155"
+          y={dateY}
           textAnchor="middle"
-          fill={color}
-          style={{
-            fontFamily: `'${fontFamily}', 'Great Vibes', 'Alex Brush', cursive, serif`,
-            fontSize: `${namesFontSize}px`,
-            fontWeight: 500,
-          }}
-        >
-          {names}
-        </text>
-
-        {/* Little decorative star sparkle above the ampersand / center */}
-        <path
-          d="M 598,102 Q 600,102 600,97 Q 600,102 602,102 Q 600,102 600,107 Q 600,102 598,102 Z"
-          fill={color}
-          opacity="0.8"
-        />
-
-        {/* 6. DATE LINE: 22 AUGUST 2026 */}
-        <text
-          x="600"
-          y="200"
-          textAnchor="middle"
-          fill={color}
+          fill={textColor}
           style={{
             fontFamily: "'Cinzel', 'Playfair Display', Georgia, serif",
-            fontSize: "14px",
-            letterSpacing: "4px",
+            fontSize: `${dateFontSize}px`,
+            letterSpacing: "3px",
             fontWeight: 600,
+            opacity: 0.95,
           }}
         >
           {dateText.toUpperCase()}
         </text>
 
-        {/* 7. BOTTOM EMBLEM: Intertwined Hearts ♡♡ with Tapered Divider Lines */}
-        <g stroke={color} fill="none" opacity="0.9">
-          {/* Left Tapered Line */}
-          {showDividers && (
-            <line x1="390" y1="230" x2="570" y2="230" strokeWidth="1.2" strokeLinecap="round" />
-          )}
-
-          {/* Intertwined Hearts Emblem */}
-          {showEmblem && (
-            <g transform="translate(600, 230) scale(0.9)" strokeWidth="1.6">
-              {/* Left Heart */}
-              <path
-                d="M -12,-6 C -18,-14 -28,-4 -20,6 L -10,15 L 0,6 C 8,-4 -2,-14 -8,-6"
-                stroke={color}
-                fill="none"
-              />
-              {/* Right Heart */}
-              <path
-                d="M 8,-6 C 2,-14 -8,-4 0,6 L 10,15 L 20,6 C 28,-4 18,-14 12,-6"
-                stroke={color}
-                fill="none"
-              />
-            </g>
-          )}
-
-          {/* Right Tapered Line */}
-          {showDividers && (
-            <line x1="630" y1="230" x2="810" y2="230" strokeWidth="1.2" strokeLinecap="round" />
-          )}
-        </g>
-      </svg>
-    );
-  }
-);
-FloralLiliesBannerSVG.displayName = "FloralLiliesBannerSVG";
-
-// -------------------------------------------------------------------------------------------------
-// SVG PRESET 2: Royal Heraldic Crest Monogram
-// -------------------------------------------------------------------------------------------------
-interface RoyalCrestProps {
-  subtitle: string;
-  names: string;
-  dateText: string;
-  fontFamily: string;
-  namesFontSize: number;
-  subtitleFontSize: number;
-  color: string;
-}
-
-const RoyalCrestSVG = forwardRef<SVGSVGElement, RoyalCrestProps>(
-  ({ subtitle, names, dateText, fontFamily, color }, ref) => {
-    // Extract initials: "Naveen & Meera" -> "N & M"
-    const words = names.replace(/&/g, " ").trim().split(/\s+/).filter(Boolean);
-    const initial1 = words[0]?.[0] || "N";
-    const initial2 = words[1]?.[0] || words[words.length - 1]?.[0] || "M";
-    const initialsStr = `${initial1} & ${initial2}`;
-
-    return (
-      <svg
-        ref={ref}
-        xmlns="http://www.w3.org/2000/svg"
-        viewBox="0 0 600 600"
-        width="600"
-        height="600"
-        className="max-h-[300px] w-auto max-w-full drop-shadow-md"
-      >
-        <g stroke={color} fill="none" strokeWidth="2.5" opacity="0.95">
-          {/* Royal Crown Top */}
-          <path
-            d="M 270,120 L 260,80 L 285,95 L 300,70 L 315,95 L 340,80 L 330,120 Z"
-            fill={color}
-            opacity="0.9"
+        {showDividers && (
+          <line
+            x1={showCalendarIcon ? "730" : "690"}
+            y1={dateY - 5}
+            x2="840"
+            y2={dateY - 5}
+            stroke={textColor}
+            strokeWidth="1"
+            opacity="0.4"
           />
-          <circle cx="260" cy="76" r="3" fill={color} />
-          <circle cx="300" cy="65" r="3.5" fill={color} />
-          <circle cx="340" cy="76" r="3" fill={color} />
+        )}
+      </g>
 
-          {/* Ornate Circular Crest Borders */}
-          <circle cx="300" cy="270" r="140" strokeWidth="2" strokeDasharray="4 3" />
-          <circle cx="300" cy="270" r="130" strokeWidth="2.5" />
-          <circle cx="300" cy="270" r="115" strokeWidth="1.2" />
-
-          {/* Botanical leaves around the crest */}
-          <path d="M 160,270 C 150,220 170,170 210,140" strokeWidth="2" />
-          <path d="M 440,270 C 450,220 430,170 390,140" strokeWidth="2" />
-          <path d="M 160,270 C 150,330 180,380 230,410" strokeWidth="2" />
-          <path d="M 440,270 C 450,330 420,380 370,410" strokeWidth="2" />
-        </g>
-
-        {/* Monogram Initials inside the circle */}
+      {/* 4. Optional Venue Tagline */}
+      {showVenue && venueText && (
         <text
-          x="300"
-          y="288"
+          x="600"
+          y={venueY}
           textAnchor="middle"
-          fill={color}
+          fill={textColor}
           style={{
-            fontFamily: `'${fontFamily}', 'Cinzel', Georgia, serif`,
-            fontSize: "64px",
-            fontWeight: 600,
-          }}
-        >
-          {initialsStr}
-        </text>
-
-        {/* Subtitle above banner */}
-        <text
-          x="300"
-          y="445"
-          textAnchor="middle"
-          fill={color}
-          style={{
-            fontFamily: "'Cinzel', Georgia, serif",
-            fontSize: "12px",
-            letterSpacing: "3px",
-            fontWeight: 600,
-          }}
-        >
-          {subtitle.toUpperCase()}
-        </text>
-
-        {/* Full Names below */}
-        <text
-          x="300"
-          y="485"
-          textAnchor="middle"
-          fill={color}
-          style={{
-            fontFamily: `'${fontFamily}', 'Great Vibes', cursive, serif`,
-            fontSize: "36px",
-            fontWeight: 500,
-          }}
-        >
-          {names}
-        </text>
-
-        {/* Date Line */}
-        <text
-          x="300"
-          y="525"
-          textAnchor="middle"
-          fill={color}
-          style={{
-            fontFamily: "'Cinzel', Georgia, serif",
+            fontFamily: "'Montserrat', sans-serif",
             fontSize: "13px",
+            letterSpacing: "2.5px",
+            fontWeight: 500,
+            opacity: 0.75,
+          }}
+        >
+          {venueText.toUpperCase()}
+        </text>
+      )}
+    </svg>
+  );
+};
+
+// ------------------------------------------------------------------------------------------------
+// 2. MINIMALIST STRAIGHT BANNER
+// ------------------------------------------------------------------------------------------------
+const MinimalistStraightBannerSVG = ({
+  ref,
+  subtitle,
+  names,
+  dateText,
+  venueText,
+  fontFamily,
+  isItalic,
+  namesFontSize,
+  subtitleFontSize,
+  dateFontSize,
+  letterSpacing,
+  bgColor,
+  textColor,
+  borderColor,
+  showBorder,
+  showCalendarIcon,
+  showDividers,
+  showVenue,
+}: ClassicArchedBannerSVGProps & { ref: React.RefObject<SVGSVGElement | null> }) => {
+  const bannerHeight = 240;
+  const subtitleY = 55;
+  const namesY = subtitleY + namesFontSize * 0.95;
+  const dateY = namesY + 44;
+  const fontStack = `'${fontFamily}', 'Playfair Display', Georgia, serif`;
+
+  return (
+    <svg
+      ref={ref}
+      xmlns="http://www.w3.org/2000/svg"
+      viewBox={`0 0 1200 ${bannerHeight}`}
+      width="1200"
+      height={bannerHeight}
+      className="max-h-[240px] w-auto max-w-full drop-shadow-md"
+      style={{ overflow: "visible" }}
+    >
+      <defs>
+        <style>{GOOGLE_FONTS_DEF}</style>
+      </defs>
+
+      {bgColor !== "transparent" && (
+        <rect x="0" y="0" width="1200" height={bannerHeight} fill={bgColor} />
+      )}
+
+      {showBorder && (
+        <g stroke={borderColor || textColor}>
+          <line x1="0" y1="2" x2="1200" y2="2" strokeWidth="2" opacity="0.8" />
+          <line x1="0" y1="6" x2="1200" y2="6" strokeWidth="1" opacity="0.4" />
+        </g>
+      )}
+
+      <text
+        x="600"
+        y={subtitleY}
+        textAnchor="middle"
+        fill={textColor}
+        style={{
+          fontFamily: "'Cinzel', 'Playfair Display', Georgia, serif",
+          fontSize: `${subtitleFontSize}px`,
+          letterSpacing: `${letterSpacing}px`,
+          fontWeight: 600,
+          opacity: 0.9,
+        }}
+      >
+        {subtitle.toUpperCase()}
+      </text>
+
+      <text
+        x="600"
+        y={namesY}
+        textAnchor="middle"
+        fill={textColor}
+        style={{
+          fontFamily: fontStack,
+          fontSize: `${namesFontSize}px`,
+          fontStyle: isItalic ? "italic" : "normal",
+          fontWeight: isItalic ? 500 : 600,
+        }}
+      >
+        {names}
+      </text>
+
+      <g fill={textColor}>
+        {showDividers && (
+          <line x1="360" y1={dateY - 5} x2="470" y2={dateY - 5} stroke={textColor} strokeWidth="1" opacity="0.4" />
+        )}
+        {showCalendarIcon && (
+          <g transform={`translate(488, ${dateY - 17}) scale(0.95)`} fill="none" stroke={textColor} strokeWidth="1.6">
+            <rect x="0" y="3" width="16" height="15" rx="2.5" />
+            <line x1="0" y1="8" x2="16" y2="8" />
+          </g>
+        )}
+        <text
+          x="600"
+          y={dateY}
+          textAnchor="middle"
+          fill={textColor}
+          style={{
+            fontFamily: "'Cinzel', Georgia, serif",
+            fontSize: `${dateFontSize}px`,
             letterSpacing: "3px",
             fontWeight: 600,
           }}
         >
           {dateText.toUpperCase()}
         </text>
-      </svg>
-    );
-  }
-);
-RoyalCrestSVG.displayName = "RoyalCrestSVG";
+        {showDividers && (
+          <line x1="730" y1={dateY - 5} x2="840" y2={dateY - 5} stroke={textColor} strokeWidth="1" opacity="0.4" />
+        )}
+      </g>
 
-// -------------------------------------------------------------------------------------------------
-// SVG PRESET 3: Botanical Ring Wreath
-// -------------------------------------------------------------------------------------------------
-interface BotanicalWreathProps {
+      {/* Optional Venue Tagline */}
+      {showVenue && venueText && (
+        <text
+          x="600"
+          y={dateY + 28}
+          textAnchor="middle"
+          fill={textColor}
+          style={{
+            fontFamily: "'Montserrat', sans-serif",
+            fontSize: "12px",
+            letterSpacing: "2.5px",
+            fontWeight: 500,
+            opacity: 0.75,
+          }}
+        >
+          {venueText.toUpperCase()}
+        </text>
+      )}
+    </svg>
+  );
+};
+
+// ------------------------------------------------------------------------------------------------
+// 3. ROYAL MONOGRAM CREST
+// ------------------------------------------------------------------------------------------------
+const RoyalCrestSVG = ({
+  ref,
+  subtitle,
+  names,
+  dateText,
+  fontFamily,
+  namesFontSize,
+  subtitleFontSize,
+  dateFontSize,
+  textColor,
+  borderColor,
+}: {
+  ref: React.RefObject<SVGSVGElement | null>;
   subtitle: string;
   names: string;
   dateText: string;
   fontFamily: string;
   namesFontSize: number;
   subtitleFontSize: number;
-  color: string;
-}
+  dateFontSize: number;
+  textColor: string;
+  borderColor: string;
+}) => {
+  const initials = names
+    .split("&")
+    .map((s) => s.trim()[0] || "")
+    .join(" & ");
 
-const BotanicalWreathSVG = forwardRef<SVGSVGElement, BotanicalWreathProps>(
-  ({ subtitle, names, dateText, fontFamily, color }, ref) => {
-    return (
-      <svg
-        ref={ref}
-        xmlns="http://www.w3.org/2000/svg"
-        viewBox="0 0 600 600"
-        width="600"
-        height="600"
-        className="max-h-[300px] w-auto max-w-full drop-shadow-md"
+  return (
+    <svg
+      ref={ref}
+      xmlns="http://www.w3.org/2000/svg"
+      viewBox="0 0 600 500"
+      width="600"
+      height="500"
+      className="max-h-[260px] w-auto max-w-full drop-shadow-md"
+      style={{ overflow: "visible" }}
+    >
+      <defs>
+        <style>{GOOGLE_FONTS_DEF}</style>
+      </defs>
+
+      {/* Royal Crest Shield Frame */}
+      <g stroke={borderColor || textColor} fill="none" strokeWidth="2" opacity="0.85">
+        <path d="M 300,40 L 410,100 L 410,210 Q 410,310 300,360 Q 190,310 190,210 L 190,100 Z" />
+        <path d="M 300,52 L 398,106 L 398,206 Q 398,296 300,344 Q 202,296 202,206 L 202,106 Z" strokeWidth="1" opacity="0.5" />
+      </g>
+
+      {/* Monogram Initials inside Shield */}
+      <text
+        x="300"
+        y="215"
+        textAnchor="middle"
+        fill={textColor}
+        style={{
+          fontFamily: `'${fontFamily}', 'Playfair Display', serif`,
+          fontSize: "64px",
+          fontWeight: 600,
+        }}
       >
-        {/* Botanical Wreath Ring */}
-        <g stroke={color} fill="none" strokeWidth="1.8" opacity="0.9">
-          <circle cx="300" cy="300" r="210" strokeDasharray="3 4" strokeWidth="1.2" />
-          <circle cx="300" cy="300" r="198" strokeWidth="1.8" />
+        {initials || "A & K"}
+      </text>
 
-          {/* Leaves and berries looping around wreath */}
-          {Array.from({ length: 16 }).map((_, i) => {
-            const angle = (i * 360) / 16;
-            return (
-              <g key={i} transform={`rotate(${angle} 300 300)`}>
-                <path d="M 300,90 C 290,75 285,60 295,48 C 305,60 305,75 300,90 Z" fill={color} opacity="0.6" />
-                <path d="M 308,98 C 322,90 335,88 342,98 C 332,104 320,102 308,98 Z" fill={color} opacity="0.6" />
-                <circle cx="288" cy="70" r="2.5" fill={color} />
-              </g>
-            );
-          })}
-        </g>
-
-        {/* Center Typography */}
-        <text
-          x="300"
-          y="235"
-          textAnchor="middle"
-          fill={color}
-          style={{
-            fontFamily: "'Cinzel', Georgia, serif",
-            fontSize: "13px",
-            letterSpacing: "4px",
-            fontWeight: 600,
-          }}
-        >
-          {subtitle.toUpperCase()}
-        </text>
-
-        <text
-          x="300"
-          y="310"
-          textAnchor="middle"
-          fill={color}
-          style={{
-            fontFamily: `'${fontFamily}', 'Great Vibes', cursive, serif`,
-            fontSize: "44px",
-            fontWeight: 500,
-          }}
-        >
-          {names}
-        </text>
-
-        <text
-          x="300"
-          y="370"
-          textAnchor="middle"
-          fill={color}
-          style={{
-            fontFamily: "'Cinzel', Georgia, serif",
-            fontSize: "14px",
-            letterSpacing: "3px",
-            fontWeight: 600,
-          }}
-        >
-          {dateText.toUpperCase()}
-        </text>
-
-        {/* Center tiny heart flourish */}
-        <path
-          d="M 296,395 C 292,390 286,395 290,400 L 300,410 L 310,400 C 314,395 308,390 304,395 Z"
-          fill={color}
-          opacity="0.8"
-        />
-      </svg>
-    );
-  }
-);
-BotanicalWreathSVG.displayName = "BotanicalWreathSVG";
-
-// -------------------------------------------------------------------------------------------------
-// SVG PRESET 4: Studio Photography Signature Badge
-// -------------------------------------------------------------------------------------------------
-interface StudioBadgeProps {
-  names: string;
-  dateText: string;
-  venueText: string;
-  color: string;
-}
-
-const StudioBadgeSVG = forwardRef<SVGSVGElement, StudioBadgeProps>(
-  ({ names, dateText, venueText, color }, ref) => {
-    return (
-      <svg
-        ref={ref}
-        xmlns="http://www.w3.org/2000/svg"
-        viewBox="0 0 700 240"
-        width="700"
-        height="240"
-        className="max-h-[220px] w-auto max-w-full drop-shadow-md"
+      {/* Subtitle */}
+      <text
+        x="300"
+        y="405"
+        textAnchor="middle"
+        fill={textColor}
+        style={{
+          fontFamily: "'Cinzel', Georgia, serif",
+          fontSize: `${subtitleFontSize}px`,
+          letterSpacing: "4px",
+          fontWeight: 600,
+        }}
       >
-        <g stroke={color} fill="none" opacity="0.95">
-          {/* Outer Badge Border */}
-          <rect x="20" y="20" width="660" height="200" rx="16" strokeWidth="2" />
-          <rect x="28" y="28" width="644" height="184" rx="12" strokeWidth="1" strokeDasharray="3 3" />
+        {subtitle.toUpperCase()}
+      </text>
 
-          {/* Left Camera Icon */}
-          <g transform="translate(60, 80) scale(1.4)" strokeWidth="1.8">
-            <path d="M 6,10 L 12,4 L 24,4 L 30,10 L 36,10 C 38,10 40,12 40,14 L 40,32 C 40,34 38,36 36,36 L 4,36 C 2,36 0,34 0,32 L 0,14 C 0,12 2,10 4,10 Z" />
-            <circle cx="20" cy="22" r="7" />
-            <circle cx="32" cy="14" r="1.5" fill={color} />
-          </g>
+      {/* Names */}
+      <text
+        x="300"
+        y="445"
+        textAnchor="middle"
+        fill={textColor}
+        style={{
+          fontFamily: `'${fontFamily}', 'Playfair Display', Georgia, serif`,
+          fontSize: `${Math.min(namesFontSize, 48)}px`,
+          fontWeight: 500,
+        }}
+      >
+        {names}
+      </text>
 
-          <line x1="140" y1="50" x2="140" y2="190" strokeWidth="1.5" />
-        </g>
+      {/* Date */}
+      <text
+        x="300"
+        y="475"
+        textAnchor="middle"
+        fill={textColor}
+        style={{
+          fontFamily: "'Cinzel', Georgia, serif",
+          fontSize: `${dateFontSize}px`,
+          letterSpacing: "3px",
+          fontWeight: 600,
+          opacity: 0.85,
+        }}
+      >
+        {dateText.toUpperCase()}
+      </text>
+    </svg>
+  );
+};
 
-        {/* Text Content */}
-        <text
-          x="165"
-          y="75"
-          fill={color}
-          style={{
-            fontFamily: "'Montserrat', sans-serif",
-            fontSize: "12px",
-            letterSpacing: "3px",
-            fontWeight: 700,
-          }}
-        >
-          CAPTURED WITH LOVE BY
-        </text>
-
-        <text
-          x="165"
-          y="125"
-          fill={color}
-          style={{
-            fontFamily: "'Great Vibes', cursive, serif",
-            fontSize: "44px",
-            fontWeight: 500,
-          }}
-        >
-          {names}
-        </text>
-
-        <text
-          x="165"
-          y="170"
-          fill={color}
-          style={{
-            fontFamily: "'Montserrat', sans-serif",
-            fontSize: "11px",
-            letterSpacing: "2px",
-            fontWeight: 600,
-          }}
-        >
-          {dateText.toUpperCase()} {venueText ? `• ${venueText.toUpperCase()}` : ""} • OFFICIAL MEMORY
-        </text>
-      </svg>
-    );
-  }
-);
-StudioBadgeSVG.displayName = "StudioBadgeSVG";
-
-// -------------------------------------------------------------------------------------------------
-// SVG PRESET 5: Minimalist Modern Frame
-// -------------------------------------------------------------------------------------------------
-interface MinimalistFrameProps {
+// ------------------------------------------------------------------------------------------------
+// 4. REFINED BOTANICAL WREATH
+// ------------------------------------------------------------------------------------------------
+const BotanicalWreathSVG = ({
+  ref,
+  subtitle,
+  names,
+  dateText,
+  fontFamily,
+  namesFontSize,
+  subtitleFontSize,
+  dateFontSize,
+  textColor,
+  borderColor,
+}: {
+  ref: React.RefObject<SVGSVGElement | null>;
   subtitle: string;
   names: string;
   dateText: string;
   fontFamily: string;
   namesFontSize: number;
-  color: string;
-}
+  subtitleFontSize: number;
+  dateFontSize: number;
+  textColor: string;
+  borderColor: string;
+}) => {
+  return (
+    <svg
+      ref={ref}
+      xmlns="http://www.w3.org/2000/svg"
+      viewBox="0 0 600 500"
+      width="600"
+      height="500"
+      className="max-h-[260px] w-auto max-w-full drop-shadow-md"
+      style={{ overflow: "visible" }}
+    >
+      <defs>
+        <style>{GOOGLE_FONTS_DEF}</style>
+      </defs>
 
-const MinimalistFrameSVG = forwardRef<SVGSVGElement, MinimalistFrameProps>(
-  ({ subtitle, names, dateText, fontFamily, color }, ref) => {
-    return (
-      <svg
-        ref={ref}
-        xmlns="http://www.w3.org/2000/svg"
-        viewBox="0 0 1000 240"
-        width="1000"
-        height="240"
-        className="max-h-[220px] w-auto max-w-full drop-shadow-md"
+      {/* Clean Symmetrical Laurel Wreath Ring */}
+      <g stroke={borderColor || textColor} fill="none" strokeWidth="1.5" opacity="0.8">
+        <circle cx="300" cy="220" r="140" strokeDasharray="6,4" />
+        <path d="M 180,220 C 180,140 240,80 300,80 C 360,80 420,140 420,220 C 420,300 360,360 300,360" />
+      </g>
+
+      <text
+        x="300"
+        y="180"
+        textAnchor="middle"
+        fill={textColor}
+        style={{
+          fontFamily: "'Cinzel', Georgia, serif",
+          fontSize: `${subtitleFontSize}px`,
+          letterSpacing: "4px",
+          fontWeight: 600,
+        }}
       >
-        <g stroke={color} fill="none" opacity="0.9">
-          {/* Minimalist modern arch border */}
-          <path d="M 40,200 L 40,50 C 40,25 60,20 90,20 L 910,20 C 940,20 960,25 960,50 L 960,200" strokeWidth="1.8" />
-          <circle cx="500" cy="20" r="4" fill={color} />
-        </g>
+        {subtitle.toUpperCase()}
+      </text>
 
-        <text
-          x="500"
-          y="65"
-          textAnchor="middle"
-          fill={color}
-          style={{
-            fontFamily: "'Montserrat', sans-serif",
-            fontSize: "12px",
-            letterSpacing: "5px",
-            fontWeight: 700,
-          }}
-        >
-          {subtitle.toUpperCase()}
-        </text>
+      <text
+        x="300"
+        y="230"
+        textAnchor="middle"
+        fill={textColor}
+        style={{
+          fontFamily: `'${fontFamily}', 'Playfair Display', serif`,
+          fontSize: `${Math.min(namesFontSize, 52)}px`,
+          fontStyle: "italic",
+          fontWeight: 600,
+        }}
+      >
+        {names}
+      </text>
 
-        <text
-          x="500"
-          y="135"
-          textAnchor="middle"
-          fill={color}
-          style={{
-            fontFamily: `'${fontFamily}', 'Playfair Display', serif`,
-            fontSize: "48px",
-            fontWeight: 600,
-          }}
-        >
-          {names}
-        </text>
+      <text
+        x="300"
+        y="275"
+        textAnchor="middle"
+        fill={textColor}
+        style={{
+          fontFamily: "'Cinzel', Georgia, serif",
+          fontSize: `${dateFontSize}px`,
+          letterSpacing: "3px",
+          fontWeight: 600,
+        }}
+      >
+        {dateText.toUpperCase()}
+      </text>
+    </svg>
+  );
+};
 
-        <text
-          x="500"
-          y="180"
-          textAnchor="middle"
-          fill={color}
-          style={{
-            fontFamily: "'Montserrat', sans-serif",
-            fontSize: "12px",
-            letterSpacing: "4px",
-            fontWeight: 500,
-          }}
-        >
-          {dateText.toUpperCase()}
-        </text>
-      </svg>
-    );
-  }
-);
-MinimalistFrameSVG.displayName = "MinimalistFrameSVG";
+// ------------------------------------------------------------------------------------------------
+// 5. TRANSPARENT LUXURY SIGNATURE
+// ------------------------------------------------------------------------------------------------
+const TransparentSignatureSVG = ({
+  ref,
+  subtitle,
+  names,
+  dateText,
+  fontFamily,
+  isItalic,
+  namesFontSize,
+  subtitleFontSize,
+  dateFontSize,
+  letterSpacing,
+  textColor,
+  showDividers,
+}: {
+  ref: React.RefObject<SVGSVGElement | null>;
+  subtitle: string;
+  names: string;
+  dateText: string;
+  fontFamily: string;
+  isItalic: boolean;
+  namesFontSize: number;
+  subtitleFontSize: number;
+  dateFontSize: number;
+  letterSpacing: number;
+  textColor: string;
+  showDividers: boolean;
+}) => {
+  return (
+    <svg
+      ref={ref}
+      xmlns="http://www.w3.org/2000/svg"
+      viewBox="0 0 1000 240"
+      width="1000"
+      height="240"
+      className="max-h-[220px] w-auto max-w-full drop-shadow-lg"
+      style={{ overflow: "visible" }}
+    >
+      <defs>
+        <style>{GOOGLE_FONTS_DEF}</style>
+      </defs>
+
+      <text
+        x="500"
+        y="50"
+        textAnchor="middle"
+        fill={textColor}
+        style={{
+          fontFamily: "'Cinzel', 'Playfair Display', Georgia, serif",
+          fontSize: `${subtitleFontSize}px`,
+          letterSpacing: `${letterSpacing}px`,
+          fontWeight: 600,
+          opacity: 0.9,
+        }}
+      >
+        {subtitle.toUpperCase()}
+      </text>
+
+      <text
+        x="500"
+        y="125"
+        textAnchor="middle"
+        fill={textColor}
+        style={{
+          fontFamily: `'${fontFamily}', 'Playfair Display', Georgia, serif`,
+          fontSize: `${namesFontSize}px`,
+          fontStyle: isItalic ? "italic" : "normal",
+          fontWeight: 500,
+        }}
+      >
+        {names}
+      </text>
+
+      {showDividers && (
+        <line x1="300" y1="155" x2="700" y2="155" stroke={textColor} strokeWidth="1" opacity="0.4" />
+      )}
+
+      <text
+        x="500"
+        y="190"
+        textAnchor="middle"
+        fill={textColor}
+        style={{
+          fontFamily: "'Cinzel', Georgia, serif",
+          fontSize: `${dateFontSize}px`,
+          letterSpacing: "4px",
+          fontWeight: 600,
+          opacity: 0.9,
+        }}
+      >
+        {dateText.toUpperCase()}
+      </text>
+    </svg>
+  );
+};

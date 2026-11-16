@@ -8,6 +8,7 @@ import {
   RotateCcw,
   Sparkles,
   Sliders,
+  Palette,
 } from "lucide-react";
 import { useRef, useState } from "react";
 import { PageHeader } from "@/components/app-shell";
@@ -91,7 +92,7 @@ export default function NewEventPage() {
       opacity: res.opacity,
       activeTemplateId: newItem.id,
     }));
-    toast.success("AI Template applied", `"${res.name}" added to photo.`);
+    toast.success("Template applied", `"${res.name}" added to photo.`);
   }
 
   // Handle clicking anywhere on the preview image to accurately place currently selected watermark
@@ -321,11 +322,11 @@ export default function NewEventPage() {
                   <button
                     type="button"
                     onClick={() => setShowDesigner(true)}
-                    className="inline-flex items-center gap-1 rounded-lg border border-brand-300 bg-brand-50 px-2.5 py-1 text-xs font-semibold text-brand-700 hover:bg-brand-100 transition-colors cursor-pointer shadow-xs"
-                    title="Open AI Template & Watermark Studio"
+                    className="inline-flex items-center gap-1.5 rounded-lg border border-brand-300 bg-brand-50 px-2.5 py-1 text-xs font-semibold text-brand-700 hover:bg-brand-100 transition-colors cursor-pointer shadow-xs"
+                    title="Open Template Customization Studio"
                   >
-                    <Sparkles className="h-3 w-3 text-brand-600" />
-                    ✨ AI Studio
+                    <Palette className="h-3.5 w-3.5 text-brand-600" />
+                    <span>🎨 Customize Template</span>
                   </button>
                   <button
                     type="button"
@@ -357,7 +358,7 @@ export default function NewEventPage() {
                 {/* Badge indicator on top-left of photo */}
                 <div className="absolute top-3 left-3 flex items-center gap-2 pointer-events-none">
                   <span className="inline-flex items-center gap-1.5 rounded-full bg-black/75 border border-white/20 px-2.5 py-1 text-[11px] font-medium text-white backdrop-blur-md shadow-md">
-                    {live.preview ? "Custom Cover Image" : "Default AI Couple Photo"}
+                    {live.preview ? "Custom Cover Image" : "Sample Couple Photo"}
                   </span>
                   {templateItems.length > 0 && (
                     <span className="inline-flex items-center gap-1.5 rounded-full bg-[#dfa843]/90 border border-[#dfa843] px-2.5 py-1 text-[11px] font-semibold text-[#1c1305] backdrop-blur-md shadow-md">
