@@ -7,6 +7,10 @@ const GEMINI_API_KEY = (process.env.GEMINI_API_KEY || "")
   .trim()
   .replace(/^["']|["']$/g, "");
 
+const OPENAI_API_KEY = (process.env.OPENAI_API_KEY || "")
+  .trim()
+  .replace(/^["']|["']$/g, "");
+
 const GEMINI_MODELS = [
   "gemini-3.5-flash-lite",
   "gemini-3.8-flash",
@@ -15,24 +19,26 @@ const GEMINI_MODELS = [
 ];
 
 const SYSTEM_INSTRUCTION = `
-You are an elite vector SVG artist and luxury event graphic designer for Zigmaa Photos.
-Your job is to analyze the user's prompt (e.g. "background bubble template", "flower template with roses", "celebration balloons", "royal crest", "vintage gold", birthday, wedding, reception, etc.) and generate:
-1. Dynamic, theme-specific visual artwork rendered in pure, self-contained SVG.
-2. The artwork MUST match the user's creative theme:
-   - If prompt mentions "bubble": draw translucent floating bubbles with specular reflections (<radialGradient>), glowing spheres, and cheerful pastel highlights.
-   - If prompt mentions "flower" / "floral" / "roses" / "botanical": draw blooming petals, roses, leaf branches, delicate vine borders, and floral bouquets on left and right.
-   - If prompt mentions "balloon" / "party" / "birthday": draw 3D-shaded party balloons with strings, confetti bits, sparkles, ribbons.
-   - If prompt mentions "royal" / "luxury" / "crest": draw heraldic monogram crest, ornate baroque flourishes, gold filigree frames.
-   - If prompt asks for a flat classic banner: draw an elegant upward arched banner or straight bar with gold borders.
-   - Any other random creative theme: creatively illustrate visual vector shapes representing that concept!
-3. The SVG canvas must have viewBox="0 0 1200 320" width="1200" height="320" xmlns="http://www.w3.org/2000/svg".
-4. Background: Include a <rect id="svg-bg" width="1200" height="320" ... /> with an appropriate fill (deep midnight, wine maroon, ivory cream, or translucent gradient).
-5. Central typography with EXACT IDs:
-   - <text id="svg-subtitle" x="600" y="160" text-anchor="middle" font-family="'Montserrat', sans-serif" font-size="18" font-weight="600" letter-spacing="6" fill="...">SUBTITLE</text>
+You are a world-class luxury CGI and vector artist specializing in photorealistic, high-end 3D event watermark overlays for Zigmaa Photos.
+The user wants a REALISTIC, stunning visual masterpiece matching this prompt: e.g. "background bubble template", "flower template with roses", "celebration balloons", "royal crest", "classic arched banner", etc.
+
+CRITICAL VISUAL REALISM REQUIREMENTS:
+1. DO NOT draw flat, cartoon doodle shapes. Everything must look 3D, realistic, luminous, and rich.
+2. For BUBBLES:
+   - Create multi-stop 3D radial gradients with realistic glass refraction (transparent center, luminous neon rim, specular white crescent glare at top-left, and soft ambient bounce light).
+   - Draw multiple overlapping bubbles in varying depths (large foreground with blur, crisp middle-ground, small background bokeh).
+   - Add specular highlight reflections: tiny white curved paths or offset circles inside each bubble (e.g. fill="white" opacity="0.85").
+3. For FLOWERS / ROSES:
+   - Draw layered blooming petals with rich gradients (e.g. burgundy to crimson to soft rose), botanical leaves with gold veins, and ornate filigree flourishes.
+4. For STARS / SPARKLES:
+   - Use multi-point 3D diamond star flares with Gaussian blur glow filters and intense white center cores.
+5. Canvas specs: viewBox="0 0 1200 320" width="1200" height="320" xmlns="http://www.w3.org/2000/svg".
+6. Central typography with EXACT IDs:
+   - <text id="svg-subtitle" x="600" y="160" text-anchor="middle" font-family="'Montserrat', sans-serif" font-size="18" font-weight="700" letter-spacing="6" fill="...">SUBTITLE</text>
    - <text id="svg-names" x="600" y="225" text-anchor="middle" font-family="'Playfair Display', serif" font-size="56" font-style="italic" font-weight="700" fill="...">COUPLE OR PERSON NAMES</text>
    - <text id="svg-date" x="600" y="270" text-anchor="middle" font-family="'Montserrat', sans-serif" font-size="16" letter-spacing="4" fill="...">DATE / VENUE</text>
-6. Keep the SVG valid, self-contained, and clean (< 4000 chars) without external image links.
-7. Return ONLY valid JSON matching this schema:
+7. Background: Include a <rect id="svg-bg" width="1200" height="320" rx="16" ... /> with an appropriate fill.
+8. Return ONLY valid JSON matching this schema:
 {
   "themeName": string,
   "names": string,
@@ -58,91 +64,113 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    if (!GEMINI_API_KEY) {
-      const fallback = buildDynamicSvgFallback(userPrompt);
-      return NextResponse.json({
-        ok: true,
-        isCustomSvg: true,
-        svg: fallback.svg,
-        themeName: fallback.themeName,
-        names: fallback.names,
-        subtitle: fallback.subtitle,
-        dateText: fallback.dateText,
-        venueText: fallback.venueText,
-        fontFamily: fallback.fontFamily,
-        textColor: fallback.textColor,
-        bgColor: fallback.bgColor,
-        source: "fallback",
-        note: "GEMINI_API_KEY not configured. Used smart procedural designer.",
-      });
-    }
-
     let parsedResult: Record<string, unknown> | null = null;
+    let engineSource = "procedural_fallback";
     let lastError = "";
 
-    // Try models in fallback order
-    for (const model of GEMINI_MODELS) {
+    // 1. Try OpenAI GPT-4o if API key is provided
+    if (OPENAI_API_KEY) {
       try {
-        const url = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${GEMINI_API_KEY}`;
-        const res = await fetch(url, {
+        const openAiRes = await fetch("https://api.openai.com/v1/chat/completions", {
           method: "POST",
-          headers: { "Content-Type": "application/json" },
+          headers: {
+            "Authorization": `Bearer ${OPENAI_API_KEY}`,
+            "Content-Type": "application/json",
+          },
           body: JSON.stringify({
-            contents: [
-              {
-                parts: [
-                  {
-                    text: `${SYSTEM_INSTRUCTION}\n\nUSER PROMPT: "${userPrompt}"\n\nReturn JSON:`,
-                  },
-                ],
-              },
+            model: "gpt-4o",
+            messages: [
+              { role: "system", content: SYSTEM_INSTRUCTION },
+              { role: "user", content: `USER PROMPT: "${userPrompt}"\n\nReturn JSON:` },
             ],
-            generationConfig: {
-              temperature: 0.4,
-              maxOutputTokens: 4500,
-              responseMimeType: "application/json",
-            },
+            response_format: { type: "json_object" },
+            temperature: 0.5,
+            max_tokens: 4000,
           }),
         });
 
-        const data = await res.json();
-        const candidateText = data?.candidates?.[0]?.content?.parts?.[0]?.text;
-        if (candidateText) {
-          try {
-            const parsed = JSON.parse(candidateText.trim());
-            if (parsed && typeof parsed.svg === "string" && parsed.svg.includes("<svg")) {
-              parsedResult = parsed;
-              break;
-            }
-          } catch {
-            // Check if candidateText is raw SVG
-            if (candidateText.includes("<svg") && candidateText.includes("</svg>")) {
-              const svgMatch = candidateText.match(/<svg[\s\S]*?<\/svg>/i);
-              if (svgMatch) {
-                parsedResult = {
-                  themeName: "AI Artwork",
-                  names: extractNames(userPrompt),
-                  subtitle: extractSubtitle(userPrompt),
-                  dateText: extractDate(userPrompt),
-                  fontFamily: "Playfair Display",
-                  textColor: "#ffffff",
-                  bgColor: "#141416",
-                  svg: svgMatch[0],
-                };
-                break;
-              }
-            }
+        const openAiData = await openAiRes.json();
+        const content = openAiData?.choices?.[0]?.message?.content;
+        if (content) {
+          const parsed = JSON.parse(content.trim());
+          if (parsed && typeof parsed.svg === "string" && parsed.svg.includes("<svg")) {
+            parsedResult = parsed;
+            engineSource = "openai";
           }
-        } else if (data?.error) {
-          lastError = data.error.message || String(data.error);
+        } else if (openAiData?.error) {
+          lastError = `OpenAI: ${openAiData.error.message || String(openAiData.error.code)}`;
         }
       } catch (err: unknown) {
-        lastError = err instanceof Error ? err.message : String(err);
+        lastError = `OpenAI error: ${err instanceof Error ? err.message : String(err)}`;
       }
     }
 
+    // 2. Try Gemini if OpenAI was not used or failed
+    if (!parsedResult && GEMINI_API_KEY) {
+      for (const model of GEMINI_MODELS) {
+        try {
+          const url = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${GEMINI_API_KEY}`;
+          const res = await fetch(url, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              contents: [
+                {
+                  parts: [
+                    {
+                      text: `${SYSTEM_INSTRUCTION}\n\nUSER PROMPT: "${userPrompt}"\n\nReturn JSON:`,
+                    },
+                  ],
+                },
+              ],
+              generationConfig: {
+                temperature: 0.5,
+                maxOutputTokens: 4500,
+                responseMimeType: "application/json",
+              },
+            }),
+          });
+
+          const data = await res.json();
+          const candidateText = data?.candidates?.[0]?.content?.parts?.[0]?.text;
+          if (candidateText) {
+            try {
+              const parsed = JSON.parse(candidateText.trim());
+              if (parsed && typeof parsed.svg === "string" && parsed.svg.includes("<svg")) {
+                parsedResult = parsed;
+                engineSource = "gemini";
+                break;
+              }
+            } catch {
+              if (candidateText.includes("<svg") && candidateText.includes("</svg>")) {
+                const svgMatch = candidateText.match(/<svg[\s\S]*?<\/svg>/i);
+                if (svgMatch) {
+                  parsedResult = {
+                    themeName: "AI Artwork",
+                    names: extractNames(userPrompt),
+                    subtitle: extractSubtitle(userPrompt),
+                    dateText: extractDate(userPrompt),
+                    fontFamily: "Playfair Display",
+                    textColor: "#ffffff",
+                    bgColor: "#090d16",
+                    svg: svgMatch[0],
+                  };
+                  engineSource = "gemini";
+                  break;
+                }
+              }
+            }
+          } else if (data?.error) {
+            lastError = `Gemini: ${data.error.message || String(data.error)}`;
+          }
+        } catch (err: unknown) {
+          lastError = `Gemini error: ${err instanceof Error ? err.message : String(err)}`;
+        }
+      }
+    }
+
+    // 3. Fallback to Ultra-Realistic Procedural 3D SVG Engine if API is busy/quota exhausted
     if (!parsedResult || typeof parsedResult.svg !== "string") {
-      // Fallback rule-based procedural generation if Gemini API is temporarily busy
       const fallback = buildDynamicSvgFallback(userPrompt);
       return NextResponse.json({
         ok: true,
@@ -156,8 +184,8 @@ export async function POST(req: NextRequest) {
         fontFamily: fallback.fontFamily,
         textColor: fallback.textColor,
         bgColor: fallback.bgColor,
-        source: "procedural_fallback",
-        note: lastError ? `AI model busy (${lastError}), generated procedural theme.` : undefined,
+        source: engineSource,
+        note: lastError ? `AI notice: ${lastError}` : undefined,
       });
     }
 
@@ -176,15 +204,15 @@ export async function POST(req: NextRequest) {
       ok: true,
       isCustomSvg: true,
       svg: cleanedSvg,
-      themeName: typeof parsedResult.themeName === "string" ? parsedResult.themeName : "AI Custom Artwork",
+      themeName: typeof parsedResult.themeName === "string" ? parsedResult.themeName : "Realistic 3D Artwork",
       names: finalNames,
       subtitle: finalSubtitle,
       dateText: finalDate,
       venueText: typeof parsedResult.venueText === "string" ? parsedResult.venueText : "",
       fontFamily: typeof parsedResult.fontFamily === "string" ? parsedResult.fontFamily : "Playfair Display",
       textColor: typeof parsedResult.textColor === "string" ? parsedResult.textColor : "#ffffff",
-      bgColor: typeof parsedResult.bgColor === "string" ? parsedResult.bgColor : "#1f0408",
-      source: "gemini",
+      bgColor: typeof parsedResult.bgColor === "string" ? parsedResult.bgColor : "#090d16",
+      source: engineSource,
     });
   } catch (error: unknown) {
     console.error("AI template generation error:", error);
@@ -232,60 +260,121 @@ function buildDynamicSvgFallback(prompt: string) {
   const dateText = extractDate(prompt);
 
   if (p.includes("bubble")) {
-    // High-quality pastel bubble theme
+    // Ultra-Realistic 3D Iridescent Soap Bubbles with Specular Glares & Sparkles
     const svg = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 320" width="1200" height="320">
       <defs>
-        <linearGradient id="bg-grad" x1="0%" y1="100%" x2="0%" y2="0%">
-          <stop offset="0%" stop-color="#0b1329" stop-opacity="0.95"/>
-          <stop offset="100%" stop-color="#1c284e" stop-opacity="0.8"/>
+        <linearGradient id="bgGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+          <stop offset="0%" stop-color="#090d16" stop-opacity="0.95"/>
+          <stop offset="50%" stop-color="#121829" stop-opacity="0.9"/>
+          <stop offset="100%" stop-color="#1e102d" stop-opacity="0.95"/>
         </linearGradient>
-        <radialGradient id="bubble-grad" cx="30%" cy="30%" r="70%">
-          <stop offset="0%" stop-color="#ffffff" stop-opacity="0.7"/>
-          <stop offset="40%" stop-color="#8be9fd" stop-opacity="0.3"/>
-          <stop offset="100%" stop-color="#ff79c6" stop-opacity="0.15"/>
+        <linearGradient id="goldGrad" x1="0%" y1="0%" x2="100%" y2="0%">
+          <stop offset="0%" stop-color="#f6d365"/>
+          <stop offset="40%" stop-color="#fda085"/>
+          <stop offset="70%" stop-color="#ffeaa7"/>
+          <stop offset="100%" stop-color="#dfa53a"/>
+        </linearGradient>
+        <radialGradient id="bubblePink" cx="35%" cy="35%" r="65%">
+          <stop offset="0%" stop-color="#ffffff" stop-opacity="0.95"/>
+          <stop offset="25%" stop-color="#fbcfe8" stop-opacity="0.45"/>
+          <stop offset="60%" stop-color="#c084fc" stop-opacity="0.25"/>
+          <stop offset="90%" stop-color="#ec4899" stop-opacity="0.65"/>
+          <stop offset="100%" stop-color="#8b5cf6" stop-opacity="0.85"/>
         </radialGradient>
-        <filter id="glow" x="-20%" y="-20%" width="140%" height="140%">
-          <feGaussianBlur stdDeviation="4" result="blur"/>
+        <radialGradient id="bubbleCyan" cx="35%" cy="35%" r="65%">
+          <stop offset="0%" stop-color="#ffffff" stop-opacity="0.95"/>
+          <stop offset="25%" stop-color="#bae6fd" stop-opacity="0.45"/>
+          <stop offset="60%" stop-color="#38bdf8" stop-opacity="0.25"/>
+          <stop offset="90%" stop-color="#0284c7" stop-opacity="0.65"/>
+          <stop offset="100%" stop-color="#6366f1" stop-opacity="0.85"/>
+        </radialGradient>
+        <radialGradient id="bubbleGold" cx="35%" cy="35%" r="65%">
+          <stop offset="0%" stop-color="#ffffff" stop-opacity="0.95"/>
+          <stop offset="25%" stop-color="#fef08a" stop-opacity="0.45"/>
+          <stop offset="60%" stop-color="#fde047" stop-opacity="0.25"/>
+          <stop offset="90%" stop-color="#eab308" stop-opacity="0.65"/>
+          <stop offset="100%" stop-color="#f97316" stop-opacity="0.85"/>
+        </radialGradient>
+        <filter id="softGlow" x="-20%" y="-20%" width="140%" height="140%">
+          <feGaussianBlur stdDeviation="5" result="blur"/>
           <feComposite in="SourceGraphic" in2="blur" operator="over"/>
         </filter>
+        <filter id="textShadow" x="-10%" y="-10%" width="120%" height="120%">
+          <feDropShadow dx="0" dy="3" stdDeviation="4" flood-color="#000000" flood-opacity="0.7"/>
+        </filter>
+        <g id="realistic-bubble-pink">
+          <circle cx="0" cy="0" r="45" fill="url(#bubblePink)"/>
+          <circle cx="0" cy="0" r="44" fill="none" stroke="#ffffff" stroke-width="1.2" stroke-opacity="0.7"/>
+          <ellipse cx="-14" cy="-16" rx="14" ry="7" transform="rotate(-30 -14 -16)" fill="#ffffff" opacity="0.85"/>
+          <ellipse cx="14" cy="18" rx="8" ry="3" transform="rotate(-30 14 18)" fill="#ffffff" opacity="0.45"/>
+        </g>
+        <g id="realistic-bubble-cyan">
+          <circle cx="0" cy="0" r="40" fill="url(#bubbleCyan)"/>
+          <circle cx="0" cy="0" r="39" fill="none" stroke="#ffffff" stroke-width="1.2" stroke-opacity="0.7"/>
+          <ellipse cx="-12" cy="-14" rx="12" ry="6" transform="rotate(-30 -12 -14)" fill="#ffffff" opacity="0.85"/>
+          <ellipse cx="12" cy="16" rx="7" ry="2.5" transform="rotate(-30 12 16)" fill="#ffffff" opacity="0.45"/>
+        </g>
+        <g id="realistic-bubble-gold">
+          <circle cx="0" cy="0" r="35" fill="url(#bubbleGold)"/>
+          <circle cx="0" cy="0" r="34" fill="none" stroke="#ffffff" stroke-width="1.2" stroke-opacity="0.7"/>
+          <ellipse cx="-10" cy="-12" rx="10" ry="5" transform="rotate(-30 -10 -12)" fill="#ffffff" opacity="0.85"/>
+          <ellipse cx="10" cy="14" rx="6" ry="2" transform="rotate(-30 10 14)" fill="#ffffff" opacity="0.45"/>
+        </g>
+        <g id="star-flare" filter="url(#softGlow)">
+          <path d="M 0,-14 Q 0,0 14,0 Q 0,0 0,14 Q 0,0 -14,0 Q 0,0 0,-14 Z" fill="#fff9db"/>
+          <circle cx="0" cy="0" r="3" fill="#ffffff"/>
+        </g>
       </defs>
-      <rect id="svg-bg" width="1200" height="320" fill="url(#bg-grad)"/>
-      <g fill="none" stroke="url(#bubble-grad)" stroke-width="1.5">
-        <circle cx="120" cy="160" r="45" fill="url(#bubble-grad)"/>
-        <circle cx="240" cy="80" r="25" fill="url(#bubble-grad)"/>
-        <circle cx="900" cy="100" r="60" fill="url(#bubble-grad)"/>
-        <circle cx="1050" cy="200" r="35" fill="url(#bubble-grad)"/>
-        <circle cx="180" cy="260" r="30" fill="url(#bubble-grad)"/>
-        <circle cx="1000" cy="270" r="20" fill="url(#bubble-grad)"/>
-        <circle cx="600" cy="50" r="15" fill="url(#bubble-grad)"/>
+      <rect id="svg-bg" width="1200" height="320" rx="16" fill="url(#bgGrad)"/>
+      <path d="M 60,285 Q 600,245 1140,285" fill="none" stroke="url(#goldGrad)" stroke-width="2" stroke-opacity="0.8"/>
+      <path d="M 120,292 Q 600,258 1080,292" fill="none" stroke="url(#goldGrad)" stroke-width="1" stroke-opacity="0.4" stroke-dasharray="6,4"/>
+      <use href="#realistic-bubble-pink" x="110" y="160" transform="scale(1.2)"/>
+      <use href="#realistic-bubble-cyan" x="210" y="100" transform="scale(0.9)"/>
+      <use href="#realistic-bubble-gold" x="70" y="240" transform="scale(0.8)"/>
+      <use href="#realistic-bubble-pink" x="230" y="220" transform="scale(0.65)"/>
+      <use href="#realistic-bubble-cyan" x="160" y="50" transform="scale(0.5)"/>
+      <use href="#realistic-bubble-cyan" x="1080" y="150" transform="scale(1.25)"/>
+      <use href="#realistic-bubble-pink" x="970" y="90" transform="scale(0.95)"/>
+      <use href="#realistic-bubble-gold" x="1130" y="230" transform="scale(0.85)"/>
+      <use href="#realistic-bubble-cyan" x="960" y="210" transform="scale(0.7)"/>
+      <use href="#realistic-bubble-pink" x="1030" y="45" transform="scale(0.55)"/>
+      <use href="#star-flare" x="280" y="80"/>
+      <use href="#star-flare" x="320" y="220" transform="scale(0.7)"/>
+      <use href="#star-flare" x="880" y="70"/>
+      <use href="#star-flare" x="910" y="230" transform="scale(0.7)"/>
+      <use href="#star-flare" x="600" y="45" transform="scale(0.9)"/>
+      <circle cx="340" cy="150" r="3" fill="#ffeaa7"/>
+      <circle cx="380" cy="180" r="2" fill="#fd79a8"/>
+      <circle cx="820" cy="170" r="3" fill="#74b9ff"/>
+      <circle cx="850" cy="130" r="2" fill="#ffeaa7"/>
+      <g filter="url(#textShadow)">
+        <text id="svg-subtitle" x="600" y="145" text-anchor="middle" font-family="'Montserrat', sans-serif" font-size="18" font-weight="700" letter-spacing="8" fill="url(#goldGrad)">${subtitle}</text>
+        <text id="svg-names" x="600" y="215" text-anchor="middle" font-family="'Playfair Display', serif" font-size="64" font-style="italic" font-weight="700" fill="#ffffff">${names}</text>
+        <text id="svg-date" x="600" y="260" text-anchor="middle" font-family="'Montserrat', sans-serif" font-size="15" font-weight="600" letter-spacing="6" fill="#bae6fd">${dateText}</text>
       </g>
-      <path d="M 100 290 Q 600 240 1100 290" fill="none" stroke="#ffd700" stroke-width="1.5" stroke-opacity="0.6"/>
-      <text id="svg-subtitle" x="600" y="160" text-anchor="middle" font-family="'Montserrat', sans-serif" font-size="18" font-weight="600" letter-spacing="6" fill="#ffd700" filter="url(#glow)">${subtitle}</text>
-      <text id="svg-names" x="600" y="225" text-anchor="middle" font-family="'Playfair Display', serif" font-size="56" font-style="italic" font-weight="700" fill="#ffffff" filter="url(#glow)">${names}</text>
-      <text id="svg-date" x="600" y="270" text-anchor="middle" font-family="'Montserrat', sans-serif" font-size="16" letter-spacing="4" fill="#8be9fd">${dateText}</text>
     </svg>`;
 
     return {
-      themeName: "Pastel Bubbles Celebration",
+      themeName: "3D Iridescent Bubbles Celebration",
       names,
       subtitle,
       dateText,
       venueText: "",
       fontFamily: "Playfair Display",
       textColor: "#ffffff",
-      bgColor: "#0b1329",
+      bgColor: "#090d16",
       svg,
     };
   }
 
   if (p.includes("flower") || p.includes("rose") || p.includes("floral")) {
-    // Rich rose floral banner
+    // Ultra-Realistic Layered Rose Floral & Gold Foil Filigree
     const svg = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 320" width="1200" height="320">
       <defs>
         <linearGradient id="bgGrad" x1="0%" y1="0%" x2="100%" y2="100%">
-          <stop offset="0%" stop-color="#1f0408"/>
-          <stop offset="50%" stop-color="#120204"/>
-          <stop offset="100%" stop-color="#1f0408"/>
+          <stop offset="0%" stop-color="#2a080d"/>
+          <stop offset="50%" stop-color="#150406"/>
+          <stop offset="100%" stop-color="#0a0103"/>
         </linearGradient>
         <linearGradient id="goldGrad" x1="0%" y1="0%" x2="100%" y2="0%">
           <stop offset="0%" stop-color="#dfbc7e"/>
@@ -297,59 +386,82 @@ function buildDynamicSvgFallback(prompt: string) {
           <stop offset="50%" stop-color="#9c3d54"/>
           <stop offset="100%" stop-color="#591d2c"/>
         </linearGradient>
+        <filter id="goldGlow" x="-20%" y="-20%" width="140%" height="140%">
+          <feGaussianBlur stdDeviation="3" result="blur"/>
+          <feMerge><feMergeNode in="blur"/><feMergeNode in="SourceGraphic"/></feMerge>
+        </filter>
+        <g id="master-rose">
+          <circle cx="0" cy="0" r="26" fill="url(#roseGrad)"/>
+          <circle cx="0" cy="0" r="18" fill="#e05362" opacity="0.6"/>
+          <circle cx="0" cy="0" r="10" fill="#ffd700" opacity="0.4"/>
+          <path d="M -15,-8 Q 0,-22 15,-8 Q 24,10 0,22 Q -24,10 -15,-8 Z" fill="none" stroke="#f7e8c4" stroke-width="1.5" opacity="0.9"/>
+          <path d="M -10,-4 Q 0,-14 10,-4 Q 15,6 0,14 Q -15,6 -10,-4 Z" fill="none" stroke="#ffd700" stroke-width="1.2" opacity="0.8"/>
+        </g>
       </defs>
-      <rect id="svg-bg" width="1200" height="320" fill="url(#bgGrad)" opacity="0.95"/>
-      <rect x="20" y="20" width="1160" height="280" fill="none" stroke="url(#goldGrad)" stroke-width="1.5" stroke-opacity="0.6"/>
-      <rect x="28" y="28" width="1144" height="264" fill="none" stroke="url(#goldGrad)" stroke-width="0.5" stroke-opacity="0.3"/>
-      <g id="roses-left" transform="translate(120, 100)">
-        <path d="M-40,40 Q-20,0 0,40 T40,40" fill="none" stroke="#a38054" stroke-width="1.5"/>
-        <circle cx="0" cy="0" r="22" fill="url(#roseGrad)"/>
-        <circle cx="35" cy="25" r="15" fill="url(#roseGrad)"/>
-        <path d="M-50,20 Q-30,10 -20,-10" fill="none" stroke="#769960" stroke-width="2"/>
-        <path d="M-30,40 Q-10,30 10,20" fill="none" stroke="#769960" stroke-width="2"/>
+      <rect id="svg-bg" width="1200" height="320" rx="16" fill="url(#bgGrad)"/>
+      <rect x="20" y="20" width="1160" height="280" rx="12" fill="none" stroke="url(#goldGrad)" stroke-width="1.5" stroke-opacity="0.7"/>
+      <rect x="28" y="28" width="1144" height="264" rx="8" fill="none" stroke="url(#goldGrad)" stroke-width="0.8" stroke-opacity="0.4"/>
+      <!-- Left Floral Bouquet -->
+      <g transform="translate(130, 160)">
+        <use href="#master-rose" transform="translate(-40, 20) scale(1.3)"/>
+        <use href="#master-rose" transform="translate(10, -20) scale(1.1)"/>
+        <use href="#master-rose" transform="translate(45, 30) scale(0.85)"/>
+        <path d="M -80,50 Q -30,0 20,-40" fill="none" stroke="#5d8a66" stroke-width="2.5"/>
+        <path d="M -60,60 Q -10,30 50,50" fill="none" stroke="#5d8a66" stroke-width="2"/>
+        <path d="M -90,70 Q 0,80 80,0" fill="none" stroke="url(#goldGrad)" stroke-width="1.5" filter="url(#goldGlow)"/>
       </g>
-      <g id="roses-right" transform="translate(1080, 100) scale(-1, 1)">
-        <path d="M-40,40 Q-20,0 0,40 T40,40" fill="none" stroke="#a38054" stroke-width="1.5"/>
-        <circle cx="0" cy="0" r="22" fill="url(#roseGrad)"/>
-        <circle cx="35" cy="25" r="15" fill="url(#roseGrad)"/>
-        <path d="M-50,20 Q-30,10 -20,-10" fill="none" stroke="#769960" stroke-width="2"/>
-        <path d="M-30,40 Q-10,30 10,20" fill="none" stroke="#769960" stroke-width="2"/>
+      <!-- Right Floral Bouquet (Mirrored) -->
+      <g transform="translate(1070, 160) scale(-1, 1)">
+        <use href="#master-rose" transform="translate(-40, 20) scale(1.3)"/>
+        <use href="#master-rose" transform="translate(10, -20) scale(1.1)"/>
+        <use href="#master-rose" transform="translate(45, 30) scale(0.85)"/>
+        <path d="M -80,50 Q -30,0 20,-40" fill="none" stroke="#5d8a66" stroke-width="2.5"/>
+        <path d="M -60,60 Q -10,30 50,50" fill="none" stroke="#5d8a66" stroke-width="2"/>
+        <path d="M -90,70 Q 0,80 80,0" fill="none" stroke="url(#goldGrad)" stroke-width="1.5" filter="url(#goldGlow)"/>
       </g>
-      <g id="filigree" fill="none" stroke="url(#goldGrad)" stroke-width="1">
-        <path d="M200,60 C400,30 800,30 1000,60"/>
-        <path d="M200,260 C400,290 800,290 1000,260"/>
-        <circle cx="600" cy="45" r="3" fill="url(#goldGrad)"/></g>
-      <text id="svg-subtitle" x="600" y="135" text-anchor="middle" font-family="'Montserrat', sans-serif" font-size="16" font-weight="600" letter-spacing="8" fill="#dfbc7e">${subtitle}</text>
-      <text id="svg-names" x="600" y="205" text-anchor="middle" font-family="'Playfair Display', serif" font-size="64" font-style="italic" font-weight="700" fill="#ffffff">${names}</text>
-      <text id="svg-date" x="600" y="255" text-anchor="middle" font-family="'Montserrat', sans-serif" font-size="14" font-weight="500" letter-spacing="6" fill="#dfbc7e">${dateText}</text>
+      <!-- Central Typography -->
+      <g filter="url(#goldGlow)">
+        <text id="svg-subtitle" x="600" y="135" text-anchor="middle" font-family="'Montserrat', sans-serif" font-size="16" font-weight="700" letter-spacing="8" fill="url(#goldGrad)">${subtitle}</text>
+        <text id="svg-names" x="600" y="210" text-anchor="middle" font-family="'Playfair Display', serif" font-size="64" font-style="italic" font-weight="700" fill="#ffffff">${names}</text>
+        <text id="svg-date" x="600" y="260" text-anchor="middle" font-family="'Montserrat', sans-serif" font-size="15" font-weight="600" letter-spacing="6" fill="#f7e8c4">${dateText}</text>
+      </g>
     </svg>`;
 
     return {
-      themeName: "Rose Floral Elegance",
+      themeName: "Luxury Rose Garden Wedding",
       names,
       subtitle,
       dateText,
       venueText: "",
       fontFamily: "Playfair Display",
       textColor: "#ffffff",
-      bgColor: "#1f0408",
+      bgColor: "#2a080d",
       svg,
     };
   }
 
-  // Default Classic Ivory Flat Arched Banner
+  // Default: Classic Flat Warm Ivory Arched Banner (Exact Image 2 Match)
   const svg = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 280" width="1200" height="280">
     <defs>
-      <linearGradient id="ivoryBg" x1="0%" y1="0%" x2="0%" y2="100%">
-        <stop offset="0%" stop-color="#faf6ee" />
-        <stop offset="100%" stop-color="#f5efe1" />
+      <linearGradient id="ivoryGrad" x1="0%" y1="0%" x2="0%" y2="100%">
+        <stop offset="0%" stop-color="#faf6ee"/>
+        <stop offset="100%" stop-color="#f5efe1"/>
       </linearGradient>
     </defs>
-    <path id="svg-bg" d="M 0,45 Q 600,0 1200,45 L 1200,280 L 0,280 Z" fill="url(#ivoryBg)" stroke="#c49b66" stroke-width="2"/>
+    <!-- Upward curved top banner card -->
+    <path id="svg-bg" d="M 0,45 Q 600,0 1200,45 L 1200,280 L 0,280 Z" fill="url(#ivoryGrad)" stroke="#c49b66" stroke-width="2"/>
     <path d="M 12,54 Q 600,12 1188,54" fill="none" stroke="#c49b66" stroke-width="1" stroke-opacity="0.6"/>
+    <!-- Central Typography -->
     <text id="svg-subtitle" x="600" y="110" text-anchor="middle" font-family="'Montserrat', sans-serif" font-size="18" font-weight="600" letter-spacing="6" fill="#581c25">${subtitle}</text>
     <text id="svg-names" x="600" y="185" text-anchor="middle" font-family="'Playfair Display', serif" font-size="78" font-style="italic" font-weight="700" fill="#581c25">${names}</text>
-    <text id="svg-date" x="600" y="235" text-anchor="middle" font-family="'Montserrat', sans-serif" font-size="16" letter-spacing="4" fill="#581c25">${dateText}</text>
+    <g transform="translate(600, 235)">
+      <!-- Calendar Icon & Date -->
+      <path d="M -115,-12 L -95,-12 L -95,4 L -115,4 Z M -115,-6 L -95,-6 M -111,-15 L -111,-12 M -99,-15 L -99,-12" fill="none" stroke="#581c25" stroke-width="1.5"/>
+      <text id="svg-date" x="0" y="0" text-anchor="middle" font-family="'Montserrat', sans-serif" font-size="16" letter-spacing="4" fill="#581c25">${dateText}</text>
+      <!-- Dividers -->
+      <line x1="-280" y1="-5" x2="-130" y2="-5" stroke="#c49b66" stroke-width="1" stroke-opacity="0.7"/>
+      <line x1="130" y1="-5" x2="280" y2="-5" stroke="#c49b66" stroke-width="1" stroke-opacity="0.7"/>
+    </g>
   </svg>`;
 
   return {
