@@ -1,6 +1,6 @@
 "use client";
 
-import { Eye, EyeOff, ImagePlus, Palette, Upload, X } from "lucide-react";
+import { Eye, EyeOff, ImagePlus, Palette, Sparkles, Upload, X } from "lucide-react";
 import { useEffect, useRef, useState, type FormEvent, type ReactNode } from "react";
 import { ApiError, errorMessage } from "@/lib/api";
 import { ACCEPTED_IMAGE_TYPES, MAX_UPLOAD_MB } from "@/lib/config";
@@ -407,14 +407,22 @@ export function EventForm({
                   })}
                 </div>
 
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 pt-1">
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-2 pt-1">
                   <button
                     type="button"
                     onClick={() => setShowDesigner(true)}
                     className="flex items-center justify-center gap-1.5 rounded-xl border border-brand-300 bg-brand-50/70 px-3 py-2 text-xs font-semibold text-brand-700 hover:bg-brand-100 transition-colors shadow-xs cursor-pointer"
                   >
+                    <Sparkles className="h-3.5 w-3.5 text-brand-600" />
+                    <span>✨ AI Generate</span>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setShowDesigner(true)}
+                    className="flex items-center justify-center gap-1.5 rounded-xl border border-line bg-surface px-3 py-2 text-xs font-semibold text-ink hover:bg-canvas transition-colors shadow-xs cursor-pointer"
+                  >
                     <Palette className="h-3.5 w-3.5 text-brand-600" />
-                    <span>🎨 Customize Template</span>
+                    <span>🎨 Customize</span>
                   </button>
                   <button
                     type="button"
@@ -422,7 +430,7 @@ export function EventForm({
                     className="flex items-center justify-center gap-1.5 rounded-xl border border-dashed border-line bg-canvas/40 px-3 py-2 text-xs text-muted hover:border-brand-300 hover:bg-brand-50/30 transition-colors cursor-pointer"
                   >
                     <Upload className="h-3.5 w-3.5" />
-                    <span>+ Upload custom files</span>
+                    <span>+ Upload custom</span>
                   </button>
                 </div>
               </div>
@@ -433,9 +441,9 @@ export function EventForm({
                   onClick={() => setShowDesigner(true)}
                   className="flex flex-col items-center justify-center gap-1.5 rounded-xl border-2 border-brand-300 bg-brand-50/50 p-4 text-xs font-semibold text-brand-700 hover:bg-brand-100/70 transition-all cursor-pointer shadow-xs text-center"
                 >
-                  <Palette className="h-5 w-5 text-brand-600" />
-                  <span className="font-bold text-sm">🎨 Customize Template</span>
-                  <span className="text-[11px] font-normal text-muted">Create classic arched banner or monogram</span>
+                  <Sparkles className="h-5 w-5 text-brand-600" />
+                  <span className="font-bold text-sm">✨ AI Generate Template</span>
+                  <span className="text-[11px] font-normal text-muted">Generate or customize classic arched banner</span>
                 </button>
                 <button
                   type="button"

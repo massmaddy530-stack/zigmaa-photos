@@ -323,10 +323,19 @@ export default function NewEventPage() {
                     type="button"
                     onClick={() => setShowDesigner(true)}
                     className="inline-flex items-center gap-1.5 rounded-lg border border-brand-300 bg-brand-50 px-2.5 py-1 text-xs font-semibold text-brand-700 hover:bg-brand-100 transition-colors cursor-pointer shadow-xs"
+                    title="Generate template with Gemini AI"
+                  >
+                    <Sparkles className="h-3.5 w-3.5 text-brand-600" />
+                    <span>✨ AI Generate Template</span>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setShowDesigner(true)}
+                    className="inline-flex items-center gap-1.5 rounded-lg border border-line bg-surface px-2.5 py-1 text-xs font-semibold text-ink hover:bg-canvas transition-colors cursor-pointer shadow-xs"
                     title="Open Template Customization Studio"
                   >
                     <Palette className="h-3.5 w-3.5 text-brand-600" />
-                    <span>🎨 Customize Template</span>
+                    <span>🎨 Customize</span>
                   </button>
                   <button
                     type="button"

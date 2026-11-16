@@ -522,16 +522,26 @@ export function EventSettings({ event, onSaved }: { event: EventOut; onSaved: (e
                     })}
                   </div>
 
-                  <div className="grid grid-cols-2 gap-2">
+                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
                     <Button
                       type="button"
                       variant="outline"
                       size="sm"
                       className="text-xs bg-brand-50/70 border-brand-300 text-brand-700 hover:bg-brand-100 font-semibold"
                       onClick={() => setShowDesigner(true)}
+                      icon={<Sparkles className="h-3.5 w-3.5 text-brand-600" />}
+                    >
+                      ✨ AI Generate
+                    </Button>
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="sm"
+                      className="text-xs font-semibold text-ink"
+                      onClick={() => setShowDesigner(true)}
                       icon={<Palette className="h-3.5 w-3.5 text-brand-600" />}
                     >
-                      🎨 Customize Template
+                      🎨 Customize
                     </Button>
                     <Button
                       type="button"
@@ -552,9 +562,9 @@ export function EventSettings({ event, onSaved }: { event: EventOut; onSaved: (e
                     variant="outline"
                     className="text-xs bg-brand-50/70 border-brand-300 text-brand-700 hover:bg-brand-100 font-semibold"
                     onClick={() => setShowDesigner(true)}
-                    icon={<Palette className="h-4 w-4 text-brand-600" />}
+                    icon={<Sparkles className="h-4 w-4 text-brand-600" />}
                   >
-                    🎨 Customize Template
+                    ✨ AI Generate Template
                   </Button>
                   <Button
                     type="button"

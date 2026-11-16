@@ -12,9 +12,11 @@ import {
   Layers,
   Minus,
   Plus,
+  Sparkles,
 } from "lucide-react";
 import { Button } from "./ui/button";
 import { Modal } from "./ui/modal";
+import { useToast } from "./ui/toast";
 
 export interface GeneratedTemplateResult {
   id: string;
@@ -88,11 +90,63 @@ export function TemplateDesignerModal({
   const [showDividers, setShowDividers] = useState(true);
   const [showVenue, setShowVenue] = useState(false);
 
+  // Gemini AI Prompt Bar state
+  const toast = useToast();
+  const [aiPrompt, setAiPrompt] = useState("");
+  const [isGenerating, setIsGenerating] = useState(false);
+
   // Preview background: "photo" | "dark" | "grid"
   const [previewBg, setPreviewBg] = useState<"photo" | "dark" | "grid">("photo");
 
   // SVG ref for exporting to PNG
   const svgRef = useRef<SVGSVGElement>(null);
+
+  // Handle AI Template Generation with Gemini
+  async function handleAiGenerate(promptToUse?: string) {
+    const text = (promptToUse ?? aiPrompt).trim();
+    if (!text) {
+      toast.error("Please enter a prompt for the template.");
+      return;
+    }
+    setIsGenerating(true);
+    try {
+      const res = await fetch("/api/template/ai-generate", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ prompt: text }),
+      });
+      const data = await res.json();
+      if (data.ok && data.template) {
+        const t = data.template;
+        if (t.preset) setPreset(t.preset);
+        if (t.subtitle) setSubtitle(t.subtitle);
+        if (t.names) setNames(t.names);
+        if (t.dateText) setDateText(t.dateText);
+        if (t.venueText) setVenueText(t.venueText);
+        if (t.fontFamily) setFontFamily(t.fontFamily);
+        if (typeof t.isItalic === "boolean") setIsItalic(t.isItalic);
+        if (typeof t.namesFontSize === "number") setNamesFontSize(t.namesFontSize);
+        if (typeof t.subtitleFontSize === "number") setSubtitleFontSize(t.subtitleFontSize);
+        if (typeof t.dateFontSize === "number") setDateFontSize(t.dateFontSize);
+        if (typeof t.letterSpacing === "number") setLetterSpacing(t.letterSpacing);
+        if (typeof t.arcHeight === "number") setArcHeight(t.arcHeight);
+        if (t.bgColor) setBgColor(t.bgColor);
+        if (t.textColor) setTextColor(t.textColor);
+        if (typeof t.showBorder === "boolean") setShowBorder(t.showBorder);
+        if (typeof t.showCalendarIcon === "boolean") setShowCalendarIcon(t.showCalendarIcon);
+        if (typeof t.showDividers === "boolean") setShowDividers(t.showDividers);
+        if (typeof t.showVenue === "boolean") setShowVenue(t.showVenue);
+
+        toast.success("AI Template Generated!", `Design updated for "${t.names}"`);
+      } else {
+        toast.error("Generation failed", data.error || "Please try again.");
+      }
+    } catch {
+      toast.error("Network error", "Could not reach AI generation service.");
+    } finally {
+      setIsGenerating(false);
+    }
+  }
 
   // Initialize from default event name/date if available
   useEffect(() => {
@@ -206,6 +260,68 @@ export function TemplateDesignerModal({
           >
             <X className="h-4 w-4" />
           </button>
+        </div>
+
+        {/* Gemini AI Prompt Bar */}
+        <div className="px-6 py-2.5 border-b border-line bg-gradient-to-r from-amber-50/60 via-brand-50/40 to-surface shrink-0 space-y-2">
+          <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2">
+            <div className="relative flex-1">
+              <div className="pointer-events-none absolute inset-y-0 left-0 flex items-center pl-3 text-brand-600">
+                <Sparkles className="h-4 w-4" />
+              </div>
+              <input
+                type="text"
+                value={aiPrompt}
+                onChange={(e) => setAiPrompt(e.target.value)}
+                onKeyDown={(e) => e.key === "Enter" && handleAiGenerate()}
+                placeholder="Describe your template: e.g. Royal maroon & gold wedding banner for Arun & Keerthana 14 Feb 2026 Chennai..."
+                className="w-full rounded-xl border border-brand-200 bg-white pl-9 pr-3 py-1.5 text-xs text-ink placeholder:text-muted/65 focus:outline-none focus:ring-2 focus:ring-brand-500/20 focus:border-brand-500 shadow-2xs"
+              />
+            </div>
+
+            <button
+              type="button"
+              disabled={isGenerating}
+              onClick={() => handleAiGenerate()}
+              className="inline-flex items-center justify-center gap-1.5 rounded-xl bg-gradient-to-r from-brand-600 to-rose-600 px-4 py-1.5 text-xs font-bold text-white shadow-xs hover:from-brand-700 hover:to-rose-700 transition-all disabled:opacity-50 cursor-pointer shrink-0"
+            >
+              {isGenerating ? (
+                <>
+                  <span className="h-3.5 w-3.5 animate-spin rounded-full border-2 border-white/30 border-t-white" />
+                  <span>Generating with AI...</span>
+                </>
+              ) : (
+                <>
+                  <Sparkles className="h-3.5 w-3.5" />
+                  <span>AI Generate Template</span>
+                </>
+              )}
+            </button>
+          </div>
+
+          {/* Quick Prompt Ideas */}
+          <div className="flex items-center gap-1.5 overflow-x-auto text-[10px] text-muted pb-0.5 scrollbar-none">
+            <span className="shrink-0 font-semibold text-brand-800">Quick ideas:</span>
+            {[
+              "Royal maroon and gold wedding banner for Arun & Keerthana 14 Feb 2026",
+              "Classic ivory arched banner for Naveen & Meera 22 August 2026 Jaipur",
+              "Minimalist white modern reception banner with gold line",
+              "Royal monogram crest for A & K with Cinzel font",
+              "Transparent gold calligraphy signature watermark",
+            ].map((p) => (
+              <button
+                key={p}
+                type="button"
+                onClick={() => {
+                  setAiPrompt(p);
+                  handleAiGenerate(p);
+                }}
+                className="shrink-0 rounded-full border border-line bg-surface/90 px-2.5 py-0.5 hover:border-brand-300 hover:bg-brand-50/50 hover:text-brand-800 transition-colors cursor-pointer"
+              >
+                {p.split(" for ")[0] || p}
+              </button>
+            ))}
+          </div>
         </div>
 
         {/* Main Body: 2 Columns (Left: Live Preview Canvas, Right: Full Controls) */}
