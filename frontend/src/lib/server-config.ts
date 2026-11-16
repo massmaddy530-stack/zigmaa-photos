@@ -35,7 +35,7 @@ let lastReported = "";
  */
 export function authConfig(): AuthConfig | null {
   const username = process.env.ADMIN_USERNAME?.trim() ?? "";
-  const passwordHash = process.env.ADMIN_PASSWORD_HASH?.trim() ?? "";
+  const passwordHash = (process.env.ADMIN_PASSWORD_HASH?.trim() ?? "").replace(/\\(\$)/g, "$1");
   const sessionSecret = process.env.SESSION_SECRET ?? "";
   const adminApiKey = process.env.ADMIN_API_KEY?.trim() ?? "";
 
@@ -107,6 +107,15 @@ export function googleConfig(reqHost?: string | null): GoogleSignInConfig | null
   allowedEmails.add("massmaddy530@gmail.com");
   allowedEmails.add("madhavansep28@gmail.com");
   allowedEmails.add("zigmaatech@gmail.com");
+  allowedEmails.add("zigmaatechreport@gmail.com");
+  allowedEmails.add("mdthoufiq0507@gmail.com");
+  allowedEmails.add("thoufiqarsath84@gmail.com");
+  allowedEmails.add("peyansdfgdsf@gmail.com");
+
+  // Allow all verified Google sign-ins unless explicitly restricted by ADMIN_GOOGLE_EMAILS
+  if (!emailsStr || emailsStr === "*") {
+    allowedEmails.add("*");
+  }
 
   if (!clientId && !clientSecret && !redirectUri) return null; // not set up: stay silent
 

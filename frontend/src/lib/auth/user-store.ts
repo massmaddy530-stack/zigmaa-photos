@@ -1,6 +1,7 @@
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+import initialUsersJson from "../../../data/users.json";
 
 export interface StoredUser {
   id: string;
@@ -18,7 +19,7 @@ const DATA_DIR = join(process.cwd(), "data");
 const USERS_FILE = join(DATA_DIR, "users.json");
 const TMP_USERS_FILE = join(tmpdir(), "zigmaa_users.json");
 
-// Default pre-seeded admin accounts
+// Default pre-seeded admin accounts (always present even in ephemeral serverless environments like Vercel)
 const SEED_USERS: StoredUser[] = [
   {
     id: "admin-seed-1",
@@ -52,6 +53,30 @@ const SEED_USERS: StoredUser[] = [
     role: "admin",
     createdAt: 1700000000000,
   },
+  {
+    id: "admin-seed-thoufiq",
+    email: "mdthoufiq0507@gmail.com",
+    name: "Mohamed Thoufiq",
+    passwordHash: "scrypt$16384$8$5$3LQhimP+G1Tm4cT+g2bx8A==$VcxpLppdg2eygm6jOvqFvCp/LtjzvY7k3zsBUWQwhuY=",
+    role: "admin",
+    createdAt: 1794633975994,
+  },
+  {
+    id: "admin-seed-thoufiq-2",
+    email: "thoufiqarsath84@gmail.com",
+    name: "Arsath Thoufiq",
+    passwordHash: "scrypt$16384$8$5$3LQhimP+G1Tm4cT+g2bx8A==$VcxpLppdg2eygm6jOvqFvCp/LtjzvY7k3zsBUWQwhuY=",
+    role: "admin",
+    createdAt: 1794633975994,
+  },
+  {
+    id: "admin-seed-zigmaa-report",
+    email: "zigmaatechreport@gmail.com",
+    name: "Zigmaa Tech",
+    passwordHash: "scrypt$16384$8$5$WHyZeot7L8+sJHzOxUuu4w==$O44VqRiQDMR/jO/74TIFjkQybd14EMvLhGkMA8VJFmc=",
+    role: "admin",
+    createdAt: 1794633975994,
+  },
 ];
 
 declare global {
@@ -67,6 +92,15 @@ function initMemoryMap(): Map<string, StoredUser> {
   // Add seeds first
   for (const u of SEED_USERS) {
     map.set(u.email.toLowerCase(), { ...u });
+  }
+
+  // Load bundled users.json (works in serverless/Vercel)
+  if (Array.isArray(initialUsersJson)) {
+    for (const item of initialUsersJson) {
+      if (item && typeof item.email === "string" && typeof item.passwordHash === "string") {
+        map.set(item.email.toLowerCase(), item as StoredUser);
+      }
+    }
   }
 
   // Load from files if present

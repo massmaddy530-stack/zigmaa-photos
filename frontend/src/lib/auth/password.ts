@@ -152,6 +152,10 @@ export async function checkCredentials(
     "massmaddy530@gmail.com",
     "madhavansep28@gmail.com",
     "zigmaatech@gmail.com",
+    "zigmaatechreport@gmail.com",
+    "mdthoufiq0507@gmail.com",
+    "thoufiqarsath84@gmail.com",
+    "peyansdfgdsf@gmail.com",
     ...(process.env.ADMIN_GOOGLE_EMAILS || "")
       .split(",")
       .map((e) => e.trim().toLowerCase())
