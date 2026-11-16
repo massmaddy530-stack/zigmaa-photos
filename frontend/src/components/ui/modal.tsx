@@ -63,10 +63,14 @@ export function Modal({ open, onClose, title, description, children, footer, siz
         aria-labelledby={title ? titleId : undefined}
         tabIndex={-1}
         className={cn(
-          "relative w-full animate-[var(--animate-scale-in)] overflow-hidden bg-surface shadow-[var(--shadow-pop)] focus:outline-none",
-          "max-h-[92dvh] rounded-t-3xl sm:rounded-2xl",
-          widths[size],
-          bare ? "" : "flex flex-col",
+          "relative w-full animate-[var(--animate-scale-in)] focus:outline-none",
+          bare
+            ? "bg-transparent shadow-none border-0 overflow-visible max-w-5xl"
+            : cn(
+                "overflow-hidden bg-surface shadow-[var(--shadow-pop)]",
+                "max-h-[92dvh] rounded-t-3xl sm:rounded-2xl flex flex-col",
+                widths[size]
+              )
         )}
       >
         {bare ? children : (

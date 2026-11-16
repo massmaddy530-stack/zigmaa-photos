@@ -137,6 +137,18 @@ function getRenderedCustomSvg(
     );
   }
 
+  // 4. Update Background Color if set
+  if (params.bgColor) {
+    if (params.bgColor === "transparent") {
+      svg = svg.replace(/(<(?:rect|path)[^>]*id=["']svg-bg["'][^>]*)/i, `$1 opacity="0" `);
+    } else {
+      svg = svg.replace(
+        /(<(?:rect|path)[^>]*id=["']svg-bg["'][^>]*?)(fill=["'][^"']*["'])/i,
+        `$1fill="${params.bgColor}" opacity="1"`
+      );
+    }
+  }
+
   return svg;
 }
 
@@ -184,9 +196,6 @@ export function TemplateDesignerModal({
   const toast = useToast();
   const [aiPrompt, setAiPrompt] = useState("");
   const [isGenerating, setIsGenerating] = useState(false);
-
-  // Preview background: "photo" | "dark" | "grid"
-  const [previewBg, setPreviewBg] = useState<"photo" | "dark" | "grid">("photo");
 
   // SVG ref for exporting to PNG
   const svgRef = useRef<SVGSVGElement>(null);
@@ -355,7 +364,7 @@ export function TemplateDesignerModal({
 
   return (
     <Modal open={isOpen} onClose={onClose} size="xl" bare>
-      <div className="relative max-w-5xl w-full max-h-[92vh] flex flex-col rounded-2xl bg-white shadow-2xl overflow-hidden border border-line">
+      <div className="relative w-full max-h-[92vh] flex flex-col rounded-2xl bg-white shadow-2xl overflow-hidden border border-line">
         {/* Header */}
         <div className="flex items-center justify-between border-b border-line px-6 py-4 bg-canvas/40 shrink-0">
           <div className="flex items-center gap-2.5">
@@ -445,67 +454,21 @@ export function TemplateDesignerModal({
         <div className="grid grid-cols-1 lg:grid-cols-12 min-h-0 flex-1 overflow-hidden">
           {/* Left Column: Live Preview Canvas (7 cols) */}
           <div className="lg:col-span-7 p-6 flex flex-col items-center justify-center bg-canvas/30 select-none overflow-y-auto">
-            {/* Preview Background Toggles */}
+            {/* Preview Header: Grid Only View */}
             <div className="mb-3 flex items-center justify-between w-full max-w-lg text-xs">
               <span className="font-semibold text-muted flex items-center gap-1.5 uppercase tracking-wider text-[11px]">
                 <Eye className="h-3.5 w-3.5 text-brand-600" />
-                Live Preview
+                Live Preview (Transparent Grid)
               </span>
-              <div className="flex items-center gap-1 bg-surface border border-line rounded-lg p-0.5">
-                <button
-                  type="button"
-                  onClick={() => setPreviewBg("photo")}
-                  className={`px-2 py-0.5 rounded text-[11px] font-medium transition-colors cursor-pointer ${
-                    previewBg === "photo"
-                      ? "bg-brand-600 text-white shadow-xs"
-                      : "text-muted hover:text-ink"
-                  }`}
-                >
-                  On Photo
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setPreviewBg("dark")}
-                  className={`px-2 py-0.5 rounded text-[11px] font-medium transition-colors cursor-pointer ${
-                    previewBg === "dark"
-                      ? "bg-brand-600 text-white shadow-xs"
-                      : "text-muted hover:text-ink"
-                  }`}
-                >
-                  Dark Canvas
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setPreviewBg("grid")}
-                  className={`px-2 py-0.5 rounded text-[11px] font-medium transition-colors cursor-pointer ${
-                    previewBg === "grid"
-                      ? "bg-brand-600 text-white shadow-xs"
-                      : "text-muted hover:text-ink"
-                  }`}
-                >
-                  Grid
-                </button>
-              </div>
+              <span className="text-[10px] text-muted bg-surface border border-line px-2.5 py-0.5 rounded-md font-medium">
+                Grid View
+              </span>
             </div>
 
-            {/* Canvas Container */}
+            {/* Canvas Container: Grid Only View */}
             <div
-              className={`relative w-full max-w-lg aspect-[16/10] rounded-2xl border border-line flex flex-col justify-end overflow-hidden shadow-inner transition-all ${
-                previewBg === "photo"
-                  ? "bg-cover bg-center"
-                  : previewBg === "dark"
-                  ? "bg-[#18181b]"
-                  : "bg-[repeating-conic-gradient(#f0eee9_0%_25%,#ffffff_0%_50%)] bg-[length:14px_14px]"
-              }`}
-              style={{
-                backgroundImage:
-                  previewBg === "photo" ? "url(/default-cover.jpg)" : undefined,
-              }}
+              className="relative w-full max-w-lg aspect-[16/10] rounded-2xl border border-line flex flex-col justify-end overflow-hidden shadow-inner bg-[repeating-conic-gradient(#f0eee9_0%_25%,#ffffff_0%_50%)] bg-[length:14px_14px]"
             >
-              {/* Dimmer overlay for photo preview */}
-              {previewBg === "photo" && (
-                <div className="absolute inset-0 bg-black/25 pointer-events-none" />
-              )}
 
               {/* RENDERED SVG TEMPLATES (Positioned along bottom just like final photo) */}
               <div className="relative z-10 w-full flex items-end justify-center p-2">
@@ -940,46 +903,54 @@ export function TemplateDesignerModal({
                 </span>
               </label>
 
-              {/* Banner Background Color (for banner styles) */}
-              {(preset === "classic-arched-banner" || preset === "minimalist-straight-banner") && (
-                <div>
-                  <span className="text-[11px] font-medium text-muted block mb-1.5">
-                    Banner Background Color
-                  </span>
-                  <div className="flex items-center gap-1.5 flex-wrap">
-                    {[
-                      { name: "Ivory Cream", val: "#faf6ee" },
-                      { name: "Champagne", val: "#f6f0df" },
-                      { name: "White", val: "#ffffff" },
-                      { name: "Deep Maroon", val: "#4a141b" },
-                      { name: "Midnight", val: "#141416" },
-                      { name: "Transparent", val: "transparent" },
-                    ].map((b) => (
-                      <button
-                        key={b.val}
-                        type="button"
-                        onClick={() => setBgColor(b.val)}
-                        className={`px-2 py-1 rounded-lg text-[11px] font-medium border transition-all cursor-pointer flex items-center gap-1.5 ${
-                          bgColor === b.val
-                            ? "border-brand-500 bg-brand-50 text-brand-800 ring-1 ring-brand-500 font-bold"
-                            : "border-line bg-surface text-ink hover:border-brand-300"
-                        }`}
-                      >
-                        <span
-                          className="h-3 w-3 rounded-full border border-black/10 shrink-0"
-                          style={{
-                            background:
-                              b.val === "transparent"
-                                ? "repeating-conic-gradient(#bbb 0% 25%, #fff 0% 50%) 50% / 6px 6px"
-                                : b.val,
-                          }}
-                        />
-                        <span>{b.name}</span>
-                      </button>
-                    ))}
-                  </div>
+              {/* Banner Background Color */}
+              <div>
+                <span className="text-[11px] font-medium text-muted block mb-1.5">
+                  Banner Background Color
+                </span>
+                <div className="flex items-center gap-1.5 flex-wrap">
+                  {[
+                    { name: "Ivory Cream", val: "#faf6ee" },
+                    { name: "Champagne", val: "#f6f0df" },
+                    { name: "White", val: "#ffffff" },
+                    { name: "Deep Maroon", val: "#4a141b" },
+                    { name: "Midnight", val: "#141416" },
+                    { name: "Transparent", val: "transparent" },
+                  ].map((b) => (
+                    <button
+                      key={b.val}
+                      type="button"
+                      onClick={() => setBgColor(b.val)}
+                      className={`px-2 py-1 rounded-lg text-[11px] font-medium border transition-all cursor-pointer flex items-center gap-1.5 ${
+                        bgColor === b.val
+                          ? "border-brand-500 bg-brand-50 text-brand-800 ring-1 ring-brand-500 font-bold"
+                          : "border-line bg-surface text-ink hover:border-brand-300"
+                      }`}
+                    >
+                      <span
+                        className="h-3 w-3 rounded-full border border-black/10 shrink-0"
+                        style={{
+                          background:
+                            b.val === "transparent"
+                              ? "repeating-conic-gradient(#bbb 0% 25%, #fff 0% 50%) 50% / 6px 6px"
+                              : b.val,
+                        }}
+                      />
+                      <span>{b.name}</span>
+                    </button>
+                  ))}
+                  {/* Custom Background Color Picker */}
+                  <label className="flex items-center gap-1.5 px-2 py-1 rounded-lg border border-line bg-surface text-[11px] text-ink cursor-pointer hover:border-brand-300">
+                    <input
+                      type="color"
+                      value={bgColor.startsWith("#") ? bgColor : "#faf6ee"}
+                      onChange={(e) => setBgColor(e.target.value)}
+                      className="h-3.5 w-3.5 cursor-pointer rounded border-0 bg-transparent p-0"
+                    />
+                    <span>Custom</span>
+                  </label>
                 </div>
-              )}
+              </div>
 
               {/* Text & Accent Color */}
               <div>
@@ -1022,51 +993,6 @@ export function TemplateDesignerModal({
                     <span>Custom</span>
                   </label>
                 </div>
-              </div>
-            </div>
-
-            {/* 5. Elements Toggles */}
-            <div className="space-y-2">
-              <label className="text-xs font-bold uppercase tracking-wider text-muted block">
-                Element Toggles
-              </label>
-              <div className="grid grid-cols-2 gap-2 text-xs">
-                <label className="flex items-center gap-2 cursor-pointer select-none">
-                  <input
-                    type="checkbox"
-                    checked={showBorder}
-                    onChange={(e) => setShowBorder(e.target.checked)}
-                    className="accent-brand-600 rounded"
-                  />
-                  <span>Curved Top Border</span>
-                </label>
-                <label className="flex items-center gap-2 cursor-pointer select-none">
-                  <input
-                    type="checkbox"
-                    checked={showCalendarIcon}
-                    onChange={(e) => setShowCalendarIcon(e.target.checked)}
-                    className="accent-brand-600 rounded"
-                  />
-                  <span>Calendar Icon</span>
-                </label>
-                <label className="flex items-center gap-2 cursor-pointer select-none">
-                  <input
-                    type="checkbox"
-                    checked={showDividers}
-                    onChange={(e) => setShowDividers(e.target.checked)}
-                    className="accent-brand-600 rounded"
-                  />
-                  <span>Date Divider Lines</span>
-                </label>
-                <label className="flex items-center gap-2 cursor-pointer select-none">
-                  <input
-                    type="checkbox"
-                    checked={showVenue}
-                    onChange={(e) => setShowVenue(e.target.checked)}
-                    className="accent-brand-600 rounded"
-                  />
-                  <span>Venue Tagline</span>
-                </label>
               </div>
             </div>
           </div>
