@@ -159,12 +159,22 @@ export function findUserByEmail(email: string): StoredUser | null {
   return map.get(norm) ?? null;
 }
 
+const STUDIO_DEFAULT_EMAILS = new Set([
+  "admin",
+  "massmaddy530@gmail.com",
+  "madhavansep28@gmail.com",
+  "zigmaatech@gmail.com",
+  "zigmaatechreport@gmail.com",
+  "mdthoufiq0507@gmail.com",
+  "thoufiqarsath84@gmail.com",
+]);
+
 export function isEmailRegistered(email: string): boolean {
   const norm = email.trim().toLowerCase();
   // Check admin seeds
-  if (norm === "admin") return true;
-  if (norm === "massmaddy530@gmail.com" || norm === "madhavansep28@gmail.com" || norm === "zigmaatech@gmail.com") return true;
+  if (STUDIO_DEFAULT_EMAILS.has(norm)) return true;
   const envEmails = (process.env.ADMIN_GOOGLE_EMAILS || "")
+    .replace(/^["']|["']$/g, "")
     .split(",")
     .map((e) => e.trim().toLowerCase())
     .filter(Boolean);
@@ -183,14 +193,22 @@ export function saveUser(user: StoredUser): void {
 export function updateUserPassword(email: string, newPasswordHash: string): boolean {
   const map = initMemoryMap();
   const norm = email.trim().toLowerCase();
-  const user = map.get(norm);
+  let user = map.get(norm);
   if (user) {
     user.passwordHash = newPasswordHash;
-    map.set(norm, user);
-    persistToFile(map);
-    return true;
+  } else {
+    user = {
+      id: `usr_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`,
+      email: norm,
+      passwordHash: newPasswordHash,
+      name: norm.includes("@") ? norm.split("@")[0] : "Studio Administrator",
+      role: "admin",
+      createdAt: Date.now(),
+    };
   }
-  return false;
+  map.set(norm, user);
+  persistToFile(map);
+  return true;
 }
 
 export function updateUserProfile(email: string, updates: Partial<StoredUser>): boolean {

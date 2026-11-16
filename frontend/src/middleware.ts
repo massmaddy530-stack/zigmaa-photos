@@ -9,7 +9,8 @@ const SESSION_MAX_AGE_S = 60 * 60 * 12;
 // (photo uploads), and the proxy performs its own session check.
 export async function middleware(req: NextRequest) {
   const token = req.cookies.get(SESSION_COOKIE)?.value;
-  const secret = process.env.SESSION_SECRET?.trim() || "";
+  const rawSecret = process.env.SESSION_SECRET?.trim() || "";
+  const secret = rawSecret.replace(/^["']|["']$/g, "");
   const valid = Boolean(secret && token && (await verifyMiddlewareSession(token, secret, SESSION_MAX_AGE_S)));
 
   let res: NextResponse;

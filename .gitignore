@@ -32,3 +32,6 @@ dist/
 !ingestion-agent/Zigmaa-Camera-Sync.spec
 *.exe
 
+# Scratch scripts
+scratch/
+

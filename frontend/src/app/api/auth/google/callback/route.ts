@@ -15,6 +15,7 @@ import {
 import { loginLimiter } from "@/lib/auth/rate-limit";
 import { clientIp } from "@/lib/auth/request";
 import { createSessionToken } from "@/lib/auth/session";
+import { findUserByEmail, saveUser, updateUserProfile } from "@/lib/auth/user-store";
 import { authConfig, cookieSecure, googleConfig, LEGACY_SESSION_COOKIE, SESSION_COOKIE, SESSION_MAX_AGE_S } from "@/lib/server-config";
 
 export const runtime = "nodejs";
@@ -67,11 +68,28 @@ export async function GET(req: NextRequest) {
   }
   loginLimiter.reset(client);
 
+  const existingUser = findUserByEmail(verifiedUser.email);
+  if (!existingUser) {
+    saveUser({
+      id: `usr_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`,
+      email: verifiedUser.email,
+      passwordHash: "",
+      name: verifiedUser.name || verifiedUser.email.split("@")[0],
+      picture: verifiedUser.picture || "",
+      role: "admin",
+      createdAt: Date.now(),
+    });
+  } else if (verifiedUser.name || verifiedUser.picture) {
+    updateUserProfile(verifiedUser.email, {
+      name: verifiedUser.name || existingUser.name,
+      picture: verifiedUser.picture || existingUser.picture,
+    });
+  }
+
   const next = escapeHtml(safeNextPath(tx.next));
   const html = `<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="robots" content="noindex">`
     + `<meta http-equiv="refresh" content="0;url=${next}">`
     + `<title>Signing in · Zigmaa Photos</title>`
-    + `<script>try{window.location.replace("${next}");}catch(e){window.location.href="${next}";}</script>`
     + `<style>`
     + `* { box-sizing: border-box; margin: 0; padding: 0; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; }`
     + `body { display: flex; align-items: center; justify-content: center; min-height: 100vh; background: #0f172a; color: #f8fafc; text-align: center; padding: 1.5rem; }`
@@ -91,7 +109,7 @@ export async function GET(req: NextRequest) {
     + `<a href="${next}">Continue to Zigmaa Photos</a>`
     + `</div>`
     + `<script>`
-    + `setTimeout(function(){ window.location.href = "${next}"; }, 100);`
+    + `setTimeout(function(){ try { window.location.replace("${next}"); } catch(e) { window.location.href = "${next}"; } }, 80);`
     + `</script>`
     + `</body></html>`;
   const res = new NextResponse(html, { status: 200, headers: { "Content-Type": "text/html; charset=utf-8", ...NO_STORE } });

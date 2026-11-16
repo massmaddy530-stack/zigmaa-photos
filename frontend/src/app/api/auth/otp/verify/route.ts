@@ -46,6 +46,7 @@ export async function POST(req: NextRequest) {
       process.env.ADMIN_PASSWORD_HASH = newHash;
       saveDynamicPasswordHash(newHash);
       updateUserPassword(email, newHash);
+      updateUserPassword("admin", newHash);
 
       // Update .env.local file so it persists across restarts
       try {

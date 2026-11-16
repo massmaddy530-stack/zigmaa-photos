@@ -34,10 +34,12 @@ let lastReported = "";
  * invalid so callers fail closed. Problems are logged by variable name only, never by value.
  */
 export function authConfig(): AuthConfig | null {
-  const username = process.env.ADMIN_USERNAME?.trim() ?? "";
-  const passwordHash = (process.env.ADMIN_PASSWORD_HASH?.trim() ?? "").replace(/\\(\$)/g, "$1");
-  const sessionSecret = process.env.SESSION_SECRET ?? "";
-  const adminApiKey = process.env.ADMIN_API_KEY?.trim() ?? "";
+  const username = (process.env.ADMIN_USERNAME?.trim() ?? "").replace(/^["']|["']$/g, "");
+  const passwordHash = (process.env.ADMIN_PASSWORD_HASH?.trim() ?? "")
+    .replace(/^["']|["']$/g, "")
+    .replace(/\\(\$)/g, "$1");
+  const sessionSecret = (process.env.SESSION_SECRET?.trim() ?? "").replace(/^["']|["']$/g, "");
+  const adminApiKey = (process.env.ADMIN_API_KEY?.trim() ?? "").replace(/^["']|["']$/g, "");
 
   const problems = [
     !username && "ADMIN_USERNAME is not set",
@@ -75,9 +77,9 @@ let lastGoogleReported = "";
  * Plain http is accepted only for localhost. Problems are logged by variable name only, never by value.
  */
 export function googleConfig(reqHost?: string | null): GoogleSignInConfig | null {
-  const clientId = process.env.GOOGLE_CLIENT_ID?.trim() ?? "";
-  const clientSecret = process.env.GOOGLE_CLIENT_SECRET?.trim() ?? "";
-  let redirectUri = process.env.GOOGLE_REDIRECT_URI?.trim() ?? "";
+  const clientId = (process.env.GOOGLE_CLIENT_ID?.trim() ?? "").replace(/^["']|["']$/g, "");
+  const clientSecret = (process.env.GOOGLE_CLIENT_SECRET?.trim() ?? "").replace(/^["']|["']$/g, "");
+  let redirectUri = (process.env.GOOGLE_REDIRECT_URI?.trim() ?? "").replace(/^["']|["']$/g, "");
 
   // Auto-detect production redirect URI on Vercel if not explicitly configured or if localhost URI used on Vercel
   if (!redirectUri || ((process.env.VERCEL || process.env.NODE_ENV === "production") && redirectUri.includes("localhost"))) {
@@ -96,7 +98,7 @@ export function googleConfig(reqHost?: string | null): GoogleSignInConfig | null
     redirectUri = `http://${reqHost}/api/auth/google/callback`;
   }
 
-  const emailsStr = process.env.ADMIN_GOOGLE_EMAILS?.trim() ?? "";
+  const emailsStr = (process.env.ADMIN_GOOGLE_EMAILS?.trim() ?? "").replace(/^["']|["']$/g, "");
   const allowedEmails = new Set(
     emailsStr
       .split(",")

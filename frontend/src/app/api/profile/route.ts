@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { checkCredentials, hashPassword, saveDynamicPasswordHash } from "@/lib/auth/password";
-import { verifySessionToken } from "@/lib/auth/session";
+import { createSessionToken, verifySessionToken } from "@/lib/auth/session";
 import { findUserByEmail, updateUserPassword, updateUserProfile } from "@/lib/auth/user-store";
 import { authConfig, cookieSecure, SESSION_COOKIE, SESSION_MAX_AGE_S } from "@/lib/server-config";
 import { promises as fs } from "node:fs";
@@ -128,9 +128,15 @@ export async function PATCH(req: NextRequest) {
       const newHash = await hashPassword(newPassword);
       process.env.ADMIN_PASSWORD_HASH = newHash;
       saveDynamicPasswordHash(newHash);
-      if (currentProfile.email) {
-        updateUserPassword(currentProfile.email, newHash);
+      const targetEmail = currentProfile.email || email || config.username;
+      if (targetEmail) {
+        updateUserPassword(targetEmail, newHash);
       }
+      if (email && email !== targetEmail) {
+        updateUserPassword(email, newHash);
+      }
+      updateUserPassword("admin", newHash);
+      updateUserPassword(config.username, newHash);
 
       // Update .env.local file
       try {
@@ -166,6 +172,19 @@ export async function PATCH(req: NextRequest) {
       ok: true,
       message: "Profile updated successfully.",
       user: updatedProfile,
+    });
+
+    // Re-issue active session cookie if password was changed so the existing browser session is seamlessly preserved
+    const sessionConfig = {
+      ...config,
+      passwordHash: newPassword ? process.env.ADMIN_PASSWORD_HASH || config.passwordHash : config.passwordHash,
+    };
+    res.cookies.set(SESSION_COOKIE, await createSessionToken(sessionConfig, SESSION_MAX_AGE_S), {
+      httpOnly: true,
+      sameSite: "lax",
+      secure: cookieSecure(),
+      path: "/",
+      maxAge: SESSION_MAX_AGE_S,
     });
 
     // Keep cookie small: never put large base64 data URLs in Set-Cookie header
