@@ -155,11 +155,10 @@ export async function checkCredentials(
     "zigmaatechreport@gmail.com",
     "mdthoufiq0507@gmail.com",
     "thoufiqarsath84@gmail.com",
-    "peyansdfgdsf@gmail.com",
     ...(process.env.ADMIN_GOOGLE_EMAILS || "")
       .split(",")
       .map((e) => e.trim().toLowerCase())
-      .filter(Boolean),
+      .filter((e) => /^[^@\s]+@[^@\s]+$/.test(e)),
   ]);
 
   if (studioEmails.has(normUser)) {

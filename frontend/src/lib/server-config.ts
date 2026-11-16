@@ -101,7 +101,7 @@ export function googleConfig(reqHost?: string | null): GoogleSignInConfig | null
     emailsStr
       .split(",")
       .map((e) => e.trim().toLowerCase())
-      .filter((e) => /^[^@\s]+@[^@\s]+$/.test(e) || e === "*"),
+      .filter((e) => /^[^@\s]+@[^@\s]+$/.test(e)),
   );
   // Default studio admin accounts always allowed:
   allowedEmails.add("massmaddy530@gmail.com");
@@ -110,12 +110,6 @@ export function googleConfig(reqHost?: string | null): GoogleSignInConfig | null
   allowedEmails.add("zigmaatechreport@gmail.com");
   allowedEmails.add("mdthoufiq0507@gmail.com");
   allowedEmails.add("thoufiqarsath84@gmail.com");
-  allowedEmails.add("peyansdfgdsf@gmail.com");
-
-  // Allow all verified Google sign-ins unless explicitly restricted by ADMIN_GOOGLE_EMAILS
-  if (!emailsStr || emailsStr === "*") {
-    allowedEmails.add("*");
-  }
 
   if (!clientId && !clientSecret && !redirectUri) return null; // not set up: stay silent
 

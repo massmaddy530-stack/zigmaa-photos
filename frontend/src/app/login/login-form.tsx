@@ -266,12 +266,32 @@ export function LoginForm() {
           )}
 
           {googleError && !error && (
-            <div className="rounded-xl border border-amber-200 bg-amber-50 p-2 text-center text-xs font-medium text-amber-800">
-              {googleError === "google_unavailable"
-                ? "Google Sign-in is not configured on this server."
-                : googleError === "not_registered"
-                ? "This Google account is not registered. Please sign up first."
-                : "Google Sign-in failed. Please sign in with your email."}
+            <div className="rounded-xl border border-amber-300 bg-amber-50 p-2.5 text-center text-xs font-medium text-amber-900 shadow-xs space-y-1">
+              <div className="font-semibold text-amber-950 flex items-center justify-center gap-1.5">
+                <span>⚠️</span>
+                <span>
+                  {googleError === "google_unavailable"
+                    ? "Google Sign-In Unavailable"
+                    : "Account Not Registered"}
+                </span>
+              </div>
+              <p className="text-[11px] text-amber-800 leading-snug">
+                {googleError === "google_unavailable"
+                  ? "Google sign-in is not configured on this server."
+                  : "This Google account is not registered with Zigmaa Photos. Only registered studio accounts can sign in."}
+              </p>
+              {googleError !== "google_unavailable" && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    setView("signup");
+                    setError(null);
+                  }}
+                  className="mt-0.5 inline-flex items-center gap-1 text-[11px] font-bold text-brand-600 hover:text-brand-700 underline cursor-pointer"
+                >
+                  Create an account now →
+                </button>
+              )}
             </div>
           )}
 

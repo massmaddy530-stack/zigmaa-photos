@@ -228,7 +228,6 @@ export async function verifyIdToken(
   if (claims.email_verified !== true && claims.email_verified !== "true") throw new GoogleAuthError("email_unverified");
   const normEmail = typeof claims.email === "string" ? claims.email.trim().toLowerCase() : "";
   const isAllowed =
-    opts.allowedEmails.has("*") ||
     opts.allowedEmails.has(normEmail) ||
     isEmailRegistered(normEmail);
   if (!normEmail || !isAllowed) {
