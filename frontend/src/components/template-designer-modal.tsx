@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState, useMemo } from "react";
 import {
   Check,
   Eye,
@@ -13,10 +13,19 @@ import {
   Minus,
   Plus,
   Sparkles,
+  Upload,
+  Image as ImageIcon,
+  Trash2,
 } from "lucide-react";
 import { Button } from "./ui/button";
 import { Modal } from "./ui/modal";
 import { useToast } from "./ui/toast";
+import {
+  EVENT_CATEGORIES,
+  EVENT_TEMPLATES,
+  EventTemplateItem,
+  TemplateRenderParams,
+} from "@/lib/templates/event-templates";
 
 export interface GeneratedTemplateResult {
   id: string;
@@ -38,10 +47,6 @@ export interface TemplateDesignerModalProps {
   defaultEventName?: string;
   defaultEventDate?: string;
 }
-
-export type TemplatePreset =
-  | "minimalist-straight-banner" // Clean flat horizontal bar with gold accent line
-  | "transparent-signature"; // Transparent luxury script watermark
 
 export type SupportedFontFamily =
   | "Playfair Display"
@@ -173,8 +178,25 @@ export function TemplateDesignerModal({
   defaultEventName = "",
   defaultEventDate = "",
 }: TemplateDesignerModalProps) {
-  // Preset selection - Default to Straight Flat Banner
-  const [preset, setPreset] = useState<TemplatePreset>("minimalist-straight-banner");
+  // Category selection (8 categories)
+  const [selectedCategory, setSelectedCategory] = useState<string>("wedding");
+
+  // Template selection (10 templates per category)
+  const [selectedTemplateId, setSelectedTemplateId] = useState<string>("wed-straight-flat");
+
+  // Filter templates for current category
+  const categoryTemplates = useMemo(() => {
+    return EVENT_TEMPLATES.filter((t) => t.categoryId === selectedCategory);
+  }, [selectedCategory]);
+
+  // Current active template item
+  const activeTemplate = useMemo(() => {
+    return (
+      EVENT_TEMPLATES.find((t) => t.id === selectedTemplateId) ||
+      categoryTemplates[0] ||
+      EVENT_TEMPLATES[0]
+    );
+  }, [selectedTemplateId, categoryTemplates]);
 
   // Text content
   const [subtitle, setSubtitle] = useState("THE WEDDING OF");
@@ -187,33 +209,107 @@ export function TemplateDesignerModal({
   const [isItalic, setIsItalic] = useState(true);
 
   // Font size sliders with high, realistic pixel ranges for 1200px vector canvas
-  const [namesFontSize, setNamesFontSize] = useState(82); // px (45 - 130)
-  const [subtitleFontSize, setSubtitleFontSize] = useState(20); // px (12 - 36)
-  const [dateFontSize, setDateFontSize] = useState(18); // px (12 - 32)
+  const [namesFontSize, setNamesFontSize] = useState(72); // px (45 - 130)
+  const [subtitleFontSize, setSubtitleFontSize] = useState(18); // px (12 - 36)
+  const [dateFontSize, setDateFontSize] = useState(16); // px (12 - 32)
 
   // Colors
-  const [bgColor, setBgColor] = useState("#faf6ee"); // Flat Warm Ivory Cream
-  const [textColor, setTextColor] = useState("#581c25"); // Deep Burgundy / Wine
-  const [borderColor] = useState("#c49b66"); // Subtle Luxury Gold Border
+  const [bgColor, setBgColor] = useState("#faf6ee");
+  const [textColor, setTextColor] = useState("#581c25");
 
-  // Toggles
-  const [showBorder] = useState(true);
-  const [showDividers] = useState(true);
-  const [showVenue] = useState(false);
+  // User-uploaded custom background (from ChatGPT or other sources)
+  const [customBgImage, setCustomBgImage] = useState<string | null>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
   // Gemini AI Prompt Bar state
   const toast = useToast();
   const [aiPrompt, setAiPrompt] = useState("");
   const [isGenerating, setIsGenerating] = useState(false);
 
-  // SVG ref for exporting to PNG
-  const svgRef = useRef<SVGSVGElement>(null);
-
-  // AI Dynamic Custom SVG state
+  // AI Dynamic Custom SVG state (from route.ts)
   const [isCustomAi, setIsCustomAi] = useState(false);
   const [customSvgRaw, setCustomSvgRaw] = useState<string | null>(null);
   const [themeName, setThemeName] = useState<string>("");
-  const customContainerRef = useRef<HTMLDivElement>(null);
+
+  // Refs for rendering
+  const svgContainerRef = useRef<HTMLDivElement>(null);
+
+  // Auto-detect category from event name
+  useEffect(() => {
+    if (!defaultEventName) return;
+    const lower = defaultEventName.toLowerCase();
+    if (lower.includes("birthday") || lower.includes("bday") || lower.includes("born")) {
+      setSelectedCategory("birthday");
+      setSelectedTemplateId("bday-luxury-gold");
+    } else if (lower.includes("reception")) {
+      setSelectedCategory("reception");
+      setSelectedTemplateId("rec-crystal-chandelier");
+    } else if (lower.includes("school") || lower.includes("annual day") || lower.includes("kindergarten")) {
+      setSelectedCategory("school");
+      setSelectedTemplateId("sch-annual-day");
+    } else if (lower.includes("college") || lower.includes("symposium") || lower.includes("fest") || lower.includes("hackathon")) {
+      setSelectedCategory("college");
+      setSelectedTemplateId("col-tech-symposium");
+    } else if (lower.includes("cricket") || lower.includes("football") || lower.includes("sports") || lower.includes("tournament")) {
+      setSelectedCategory("sports");
+      setSelectedTemplateId("spt-cricket-championship");
+    } else if (lower.includes("baby") || lower.includes("seemantham") || lower.includes("valaikappu") || lower.includes("cradle")) {
+      setSelectedCategory("baby_family");
+      setSelectedTemplateId("fam-seemantham-valaikappu");
+    } else if (lower.includes("temple") || lower.includes("pooja") || lower.includes("kumbabishekam") || lower.includes("utsavam")) {
+      setSelectedCategory("temple_cultural");
+      setSelectedTemplateId("tem-gopuram-heritage");
+    }
+    setNames(defaultEventName.trim());
+  }, [defaultEventName]);
+
+  // Format default event date if provided
+  useEffect(() => {
+    if (!defaultEventDate) return;
+    try {
+      const d = new Date(defaultEventDate);
+      if (!isNaN(d.getTime())) {
+        const formatted = d.toLocaleDateString("en-US", {
+          day: "numeric",
+          month: "long",
+          year: "numeric",
+        });
+        setDateText(formatted.toUpperCase());
+      }
+    } catch {
+      // keep fallback
+    }
+  }, [defaultEventDate]);
+
+  // When selecting a template from the catalog
+  function handleSelectTemplate(tpl: EventTemplateItem) {
+    setIsCustomAi(false);
+    setCustomBgImage(null);
+    setSelectedTemplateId(tpl.id);
+    setSubtitle(tpl.defaultSubtitle);
+    setFontFamily(tpl.defaultFontFamily as SupportedFontFamily);
+    if (typeof tpl.isItalic === "boolean") setIsItalic(tpl.isItalic);
+    setBgColor(tpl.defaultBgColor);
+    setTextColor(tpl.defaultTextColor);
+    if (tpl.defaultVenue) setVenueText(tpl.defaultVenue);
+  }
+
+  // Handle User Uploading a custom background image (e.g. from ChatGPT)
+  function handleImageUpload(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    if (!file.type.startsWith("image/")) {
+      toast.error("Invalid file", "Please select a PNG or JPG image.");
+      return;
+    }
+    const reader = new FileReader();
+    reader.onload = () => {
+      setCustomBgImage(reader.result as string);
+      setIsCustomAi(false);
+      toast.success("Background Image Loaded!", "Custom image set. Customize your text and typography over it.");
+    };
+    reader.readAsDataURL(file);
+  }
 
   // Handle AI Template Generation with Gemini / OpenAI
   async function handleAiGenerate(promptToUse?: string) {
@@ -230,40 +326,21 @@ export function TemplateDesignerModal({
         body: JSON.stringify({ prompt: text }),
       });
       const data = await res.json();
-      if (data.ok) {
-        if (data.isCustomSvg && data.svg) {
-          setIsCustomAi(true);
-          setCustomSvgRaw(data.svg);
-          if (data.themeName) setThemeName(data.themeName);
-          if (data.names) setNames(data.names);
-          if (data.subtitle) setSubtitle(data.subtitle);
-          if (data.dateText) setDateText(data.dateText);
-          if (data.venueText) setVenueText(data.venueText);
-          if (data.fontFamily) setFontFamily(data.fontFamily as SupportedFontFamily);
-          if (data.textColor) setTextColor(data.textColor);
-          if (data.bgColor) setBgColor(data.bgColor);
-          toast.success("AI Graphic Generated!", `Custom ${data.themeName || "template"} created for "${data.names || text}"`);
-        } else if (data.template) {
-          const t = data.template;
-          setIsCustomAi(false);
-          if (t.preset === "transparent-signature") setPreset("transparent-signature");
-          else setPreset("minimalist-straight-banner");
-          if (t.subtitle) setSubtitle(t.subtitle);
-          if (t.names) setNames(t.names);
-          if (t.dateText) setDateText(t.dateText);
-          if (t.venueText) setVenueText(t.venueText);
-          if (t.fontFamily) setFontFamily(t.fontFamily as SupportedFontFamily);
-          if (typeof t.isItalic === "boolean") setIsItalic(t.isItalic);
-          if (typeof t.namesFontSize === "number") setNamesFontSize(t.namesFontSize);
-          if (typeof t.subtitleFontSize === "number") setSubtitleFontSize(t.subtitleFontSize);
-          if (typeof t.dateFontSize === "number") setDateFontSize(t.dateFontSize);
-          if (t.bgColor) setBgColor(t.bgColor);
-          if (t.textColor) setTextColor(t.textColor);
-
-          toast.success("AI Template Generated!", `Design updated for "${t.names}"`);
-        }
+      if (data.ok && data.isCustomSvg && data.svg) {
+        setIsCustomAi(true);
+        setCustomBgImage(null);
+        setCustomSvgRaw(data.svg);
+        if (data.themeName) setThemeName(data.themeName);
+        if (data.names) setNames(data.names);
+        if (data.subtitle) setSubtitle(data.subtitle);
+        if (data.dateText) setDateText(data.dateText);
+        if (data.venueText) setVenueText(data.venueText);
+        if (data.fontFamily) setFontFamily(data.fontFamily as SupportedFontFamily);
+        if (data.textColor) setTextColor(data.textColor);
+        if (data.bgColor) setBgColor(data.bgColor);
+        toast.success("AI Graphic Generated!", `Custom ${data.themeName || "template"} created for "${data.names || text}"`);
       } else {
-        toast.error("Generation failed", data.error || "Please try again.");
+        toast.error("Generation notice", data.error || "Please try again with a descriptive prompt.");
       }
     } catch {
       toast.error("Network error", "Could not reach AI generation service.");
@@ -272,37 +349,10 @@ export function TemplateDesignerModal({
     }
   }
 
-  // Initialize from default event name/date if available
-  useEffect(() => {
-    if (defaultEventName && defaultEventName.trim()) {
-      const trimmed = defaultEventName.trim();
-      setNames(trimmed);
-    }
-    if (defaultEventDate) {
-      try {
-        const d = new Date(defaultEventDate);
-        if (!isNaN(d.getTime())) {
-          const formatted = d.toLocaleDateString("en-US", {
-            day: "numeric",
-            month: "long",
-            year: "numeric",
-          });
-          setDateText(formatted.toUpperCase());
-        }
-      } catch {
-        // keep fallback
-      }
-    }
-  }, [defaultEventName, defaultEventDate]);
-
   // Export SVG to high-res PNG and apply as watermark
   async function handleApply() {
-    let svgElement: SVGSVGElement | null = null;
-    if (isCustomAi && customContainerRef.current) {
-      svgElement = customContainerRef.current.querySelector("svg");
-    } else {
-      svgElement = svgRef.current;
-    }
+    if (!svgContainerRef.current) return;
+    const svgElement = svgContainerRef.current.querySelector("svg");
     if (!svgElement) return;
 
     try {
@@ -345,11 +395,11 @@ export function TemplateDesignerModal({
 
             const result: GeneratedTemplateResult = {
               id: `tpl-${Date.now()}`,
-              name: isCustomAi
+              name: customBgImage
+                ? "Custom Uploaded Graphic Watermark"
+                : isCustomAi
                 ? `AI Template (${themeName || "Custom"})`
-                : preset === "minimalist-straight-banner"
-                ? "Straight Flat Banner"
-                : "Transparent Signature",
+                : activeTemplate.name,
               preview: dataUrl,
               dataUrl,
               sizeBytes: blob.size,
@@ -384,19 +434,91 @@ export function TemplateDesignerModal({
     }
   }
 
+  // Render SVG string for active state
+  const renderedSvgString = useMemo(() => {
+    const params: TemplateRenderParams = {
+      names,
+      subtitle,
+      dateText,
+      venueText,
+      fontFamily,
+      isItalic,
+      namesFontSize,
+      subtitleFontSize,
+      dateFontSize,
+      textColor,
+      bgColor,
+    };
+
+    if (customBgImage) {
+      // If user uploaded a custom background image (e.g. from ChatGPT DALL-E)
+      const subtitleY = 52;
+      const namesY = subtitleY + namesFontSize * 0.92;
+      const dateY = namesY + 42;
+      const fontStack = `'${fontFamily}', 'Playfair Display', Georgia, serif`;
+
+      return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 240" width="1200" height="240">
+        <defs>
+          <style>${GOOGLE_FONTS_DEF}</style>
+        </defs>
+        <image href="${customBgImage}" x="0" y="0" width="1200" height="240" preserveAspectRatio="xMidYMid slice" />
+        <text id="svg-subtitle" x="600" y="${subtitleY}" text-anchor="middle" fill="${textColor}" style="font-family: 'Cinzel', serif; font-size: ${subtitleFontSize}px; letter-spacing: 4px; font-weight: 600; opacity: 0.95;">
+          ${subtitle.toUpperCase()}
+        </text>
+        <text id="svg-names" x="600" y="${namesY}" text-anchor="middle" fill="${textColor}" style="font-family: ${fontStack}; font-size: ${namesFontSize}px; font-style: ${isItalic ? "italic" : "normal"}; font-weight: ${isItalic ? 500 : 600};">
+          ${names}
+        </text>
+        <g fill="${textColor}">
+          <line x1="380" y1="${dateY - 5}" x2="475" y2="${dateY - 5}" stroke="${textColor}" stroke-width="1" opacity="0.5" />
+          <text id="svg-date" x="600" y="${dateY}" text-anchor="middle" fill="${textColor}" style="font-family: 'Cinzel', Georgia, serif; font-size: ${dateFontSize}px; letter-spacing: 3px; font-weight: 600;">
+            ${dateText.toUpperCase()}
+          </text>
+          <line x1="725" y1="${dateY - 5}" x2="820" y2="${dateY - 5}" stroke="${textColor}" stroke-width="1" opacity="0.5" />
+        </g>
+        ${venueText ? `
+          <text id="svg-venue" x="600" y="${dateY + 26}" text-anchor="middle" fill="${textColor}" style="font-family: 'Montserrat', sans-serif; font-size: 11px; letter-spacing: 2px; font-weight: 500; opacity: 0.8;">
+            ${venueText.toUpperCase()}
+          </text>
+        ` : ""}
+      </svg>`;
+    }
+
+    if (isCustomAi && customSvgRaw) {
+      return getRenderedCustomSvg(customSvgRaw, params);
+    }
+
+    return activeTemplate.getSvg(params);
+  }, [
+    customBgImage,
+    isCustomAi,
+    customSvgRaw,
+    activeTemplate,
+    names,
+    subtitle,
+    dateText,
+    venueText,
+    fontFamily,
+    isItalic,
+    namesFontSize,
+    subtitleFontSize,
+    dateFontSize,
+    textColor,
+    bgColor,
+  ]);
+
   return (
     <Modal open={isOpen} onClose={onClose} size="xl" bare>
       <div className="relative w-full max-h-[92vh] flex flex-col bg-surface border border-line rounded-2xl shadow-2xl overflow-hidden">
         {/* Modal Header */}
-        <div className="flex items-center justify-between border-b border-line px-6 py-4 bg-canvas/40 shrink-0">
+        <div className="flex items-center justify-between border-b border-line px-6 py-3.5 bg-canvas/40 shrink-0">
           <div className="flex items-center gap-3">
             <div className="grid h-10 w-10 place-items-center rounded-xl bg-brand-50 border border-brand-200 text-brand-600">
               <Palette className="h-5 w-5" />
             </div>
             <div>
-              <h2 className="text-base font-bold text-ink">Customize Template</h2>
+              <h2 className="text-base font-bold text-ink">Watermark Template Studio</h2>
               <p className="text-xs text-muted">
-                Design classic flat banners or transparent watermark templates with custom fonts and colors.
+                Choose from 80 event templates (10 per function) or upload custom AI background art.
               </p>
             </div>
           </div>
@@ -410,8 +532,8 @@ export function TemplateDesignerModal({
           </button>
         </div>
 
-        {/* AI Template Prompt Bar */}
-        <div className="border-b border-line bg-gradient-to-r from-brand-50/70 via-surface to-amber-50/50 px-6 py-3 space-y-2 shrink-0">
+        {/* AI Prompt Bar */}
+        <div className="border-b border-line bg-gradient-to-r from-brand-50/70 via-surface to-amber-50/50 px-6 py-2.5 space-y-2 shrink-0">
           <div className="flex items-center gap-2">
             <div className="relative flex-1">
               <Sparkles className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-brand-500" />
@@ -425,7 +547,7 @@ export function TemplateDesignerModal({
                     handleAiGenerate();
                   }
                 }}
-                placeholder="Ask AI to generate any template (e.g. background bubble template, flowers, balloons, luxury banner)..."
+                placeholder="Ask AI to generate custom artwork (e.g. background bubble template, flowers, celebration balloons)..."
                 className="w-full rounded-xl border border-brand-200 bg-white pl-9 pr-3 py-1.5 text-xs text-ink placeholder:text-muted/65 focus:outline-none focus:ring-2 focus:ring-brand-500/20 focus:border-brand-500 shadow-2xs"
               />
             </div>
@@ -439,212 +561,176 @@ export function TemplateDesignerModal({
               {isGenerating ? (
                 <>
                   <span className="h-3.5 w-3.5 animate-spin rounded-full border-2 border-white/30 border-t-white" />
-                  <span>Generating with AI...</span>
+                  <span>Generating...</span>
                 </>
               ) : (
                 <>
                   <Sparkles className="h-3.5 w-3.5" />
-                  <span>AI Generate Template</span>
+                  <span>AI Generate</span>
                 </>
               )}
             </button>
           </div>
-
-          {/* Quick Prompt Ideas */}
-          <div className="flex items-center gap-1.5 overflow-x-auto text-[10px] text-muted pb-0.5 scrollbar-none">
-            <span className="shrink-0 font-semibold text-brand-800">Quick ideas:</span>
-            {[
-              "Background bubble template for Rithvik birthday 17-11-2026",
-              "Flower template with elegant roses for Naveen & Meera wedding 24 Dec 2026",
-              "Festive party balloons with confetti for Birthday Celebration",
-              "Straight flat ivory banner for Arun & Keerthana 14 Feb 2026",
-              "Transparent gold calligraphy signature watermark",
-            ].map((p) => (
-              <button
-                key={p}
-                type="button"
-                onClick={() => {
-                  setAiPrompt(p);
-                  handleAiGenerate(p);
-                }}
-                className="shrink-0 rounded-full border border-line bg-surface/90 px-2.5 py-0.5 hover:border-brand-300 hover:bg-brand-50/50 hover:text-brand-800 transition-colors cursor-pointer"
-              >
-                {p.split(" for ")[0] || p}
-              </button>
-            ))}
-          </div>
         </div>
 
-        {/* Main Body: 2 Columns (Left: Live Preview Canvas, Right: Full Controls) */}
+        {/* Main Body: 2 Columns */}
         <div className="grid grid-cols-1 lg:grid-cols-12 min-h-0 flex-1 overflow-hidden">
           {/* Left Column: Live Preview Canvas (7 cols) */}
-          <div className="lg:col-span-7 p-6 flex flex-col items-center justify-center bg-canvas/30 select-none overflow-y-auto">
+          <div className="lg:col-span-7 p-5 flex flex-col items-center justify-center bg-canvas/30 select-none overflow-y-auto">
             {/* Preview Header: Grid Only View */}
-            <div className="mb-3 flex items-center justify-between w-full max-w-lg text-xs">
+            <div className="mb-2 flex items-center justify-between w-full max-w-lg text-xs">
               <span className="font-semibold text-muted flex items-center gap-1.5 uppercase tracking-wider text-[11px]">
                 <Eye className="h-3.5 w-3.5 text-brand-600" />
                 Live Preview (Transparent Grid)
               </span>
-              <span className="text-[10px] text-muted bg-surface border border-line px-2.5 py-0.5 rounded-md font-medium">
-                Grid View
+              <span className="text-[10px] text-muted bg-surface border border-line px-2 py-0.5 rounded-md font-medium">
+                {customBgImage
+                  ? "Custom Image Background"
+                  : isCustomAi
+                  ? "AI Vector Render"
+                  : `${activeTemplate.name} (Vector)`}
               </span>
             </div>
 
             {/* Canvas Container: Grid Only View */}
-            <div
-              className="relative w-full max-w-lg aspect-[16/10] rounded-2xl border border-line flex flex-col justify-end overflow-hidden shadow-inner bg-[repeating-conic-gradient(#f0eee9_0%_25%,#ffffff_0%_50%)] bg-[length:14px_14px]"
-            >
-              {/* RENDERED SVG TEMPLATES */}
+            <div className="relative w-full max-w-lg aspect-[16/10] rounded-2xl border border-line flex flex-col justify-end overflow-hidden shadow-inner bg-[repeating-conic-gradient(#f0eee9_0%_25%,#ffffff_0%_50%)] bg-[length:14px_14px]">
+              {/* RENDERED SVG TEMPLATE */}
               <div className="relative z-10 w-full flex items-end justify-center p-2">
-                {isCustomAi && customSvgRaw ? (
-                  <div
-                    ref={customContainerRef}
-                    className="w-full flex items-center justify-center [&>svg]:w-full [&>svg]:h-auto [&>svg]:max-h-[220px] [&>svg]:drop-shadow-lg"
-                    dangerouslySetInnerHTML={{
-                      __html: getRenderedCustomSvg(customSvgRaw, {
-                        names,
-                        subtitle,
-                        dateText,
-                        fontFamily,
-                        isItalic,
-                        namesFontSize,
-                        subtitleFontSize,
-                        dateFontSize,
-                        textColor,
-                        bgColor,
-                      }),
-                    }}
-                  />
-                ) : (
-                  <>
-                    {preset === "minimalist-straight-banner" && (
-                      <MinimalistStraightBannerSVG
-                        ref={svgRef}
-                        subtitle={subtitle}
-                        names={names}
-                        dateText={dateText}
-                        venueText={venueText}
-                        fontFamily={fontFamily}
-                        isItalic={isItalic}
-                        namesFontSize={namesFontSize}
-                        subtitleFontSize={subtitleFontSize}
-                        dateFontSize={dateFontSize}
-                        bgColor={bgColor}
-                        textColor={textColor}
-                        borderColor={borderColor}
-                        showBorder={showBorder}
-                        showDividers={showDividers}
-                        showVenue={showVenue}
-                      />
-                    )}
-
-                    {preset === "transparent-signature" && (
-                      <TransparentSignatureSVG
-                        ref={svgRef}
-                        subtitle={subtitle}
-                        names={names}
-                        dateText={dateText}
-                        fontFamily={fontFamily}
-                        isItalic={isItalic}
-                        namesFontSize={namesFontSize}
-                        subtitleFontSize={subtitleFontSize}
-                        dateFontSize={dateFontSize}
-                        textColor={textColor}
-                        showDividers={showDividers}
-                      />
-                    )}
-                  </>
-                )}
+                <div
+                  ref={svgContainerRef}
+                  className="w-full flex items-center justify-center [&>svg]:w-full [&>svg]:h-auto [&>svg]:max-h-[220px] [&>svg]:drop-shadow-lg"
+                  dangerouslySetInnerHTML={{ __html: renderedSvgString }}
+                />
               </div>
             </div>
 
-            <p className="mt-3 text-[11px] text-muted text-center">
+            <p className="mt-2 text-[11px] text-muted text-center">
               ✓ High-res vector render. Automatically attached to event watermark settings on apply.
             </p>
           </div>
 
-          {/* Right Column: Customization Controls (5 cols) */}
-          <div className="lg:col-span-5 p-6 space-y-5 overflow-y-auto max-h-[75vh]">
-            {/* AI Custom Active Banner */}
-            {isCustomAi && (
-              <div className="rounded-xl border border-brand-300 bg-brand-50/80 p-3 flex items-center justify-between shadow-xs">
+          {/* Right Column: Event Categories, 10 Templates & Full Controls (5 cols) */}
+          <div className="lg:col-span-5 p-5 space-y-4 overflow-y-auto max-h-[75vh]">
+            {/* Custom Background Image Active Notification */}
+            {customBgImage && (
+              <div className="rounded-xl border border-emerald-300 bg-emerald-50/80 p-2.5 flex items-center justify-between shadow-xs">
                 <div className="flex items-center gap-2">
-                  <Sparkles className="h-4 w-4 text-brand-600 animate-pulse shrink-0" />
-                  <div>
-                    <div className="text-xs font-bold text-brand-900">
-                      ✨ AI Custom Graphic: {themeName || "Generated Artwork"}
-                    </div>
-                    <div className="text-[10px] text-brand-700">
-                      Live vector rendering based on prompt. You can customize text and fonts below.
-                    </div>
+                  <ImageIcon className="h-4 w-4 text-emerald-600 shrink-0" />
+                  <div className="text-xs">
+                    <span className="font-bold text-emerald-950">Custom Image Active</span>
+                    <p className="text-[10px] text-emerald-700">Uploaded background image is set.</p>
                   </div>
                 </div>
                 <button
                   type="button"
-                  onClick={() => setIsCustomAi(false)}
-                  className="shrink-0 text-[11px] font-semibold text-brand-700 hover:text-brand-900 bg-white border border-brand-200 px-2.5 py-1 rounded-lg transition-colors cursor-pointer"
+                  onClick={() => setCustomBgImage(null)}
+                  className="inline-flex items-center gap-1 text-[11px] font-semibold text-rose-700 hover:text-rose-900 bg-white border border-rose-200 px-2 py-0.5 rounded-lg transition-colors cursor-pointer"
                 >
-                  Use Presets
+                  <Trash2 className="h-3 w-3" />
+                  <span>Remove</span>
                 </button>
               </div>
             )}
 
-            {/* 1. Template Presets (Straight Flat & Transparent Only) */}
+            {/* 1. Event Category Selector (8 Categories) */}
             <div>
-              <label className="text-xs font-bold uppercase tracking-wider text-muted flex items-center gap-1.5 mb-2">
-                <Layers className="h-3.5 w-3.5 text-brand-600" />
-                <span>Template Style</span>
+              <label className="text-xs font-bold uppercase tracking-wider text-muted flex items-center justify-between mb-1.5">
+                <span className="flex items-center gap-1.5">
+                  <Layers className="h-3.5 w-3.5 text-brand-600" />
+                  <span>Event Category</span>
+                </span>
+                <span className="text-[10px] text-brand-700 font-semibold bg-brand-50 px-2 py-0.5 rounded-full border border-brand-200">
+                  80 Templates Total
+                </span>
               </label>
 
-              <div className="grid grid-cols-2 gap-2">
-                <button
-                  type="button"
-                  onClick={() => {
-                    setIsCustomAi(false);
-                    setPreset("minimalist-straight-banner");
-                    setBgColor("#faf6ee");
-                    setTextColor("#581c25");
-                  }}
-                  className={`flex flex-col text-left p-3 rounded-xl border transition-all cursor-pointer ${
-                    !isCustomAi && preset === "minimalist-straight-banner"
-                      ? "border-brand-500 bg-brand-50/50 ring-1 ring-brand-500 shadow-xs"
-                      : "border-line bg-surface hover:border-brand-300"
-                  }`}
-                >
-                  <span className="text-xs font-bold text-ink">Straight Flat Banner</span>
-                  <span className="text-[10px] text-muted mt-0.5">Clean horizontal bottom bar with gold line</span>
-                </button>
-
-                <button
-                  type="button"
-                  onClick={() => {
-                    setIsCustomAi(false);
-                    setPreset("transparent-signature");
-                    setBgColor("transparent");
-                    setTextColor("#ffffff");
-                    setIsItalic(true);
-                  }}
-                  className={`flex flex-col text-left p-3 rounded-xl border transition-all cursor-pointer ${
-                    !isCustomAi && preset === "transparent-signature"
-                      ? "border-brand-500 bg-brand-50/50 ring-1 ring-brand-500 shadow-xs"
-                      : "border-line bg-surface hover:border-brand-300"
-                  }`}
-                >
-                  <span className="text-xs font-bold text-ink">Transparent Signature</span>
-                  <span className="text-[10px] text-muted mt-0.5">Overlay script without background box</span>
-                </button>
+              <div className="grid grid-cols-4 gap-1.5">
+                {EVENT_CATEGORIES.map((cat) => {
+                  const isActive = selectedCategory === cat.id;
+                  return (
+                    <button
+                      key={cat.id}
+                      type="button"
+                      onClick={() => {
+                        setSelectedCategory(cat.id);
+                        const firstInCat = EVENT_TEMPLATES.find((t) => t.categoryId === cat.id);
+                        if (firstInCat) handleSelectTemplate(firstInCat);
+                      }}
+                      className={`flex flex-col items-center justify-center p-2 rounded-xl border text-center transition-all cursor-pointer ${
+                        isActive
+                          ? "border-brand-500 bg-brand-50/70 text-brand-900 font-bold ring-1 ring-brand-500 shadow-2xs"
+                          : "border-line bg-surface hover:border-brand-300 text-ink"
+                      }`}
+                    >
+                      <span className="text-base">{cat.emoji}</span>
+                      <span className="text-[10px] leading-tight mt-0.5 font-medium truncate w-full">
+                        {cat.label}
+                      </span>
+                    </button>
+                  );
+                })}
               </div>
             </div>
 
-            {/* 2. Text Content Fields */}
-            <div className="space-y-3">
+            {/* 2. 10 Templates for Selected Category */}
+            <div>
+              <div className="flex items-center justify-between mb-1.5">
+                <label className="text-xs font-bold uppercase tracking-wider text-muted">
+                  Choose Template (10 Available)
+                </label>
+                {/* Upload Custom Image Button */}
+                <button
+                  type="button"
+                  onClick={() => fileInputRef.current?.click()}
+                  className="inline-flex items-center gap-1 text-[11px] font-semibold text-brand-700 hover:text-brand-900 bg-brand-50 hover:bg-brand-100 border border-brand-200 px-2 py-0.5 rounded-lg transition-colors cursor-pointer"
+                >
+                  <Upload className="h-3 w-3" />
+                  <span>Upload AI Image</span>
+                </button>
+                <input
+                  ref={fileInputRef}
+                  type="file"
+                  accept="image/png,image/jpeg"
+                  className="hidden"
+                  onChange={handleImageUpload}
+                />
+              </div>
+
+              <div className="grid grid-cols-2 gap-1.5 max-h-[190px] overflow-y-auto p-1 border border-line rounded-xl bg-canvas/30">
+                {categoryTemplates.map((tpl) => {
+                  const isSelected = !customBgImage && !isCustomAi && selectedTemplateId === tpl.id;
+                  return (
+                    <button
+                      key={tpl.id}
+                      type="button"
+                      onClick={() => handleSelectTemplate(tpl)}
+                      className={`flex flex-col text-left p-2 rounded-lg border transition-all cursor-pointer ${
+                        isSelected
+                          ? "border-brand-500 bg-brand-50 ring-1 ring-brand-500 shadow-2xs"
+                          : "border-line bg-surface hover:border-brand-300"
+                      }`}
+                    >
+                      <span className="text-[11px] font-bold text-ink truncate w-full">
+                        {tpl.name}
+                      </span>
+                      <span className="text-[9px] text-muted line-clamp-1 mt-0.5">
+                        {tpl.tagline}
+                      </span>
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+
+            {/* 3. Text Content Fields */}
+            <div className="space-y-2.5 pt-1 border-t border-line">
               <label className="text-xs font-bold uppercase tracking-wider text-muted flex items-center gap-1.5">
                 <Type className="h-3.5 w-3.5 text-brand-600" />
                 <span>Text Details</span>
               </label>
 
               <div>
-                <span className="text-[11px] font-medium text-muted block mb-1">Top Subtitle</span>
+                <span className="text-[10px] font-medium text-muted block mb-1">Top Subtitle</span>
                 <input
                   type="text"
                   value={subtitle}
@@ -655,7 +741,7 @@ export function TemplateDesignerModal({
               </div>
 
               <div>
-                <span className="text-[11px] font-medium text-muted block mb-1">Couple / Person Names</span>
+                <span className="text-[10px] font-medium text-muted block mb-1">Names / Event Title</span>
                 <input
                   type="text"
                   value={names}
@@ -667,7 +753,7 @@ export function TemplateDesignerModal({
 
               <div className="grid grid-cols-2 gap-2">
                 <div>
-                  <span className="text-[11px] font-medium text-muted block mb-1">Date</span>
+                  <span className="text-[10px] font-medium text-muted block mb-1">Date</span>
                   <input
                     type="text"
                     value={dateText}
@@ -677,7 +763,7 @@ export function TemplateDesignerModal({
                   />
                 </div>
                 <div>
-                  <span className="text-[11px] font-medium text-muted block mb-1">Venue / Tagline</span>
+                  <span className="text-[10px] font-medium text-muted block mb-1">Venue / Tagline</span>
                   <input
                     type="text"
                     value={venueText}
@@ -689,8 +775,8 @@ export function TemplateDesignerModal({
               </div>
             </div>
 
-            {/* 3. Typography & Font Selection */}
-            <div className="space-y-3">
+            {/* 4. Typography & Font Selection */}
+            <div className="space-y-2.5 pt-1 border-t border-line">
               <div className="flex items-center justify-between">
                 <label className="text-xs font-bold uppercase tracking-wider text-muted flex items-center gap-1.5">
                   <Sliders className="h-3.5 w-3.5 text-brand-600" />
@@ -699,7 +785,7 @@ export function TemplateDesignerModal({
                 <button
                   type="button"
                   onClick={() => setIsItalic(!isItalic)}
-                  className={`px-2 py-0.5 rounded text-[11px] font-medium border transition-colors cursor-pointer ${
+                  className={`px-2 py-0.5 rounded text-[10px] font-medium border transition-colors cursor-pointer ${
                     isItalic
                       ? "border-brand-500 bg-brand-50 text-brand-700 font-bold"
                       : "border-line text-muted hover:text-ink"
@@ -709,9 +795,9 @@ export function TemplateDesignerModal({
                 </button>
               </div>
 
-              {/* Font Family Selection with Expanded Luxury & Script Fonts */}
+              {/* Font Family Selection */}
               <div>
-                <span className="text-[11px] font-medium text-muted block mb-1">Font Family</span>
+                <span className="text-[10px] font-medium text-muted block mb-1">Font Family</span>
                 <select
                   value={fontFamily}
                   onChange={(e) => setFontFamily(e.target.value as SupportedFontFamily)}
@@ -741,27 +827,26 @@ export function TemplateDesignerModal({
                 </select>
               </div>
 
-              {/* FONT SIZING SLIDERS (Full range, directly modifies SVG) */}
-              <div className="space-y-2.5 pt-1 bg-surface border border-line rounded-xl p-3">
-                {/* Names Size */}
+              {/* Font Sizing Sliders */}
+              <div className="space-y-2 pt-1 bg-surface border border-line rounded-xl p-2.5">
                 <div>
-                  <div className="flex items-center justify-between text-[11px] text-muted mb-1">
+                  <div className="flex items-center justify-between text-[10px] text-muted mb-1">
                     <span className="font-semibold text-ink">Names Font Size</span>
                     <div className="flex items-center gap-1.5">
                       <button
                         type="button"
                         onClick={() => setNamesFontSize(Math.max(45, namesFontSize - 4))}
-                        className="grid h-5 w-5 place-items-center rounded bg-canvas border border-line text-ink hover:bg-brand-50"
+                        className="grid h-4 w-4 place-items-center rounded bg-canvas border border-line text-ink hover:bg-brand-50"
                       >
-                        <Minus className="h-3 w-3" />
+                        <Minus className="h-2.5 w-2.5" />
                       </button>
-                      <span className="font-mono text-ink font-bold w-10 text-center">{namesFontSize}px</span>
+                      <span className="font-mono text-ink font-bold w-8 text-center">{namesFontSize}px</span>
                       <button
                         type="button"
                         onClick={() => setNamesFontSize(Math.min(130, namesFontSize + 4))}
-                        className="grid h-5 w-5 place-items-center rounded bg-canvas border border-line text-ink hover:bg-brand-50"
+                        className="grid h-4 w-4 place-items-center rounded bg-canvas border border-line text-ink hover:bg-brand-50"
                       >
-                        <Plus className="h-3 w-3" />
+                        <Plus className="h-2.5 w-2.5" />
                       </button>
                     </div>
                   </div>
@@ -771,46 +856,45 @@ export function TemplateDesignerModal({
                     max={130}
                     value={namesFontSize}
                     onChange={(e) => setNamesFontSize(Number(e.target.value))}
-                    className="w-full accent-brand-500 h-1.5 bg-line rounded-lg cursor-pointer"
+                    className="w-full accent-brand-500 h-1 bg-line rounded-lg cursor-pointer"
                   />
                 </div>
 
-                {/* Subtitle Size */}
-                <div>
-                  <div className="flex items-center justify-between text-[11px] text-muted mb-1">
-                    <span>Subtitle Size</span>
-                    <span className="font-mono text-ink font-semibold">{subtitleFontSize}px</span>
+                <div className="grid grid-cols-2 gap-2">
+                  <div>
+                    <div className="flex items-center justify-between text-[10px] text-muted mb-1">
+                      <span>Subtitle Size</span>
+                      <span className="font-mono text-ink font-semibold">{subtitleFontSize}px</span>
+                    </div>
+                    <input
+                      type="range"
+                      min={12}
+                      max={32}
+                      value={subtitleFontSize}
+                      onChange={(e) => setSubtitleFontSize(Number(e.target.value))}
+                      className="w-full accent-brand-500 h-1 bg-line rounded-lg cursor-pointer"
+                    />
                   </div>
-                  <input
-                    type="range"
-                    min={12}
-                    max={36}
-                    value={subtitleFontSize}
-                    onChange={(e) => setSubtitleFontSize(Number(e.target.value))}
-                    className="w-full accent-brand-500 h-1.5 bg-line rounded-lg cursor-pointer"
-                  />
-                </div>
-
-                {/* Date Size */}
-                <div>
-                  <div className="flex items-center justify-between text-[11px] text-muted mb-1">
-                    <span>Date Size</span>
-                    <span className="font-mono text-ink font-semibold">{dateFontSize}px</span>
+                  <div>
+                    <div className="flex items-center justify-between text-[10px] text-muted mb-1">
+                      <span>Date Size</span>
+                      <span className="font-mono text-ink font-semibold">{dateFontSize}px</span>
+                    </div>
+                    <input
+                      type="range"
+                      min={12}
+                      max={30}
+                      value={dateFontSize}
+                      onChange={(e) => setDateFontSize(Number(e.target.value))}
+                      className="w-full accent-brand-500 h-1 bg-line rounded-lg cursor-pointer"
+                    />
                   </div>
-                  <input
-                    type="range"
-                    min={12}
-                    max={32}
-                    value={dateFontSize}
-                    onChange={(e) => setDateFontSize(Number(e.target.value))}
-                    className="w-full accent-brand-500 h-1.5 bg-line rounded-lg cursor-pointer"
-                  />
                 </div>
               </div>
             </div>
 
-            {/* 4. Colors (Background & Text) */}
-            <div className="space-y-3">
+            {/* 5. Colors (Background & Text) */}
+            <div className="space-y-2.5 pt-1 border-t border-line">
               <label className="text-xs font-bold uppercase tracking-wider text-muted flex items-center justify-between">
                 <span className="flex items-center gap-1.5">
                   <Palette className="h-3.5 w-3.5 text-brand-600" /> Color Themes
@@ -819,7 +903,7 @@ export function TemplateDesignerModal({
 
               {/* Banner Background Color */}
               <div>
-                <span className="text-[11px] font-medium text-muted block mb-1.5">
+                <span className="text-[10px] font-medium text-muted block mb-1">
                   Banner Background Color
                 </span>
                 <div className="flex items-center gap-1.5 flex-wrap">
@@ -828,21 +912,21 @@ export function TemplateDesignerModal({
                     { name: "Champagne", val: "#f6f0df" },
                     { name: "White", val: "#ffffff" },
                     { name: "Deep Maroon", val: "#4a141b" },
-                    { name: "Midnight", val: "#141416" },
+                    { name: "Midnight", val: "#0b0f19" },
                     { name: "Transparent", val: "transparent" },
                   ].map((b) => (
                     <button
                       key={b.val}
                       type="button"
                       onClick={() => setBgColor(b.val)}
-                      className={`px-2 py-1 rounded-lg text-[11px] font-medium border transition-all cursor-pointer flex items-center gap-1.5 ${
+                      className={`px-2 py-0.5 rounded-lg text-[10px] font-medium border transition-all cursor-pointer flex items-center gap-1 ${
                         bgColor === b.val
                           ? "border-brand-500 bg-brand-50 text-brand-800 ring-1 ring-brand-500 font-bold"
                           : "border-line bg-surface text-ink hover:border-brand-300"
                       }`}
                     >
                       <span
-                        className="h-3 w-3 rounded-full border border-black/10 shrink-0"
+                        className="h-2.5 w-2.5 rounded-full border border-black/10 shrink-0"
                         style={{
                           background:
                             b.val === "transparent"
@@ -854,12 +938,12 @@ export function TemplateDesignerModal({
                     </button>
                   ))}
                   {/* Custom Background Color Picker */}
-                  <label className="flex items-center gap-1.5 px-2 py-1 rounded-lg border border-line bg-surface text-[11px] text-ink cursor-pointer hover:border-brand-300">
+                  <label className="flex items-center gap-1 px-2 py-0.5 rounded-lg border border-line bg-surface text-[10px] text-ink cursor-pointer hover:border-brand-300">
                     <input
                       type="color"
                       value={bgColor.startsWith("#") ? bgColor : "#faf6ee"}
                       onChange={(e) => setBgColor(e.target.value)}
-                      className="h-3.5 w-3.5 cursor-pointer rounded border-0 bg-transparent p-0"
+                      className="h-3 w-3 cursor-pointer rounded border-0 bg-transparent p-0"
                     />
                     <span>Custom</span>
                   </label>
@@ -868,14 +952,14 @@ export function TemplateDesignerModal({
 
               {/* Text & Accent Color */}
               <div>
-                <span className="text-[11px] font-medium text-muted block mb-1.5">
+                <span className="text-[10px] font-medium text-muted block mb-1">
                   Text & Accent Color
                 </span>
                 <div className="flex items-center gap-1.5 flex-wrap">
                   {[
                     { name: "Wine Burgundy", val: "#581c25" },
                     { name: "Warm Gold", val: "#c49b66" },
-                    { name: "Royal Gold", val: "#996515" },
+                    { name: "Royal Gold", val: "#eab308" },
                     { name: "Matte Charcoal", val: "#1a1a1a" },
                     { name: "Pure White", val: "#ffffff" },
                   ].map((c) => (
@@ -883,26 +967,26 @@ export function TemplateDesignerModal({
                       key={c.val}
                       type="button"
                       onClick={() => setTextColor(c.val)}
-                      className={`px-2 py-1 rounded-lg text-[11px] font-medium border transition-all cursor-pointer flex items-center gap-1.5 ${
+                      className={`px-2 py-0.5 rounded-lg text-[10px] font-medium border transition-all cursor-pointer flex items-center gap-1 ${
                         textColor === c.val
                           ? "border-brand-500 bg-brand-50 text-brand-800 ring-1 ring-brand-500 font-bold"
                           : "border-line bg-surface text-ink hover:border-brand-300"
                       }`}
                     >
                       <span
-                        className="h-3 w-3 rounded-full border border-black/10 shrink-0"
+                        className="h-2.5 w-2.5 rounded-full border border-black/10 shrink-0"
                         style={{ background: c.val }}
                       />
                       <span>{c.name}</span>
                     </button>
                   ))}
                   {/* Custom color input */}
-                  <label className="flex items-center gap-1.5 px-2 py-1 rounded-lg border border-line bg-surface text-[11px] text-ink cursor-pointer hover:border-brand-300">
+                  <label className="flex items-center gap-1 px-2 py-0.5 rounded-lg border border-line bg-surface text-[10px] text-ink cursor-pointer hover:border-brand-300">
                     <input
                       type="color"
                       value={textColor.startsWith("#") ? textColor : "#581c25"}
                       onChange={(e) => setTextColor(e.target.value)}
-                      className="h-3.5 w-3.5 cursor-pointer rounded border-0 bg-transparent p-0"
+                      className="h-3 w-3 cursor-pointer rounded border-0 bg-transparent p-0"
                     />
                     <span>Custom</span>
                   </label>
@@ -917,24 +1001,15 @@ export function TemplateDesignerModal({
           <button
             type="button"
             onClick={() => {
-              setNames("Arun & Keerthana");
-              setSubtitle("THE WEDDING OF");
-              setDateText("14 FEBRUARY 2026");
-              setVenueText("The Grand Palace, Chennai");
-              setBgColor("#faf6ee");
-              setTextColor("#581c25");
-              setFontFamily("Playfair Display");
-              setIsItalic(true);
-              setNamesFontSize(82);
-              setSubtitleFontSize(20);
-              setDateFontSize(18);
-              setPreset("minimalist-straight-banner");
+              setCustomBgImage(null);
               setIsCustomAi(false);
+              const defaultTpl = EVENT_TEMPLATES[0];
+              handleSelectTemplate(defaultTpl);
             }}
             className="inline-flex items-center gap-1.5 text-xs text-muted hover:text-ink transition-colors cursor-pointer"
           >
             <RotateCcw className="h-3.5 w-3.5" />
-            <span>Reset to Photo Match</span>
+            <span>Reset Defaults</span>
           </button>
 
           <div className="flex items-center gap-2">
@@ -955,254 +1030,3 @@ export function TemplateDesignerModal({
     </Modal>
   );
 }
-
-// ------------------------------------------------------------------------------------------------
-// 1. STRAIGHT FLAT BANNER (Clean, horizontal bottom bar with gold accent line & NO calendar icon)
-// ------------------------------------------------------------------------------------------------
-interface MinimalistStraightBannerSVGProps {
-  ref: React.RefObject<SVGSVGElement | null>;
-  subtitle: string;
-  names: string;
-  dateText: string;
-  venueText?: string;
-  fontFamily: string;
-  isItalic: boolean;
-  namesFontSize: number;
-  subtitleFontSize: number;
-  dateFontSize: number;
-  bgColor: string;
-  textColor: string;
-  borderColor?: string;
-  showBorder?: boolean;
-  showDividers?: boolean;
-  showVenue?: boolean;
-}
-
-const MinimalistStraightBannerSVG = ({
-  ref,
-  subtitle,
-  names,
-  dateText,
-  venueText,
-  fontFamily,
-  isItalic,
-  namesFontSize,
-  subtitleFontSize,
-  dateFontSize,
-  bgColor,
-  textColor,
-  borderColor,
-  showBorder = true,
-  showDividers = true,
-  showVenue = false,
-}: MinimalistStraightBannerSVGProps) => {
-  const bannerHeight = 240;
-  const subtitleY = 55;
-  const namesY = subtitleY + namesFontSize * 0.95;
-  const dateY = namesY + 44;
-  const fontStack = `'${fontFamily}', 'Playfair Display', Georgia, serif`;
-
-  return (
-    <svg
-      ref={ref}
-      xmlns="http://www.w3.org/2000/svg"
-      viewBox={`0 0 1200 ${bannerHeight}`}
-      width="1200"
-      height={bannerHeight}
-      className="max-h-[240px] w-auto max-w-full drop-shadow-md"
-      style={{ overflow: "visible" }}
-    >
-      <defs>
-        <style>{GOOGLE_FONTS_DEF}</style>
-      </defs>
-
-      {bgColor !== "transparent" && (
-        <rect id="svg-bg" x="0" y="0" width="1200" height={bannerHeight} fill={bgColor} />
-      )}
-
-      {showBorder && (
-        <g stroke={borderColor || textColor}>
-          <line x1="0" y1="2" x2="1200" y2="2" strokeWidth="2" opacity="0.8" />
-          <line x1="0" y1="6" x2="1200" y2="6" strokeWidth="1" opacity="0.4" />
-        </g>
-      )}
-
-      <text
-        id="svg-subtitle"
-        x="600"
-        y={subtitleY}
-        textAnchor="middle"
-        fill={textColor}
-        style={{
-          fontFamily: "'Cinzel', 'Playfair Display', Georgia, serif",
-          fontSize: `${subtitleFontSize}px`,
-          letterSpacing: "4px",
-          fontWeight: 600,
-          opacity: 0.9,
-        }}
-      >
-        {subtitle.toUpperCase()}
-      </text>
-
-      <text
-        id="svg-names"
-        x="600"
-        y={namesY}
-        textAnchor="middle"
-        fill={textColor}
-        style={{
-          fontFamily: fontStack,
-          fontSize: `${namesFontSize}px`,
-          fontStyle: isItalic ? "italic" : "normal",
-          fontWeight: isItalic ? 500 : 600,
-        }}
-      >
-        {names}
-      </text>
-
-      <g fill={textColor}>
-        {showDividers && (
-          <line x1="380" y1={dateY - 5} x2="475" y2={dateY - 5} stroke={textColor} strokeWidth="1" opacity="0.4" />
-        )}
-        <text
-          id="svg-date"
-          x="600"
-          y={dateY}
-          textAnchor="middle"
-          fill={textColor}
-          style={{
-            fontFamily: "'Cinzel', Georgia, serif",
-            fontSize: `${dateFontSize}px`,
-            letterSpacing: "3px",
-            fontWeight: 600,
-          }}
-        >
-          {dateText.toUpperCase()}
-        </text>
-        {showDividers && (
-          <line x1="725" y1={dateY - 5} x2="820" y2={dateY - 5} stroke={textColor} strokeWidth="1" opacity="0.4" />
-        )}
-      </g>
-
-      {/* Optional Venue Tagline */}
-      {showVenue && venueText && (
-        <text
-          x="600"
-          y={dateY + 28}
-          textAnchor="middle"
-          fill={textColor}
-          style={{
-            fontFamily: "'Montserrat', sans-serif",
-            fontSize: "12px",
-            letterSpacing: "2.5px",
-            fontWeight: 500,
-            opacity: 0.75,
-          }}
-        >
-          {venueText.toUpperCase()}
-        </text>
-      )}
-    </svg>
-  );
-};
-
-// ------------------------------------------------------------------------------------------------
-// 2. TRANSPARENT SIGNATURE (Clean overlay script watermark without background box)
-// ------------------------------------------------------------------------------------------------
-interface TransparentSignatureSVGProps {
-  ref: React.RefObject<SVGSVGElement | null>;
-  subtitle: string;
-  names: string;
-  dateText: string;
-  fontFamily: string;
-  isItalic: boolean;
-  namesFontSize: number;
-  subtitleFontSize: number;
-  dateFontSize: number;
-  textColor: string;
-  showDividers?: boolean;
-}
-
-const TransparentSignatureSVG = ({
-  ref,
-  subtitle,
-  names,
-  dateText,
-  fontFamily,
-  isItalic,
-  namesFontSize,
-  subtitleFontSize,
-  dateFontSize,
-  textColor,
-  showDividers = true,
-}: TransparentSignatureSVGProps) => {
-  return (
-    <svg
-      ref={ref}
-      xmlns="http://www.w3.org/2000/svg"
-      viewBox="0 0 1000 240"
-      width="1000"
-      height="240"
-      className="max-h-[220px] w-auto max-w-full drop-shadow-lg"
-      style={{ overflow: "visible" }}
-    >
-      <defs>
-        <style>{GOOGLE_FONTS_DEF}</style>
-      </defs>
-
-      <text
-        id="svg-subtitle"
-        x="500"
-        y="50"
-        textAnchor="middle"
-        fill={textColor}
-        style={{
-          fontFamily: "'Cinzel', 'Playfair Display', Georgia, serif",
-          fontSize: `${subtitleFontSize}px`,
-          letterSpacing: "4px",
-          fontWeight: 600,
-          opacity: 0.9,
-        }}
-      >
-        {subtitle.toUpperCase()}
-      </text>
-
-      <text
-        id="svg-names"
-        x="500"
-        y="125"
-        textAnchor="middle"
-        fill={textColor}
-        style={{
-          fontFamily: `'${fontFamily}', 'Playfair Display', Georgia, serif`,
-          fontSize: `${namesFontSize}px`,
-          fontStyle: isItalic ? "italic" : "normal",
-          fontWeight: 500,
-        }}
-      >
-        {names}
-      </text>
-
-      {showDividers && (
-        <line x1="300" y1="155" x2="700" y2="155" stroke={textColor} strokeWidth="1" opacity="0.4" />
-      )}
-
-      <text
-        id="svg-date"
-        x="500"
-        y="190"
-        textAnchor="middle"
-        fill={textColor}
-        style={{
-          fontFamily: "'Cinzel', Georgia, serif",
-          fontSize: `${dateFontSize}px`,
-          letterSpacing: "4px",
-          fontWeight: 600,
-          opacity: 0.9,
-        }}
-      >
-        {dateText.toUpperCase()}
-      </text>
-    </svg>
-  );
-};
