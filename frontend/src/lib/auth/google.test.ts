@@ -249,7 +249,7 @@ describe("start and callback routes", () => {
     expect(html).toContain('href="/dashboard/events"');
     const cookies = setCookies(res);
     expect(cookies.evp_session).toMatch(/HttpOnly/i);
-    expect(cookies.evp_session).toMatch(/SameSite=strict/i);
+    expect(cookies.evp_session).toMatch(/SameSite=lax/i);
     expect(await verifySessionToken(cookieValue(cookies.evp_session), await testKeys(), 12 * 3600)).not.toBeNull();
     expect(isDeletion(cookies[OAUTH_TX_COOKIE])).toBe(true);
     expect(res.headers.get("cache-control")).toBe("no-store");

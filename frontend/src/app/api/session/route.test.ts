@@ -61,7 +61,7 @@ describe("POST /api/session", () => {
     const cookies = setCookies(res);
     const session = cookies.evp_session;
     expect(session).toMatch(/HttpOnly/i);
-    expect(session).toMatch(/SameSite=strict/i);
+    expect(session).toMatch(/SameSite=lax/i);
     expect(session).toMatch(/Path=\//);
     expect(session).toMatch(/Max-Age=43200/);
     expect(session).not.toMatch(/Secure/i); // not production

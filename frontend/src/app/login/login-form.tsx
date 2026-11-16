@@ -1,6 +1,6 @@
 "use client";
 
-import { useRouter, useSearchParams } from "next/navigation";
+import { useSearchParams } from "next/navigation";
 import { CheckCircle2, Eye, EyeOff, Lock, Mail } from "lucide-react";
 import { useState, type FormEvent } from "react";
 import { ApiError, CSRF_HEADER, errorMessage, toApiError } from "@/lib/api";
@@ -50,7 +50,6 @@ function GoogleIcon() {
 }
 
 export function LoginForm() {
-  const router = useRouter();
   const params = useSearchParams();
 
   // In-place view switcher: "login" | "forgot" | "signup"
@@ -117,8 +116,7 @@ export function LoginForm() {
         } catch {}
       }
       setPassword("");
-      router.replace(next);
-      router.refresh();
+      window.location.href = next;
     } catch (err) {
       setPassword("");
       setError(err instanceof ApiError ? errorMessage(err) : "Could not reach the server.");
@@ -227,8 +225,7 @@ export function LoginForm() {
         throw new Error(data.error || "Failed to create account.");
       }
       // Successful registration & auto-login!
-      router.replace(next);
-      router.refresh();
+      window.location.href = next;
     } catch (err: unknown) {
       setSignUpError(err instanceof Error ? err.message : "Registration failed.");
       setSignUpBusy(false);

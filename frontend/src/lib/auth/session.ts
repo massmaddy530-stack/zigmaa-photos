@@ -98,3 +98,39 @@ export async function verifySessionToken(
   if (payload.pwv !== (await passwordVersion(keys))) return null;
   return payload;
 }
+
+/**
+ * Edge-compatible session verification for middleware.
+ * Verifies HMAC-SHA256 signature and expiration without requiring ADMIN_API_KEY or server-only modules.
+ */
+export async function verifyMiddlewareSession(
+  token: string,
+  secret: string,
+  maxAgeS: number = 43200,
+  now = Date.now(),
+): Promise<boolean> {
+  if (!token || token.length > MAX_TOKEN_LENGTH || !secret) return false;
+  const parts = token.split(".");
+  if (parts.length !== 2) return false;
+  const [body, signatureText] = parts;
+  const signature = fromBase64Url(signatureText);
+  const raw = fromBase64Url(body);
+  if (!signature || signature.length !== 32 || !raw) return false;
+
+  try {
+    const key = await hmacKey(secret);
+    const valid = await crypto.subtle.verify("HMAC", key, signature, encoder.encode(body));
+    if (!valid) return false;
+
+    const payload = JSON.parse(new TextDecoder().decode(raw));
+    if (!isPayload(payload)) return false;
+
+    const nowS = Math.floor(now / 1000);
+    if (payload.exp <= nowS || payload.iat > nowS + CLOCK_SKEW_S || payload.exp - payload.iat > maxAgeS) {
+      return false;
+    }
+    return true;
+  } catch {
+    return false;
+  }
+}

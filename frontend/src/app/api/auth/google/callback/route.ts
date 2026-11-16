@@ -98,7 +98,7 @@ export async function GET(req: NextRequest) {
   res.cookies.delete(LEGACY_SESSION_COOKIE);
   res.cookies.set(SESSION_COOKIE, await createSessionToken(auth, SESSION_MAX_AGE_S), {
     httpOnly: true,
-    sameSite: "strict",
+    sameSite: "lax",
     secure: cookieSecure(),
     path: "/",
     maxAge: SESSION_MAX_AGE_S,

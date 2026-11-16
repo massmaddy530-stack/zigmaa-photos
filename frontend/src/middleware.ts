@@ -1,13 +1,16 @@
 import { NextRequest, NextResponse } from "next/server";
-import { verifySessionToken } from "@/lib/auth/session";
-import { authConfig, LEGACY_SESSION_COOKIE, SESSION_COOKIE, SESSION_MAX_AGE_S } from "@/lib/server-config";
+import { verifyMiddlewareSession } from "@/lib/auth/session";
+
+const SESSION_COOKIE = "evp_session";
+const LEGACY_SESSION_COOKIE = "evp_admin";
+const SESSION_MAX_AGE_S = 60 * 60 * 12;
 
 // Only guards dashboard pages. API routes are excluded on purpose: middleware would buffer request bodies
 // (photo uploads), and the proxy performs its own session check.
 export async function middleware(req: NextRequest) {
-  const config = authConfig();
   const token = req.cookies.get(SESSION_COOKIE)?.value;
-  const valid = Boolean(config && token && (await verifySessionToken(token, config, SESSION_MAX_AGE_S)));
+  const secret = process.env.SESSION_SECRET?.trim() || "";
+  const valid = Boolean(secret && token && (await verifyMiddlewareSession(token, secret, SESSION_MAX_AGE_S)));
 
   let res: NextResponse;
   if (valid) {
