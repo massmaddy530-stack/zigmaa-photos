@@ -3,47 +3,46 @@ import { NextRequest, NextResponse } from "next/server";
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
-const GEMINI_API_KEY = process.env.GEMINI_API_KEY?.trim() || "";
+const GEMINI_API_KEY = (process.env.GEMINI_API_KEY || "")
+  .trim()
+  .replace(/^["']|["']$/g, "");
 
 const GEMINI_MODELS = [
   "gemini-3.5-flash-lite",
-  "gemini-3.1-flash-lite",
   "gemini-3.8-flash",
+  "gemini-3.1-flash-lite",
   "gemini-flash-latest",
 ];
 
 const SYSTEM_INSTRUCTION = `
-You are an expert event watermark and luxury graphic designer for Zigmaa Photos.
-Your job is to analyze the user's prompt (event type, couple names, date, venue, colors, style, mood) and generate a complete, perfectly tuned JSON configuration for a watermark banner or monogram.
-
-Choose the best matching preset:
-- "classic-arched-banner": Flat luxury background card with top upward curved arch (e.g. wedding banners, traditional ceremonies, South Indian, royal weddings)
-- "minimalist-straight-banner": Clean horizontal bottom bar with gold accent line (e.g. modern receptions, cocktail parties)
-- "royal-crest": Monogram initials inside luxury heraldic shield (e.g. luxury royal monograms, initials branding)
-- "botanical-wreath": Delicate laurel branch circular wreath (e.g. engagements, garden weddings)
-- "transparent-signature": Transparent luxury calligraphy script watermark without background card (e.g. photography signatures, subtle overlays)
-
-Return ONLY valid JSON with no markdown backticks, matching this exact schema:
+You are an elite vector SVG artist and luxury event graphic designer for Zigmaa Photos.
+Your job is to analyze the user's prompt (e.g. "background bubble template", "flower template with roses", "celebration balloons", "royal crest", "vintage gold", birthday, wedding, reception, etc.) and generate:
+1. Dynamic, theme-specific visual artwork rendered in pure, self-contained SVG.
+2. The artwork MUST match the user's creative theme:
+   - If prompt mentions "bubble": draw translucent floating bubbles with specular reflections (<radialGradient>), glowing spheres, and cheerful pastel highlights.
+   - If prompt mentions "flower" / "floral" / "roses" / "botanical": draw blooming petals, roses, leaf branches, delicate vine borders, and floral bouquets on left and right.
+   - If prompt mentions "balloon" / "party" / "birthday": draw 3D-shaded party balloons with strings, confetti bits, sparkles, ribbons.
+   - If prompt mentions "royal" / "luxury" / "crest": draw heraldic monogram crest, ornate baroque flourishes, gold filigree frames.
+   - If prompt asks for a flat classic banner: draw an elegant upward arched banner or straight bar with gold borders.
+   - Any other random creative theme: creatively illustrate visual vector shapes representing that concept!
+3. The SVG canvas must have viewBox="0 0 1200 320" width="1200" height="320" xmlns="http://www.w3.org/2000/svg".
+4. Background: Include a <rect id="svg-bg" width="1200" height="320" ... /> with an appropriate fill (deep midnight, wine maroon, ivory cream, or translucent gradient).
+5. Central typography with EXACT IDs:
+   - <text id="svg-subtitle" x="600" y="160" text-anchor="middle" font-family="'Montserrat', sans-serif" font-size="18" font-weight="600" letter-spacing="6" fill="...">SUBTITLE</text>
+   - <text id="svg-names" x="600" y="225" text-anchor="middle" font-family="'Playfair Display', serif" font-size="56" font-style="italic" font-weight="700" fill="...">COUPLE OR PERSON NAMES</text>
+   - <text id="svg-date" x="600" y="270" text-anchor="middle" font-family="'Montserrat', sans-serif" font-size="16" letter-spacing="4" fill="...">DATE / VENUE</text>
+6. Keep the SVG valid, self-contained, and clean (< 4000 chars) without external image links.
+7. Return ONLY valid JSON matching this schema:
 {
-  "preset": "classic-arched-banner" | "minimalist-straight-banner" | "royal-crest" | "botanical-wreath" | "transparent-signature",
-  "subtitle": string (e.g. "THE WEDDING OF", "ENGAGEMENT CEREMONY OF", "RECEPTION OF", "CELEBRATING", "SAVE THE DATE"),
-  "names": string (e.g. "Arun & Keerthana", "Naveen & Sneha"),
-  "dateText": string (e.g. "14 FEBRUARY 2026"),
-  "venueText": string (e.g. "The Grand Palace, Chennai"),
+  "themeName": string,
+  "names": string,
+  "subtitle": string,
+  "dateText": string,
+  "venueText": string,
   "fontFamily": "Playfair Display" | "Cormorant Garamond" | "Cinzel" | "Great Vibes" | "Alex Brush" | "Montserrat",
-  "isItalic": boolean,
-  "namesFontSize": number (between 50 and 110, default 82),
-  "subtitleFontSize": number (between 14 and 26, default 20),
-  "dateFontSize": number (between 14 and 24, default 18),
-  "letterSpacing": number (between 2 and 10, default 5),
-  "arcHeight": number (between 0 and 55, default 45),
-  "bgColor": string (hex color like "#faf6ee" for ivory, "#f6f0df" for champagne, "#ffffff" for white, "#4a141b" for maroon, "#141416" for midnight, or "transparent"),
-  "textColor": string (hex color like "#581c25" for wine, "#dfb15b" for gold, "#c49b66" for rose gold, "#1a1a1a" for dark, or "#ffffff" for white),
-  "borderColor": string (hex color like "#c49b66" or "#dfb15b"),
-  "showBorder": boolean,
-  "showCalendarIcon": boolean,
-  "showDividers": boolean,
-  "showVenue": boolean
+  "textColor": string,
+  "bgColor": string,
+  "svg": string
 }
 `;
 
@@ -60,16 +59,25 @@ export async function POST(req: NextRequest) {
     }
 
     if (!GEMINI_API_KEY) {
-      const fallbackConfig = buildSmartFallback(userPrompt);
+      const fallback = buildDynamicSvgFallback(userPrompt);
       return NextResponse.json({
         ok: true,
-        template: fallbackConfig,
+        isCustomSvg: true,
+        svg: fallback.svg,
+        themeName: fallback.themeName,
+        names: fallback.names,
+        subtitle: fallback.subtitle,
+        dateText: fallback.dateText,
+        venueText: fallback.venueText,
+        fontFamily: fallback.fontFamily,
+        textColor: fallback.textColor,
+        bgColor: fallback.bgColor,
         source: "fallback",
-        note: "GEMINI_API_KEY is not set in environment. Used smart template designer.",
+        note: "GEMINI_API_KEY not configured. Used smart procedural designer.",
       });
     }
 
-    let rawOutput = "";
+    let parsedResult: Record<string, unknown> | null = null;
     let lastError = "";
 
     // Try models in fallback order
@@ -91,7 +99,8 @@ export async function POST(req: NextRequest) {
             ],
             generationConfig: {
               temperature: 0.4,
-              maxOutputTokens: 800,
+              maxOutputTokens: 4500,
+              responseMimeType: "application/json",
             },
           }),
         });
@@ -99,8 +108,31 @@ export async function POST(req: NextRequest) {
         const data = await res.json();
         const candidateText = data?.candidates?.[0]?.content?.parts?.[0]?.text;
         if (candidateText) {
-          rawOutput = candidateText;
-          break;
+          try {
+            const parsed = JSON.parse(candidateText.trim());
+            if (parsed && typeof parsed.svg === "string" && parsed.svg.includes("<svg")) {
+              parsedResult = parsed;
+              break;
+            }
+          } catch {
+            // Check if candidateText is raw SVG
+            if (candidateText.includes("<svg") && candidateText.includes("</svg>")) {
+              const svgMatch = candidateText.match(/<svg[\s\S]*?<\/svg>/i);
+              if (svgMatch) {
+                parsedResult = {
+                  themeName: "AI Artwork",
+                  names: extractNames(userPrompt),
+                  subtitle: extractSubtitle(userPrompt),
+                  dateText: extractDate(userPrompt),
+                  fontFamily: "Playfair Display",
+                  textColor: "#ffffff",
+                  bgColor: "#141416",
+                  svg: svgMatch[0],
+                };
+                break;
+              }
+            }
+          }
         } else if (data?.error) {
           lastError = data.error.message || String(data.error);
         }
@@ -109,38 +141,49 @@ export async function POST(req: NextRequest) {
       }
     }
 
-    if (!rawOutput) {
-      // Fallback rule-based parsing if Gemini API is temporarily busy
-      const fallbackConfig = buildSmartFallback(userPrompt);
+    if (!parsedResult || typeof parsedResult.svg !== "string") {
+      // Fallback rule-based procedural generation if Gemini API is temporarily busy
+      const fallback = buildDynamicSvgFallback(userPrompt);
       return NextResponse.json({
         ok: true,
-        template: fallbackConfig,
-        source: "fallback",
-        note: lastError ? `AI model busy (${lastError}), used smart preset.` : undefined,
+        isCustomSvg: true,
+        svg: fallback.svg,
+        themeName: fallback.themeName,
+        names: fallback.names,
+        subtitle: fallback.subtitle,
+        dateText: fallback.dateText,
+        venueText: fallback.venueText,
+        fontFamily: fallback.fontFamily,
+        textColor: fallback.textColor,
+        bgColor: fallback.bgColor,
+        source: "procedural_fallback",
+        note: lastError ? `AI model busy (${lastError}), generated procedural theme.` : undefined,
       });
     }
 
-    // Clean JSON (strip markdown codeblocks if model included them)
-    const cleaned = rawOutput
-      .replace(/^```json\s*/i, "")
-      .replace(/^```\s*/i, "")
-      .replace(/```\s*$/i, "")
-      .trim();
-
-    let parsedConfig;
-    try {
-      parsedConfig = JSON.parse(cleaned);
-    } catch {
-      // If JSON parse fails, fallback
-      parsedConfig = buildSmartFallback(userPrompt);
-    }
-
-    // Sanitize and ensure safe defaults
-    const template = sanitizeConfig(parsedConfig);
+    const cleanedSvg = String(parsedResult.svg).trim();
+    const finalNames = typeof parsedResult.names === "string" && parsedResult.names.trim()
+      ? parsedResult.names.trim()
+      : extractNames(userPrompt);
+    const finalSubtitle = typeof parsedResult.subtitle === "string" && parsedResult.subtitle.trim()
+      ? parsedResult.subtitle.trim()
+      : extractSubtitle(userPrompt);
+    const finalDate = typeof parsedResult.dateText === "string" && parsedResult.dateText.trim()
+      ? parsedResult.dateText.trim()
+      : extractDate(userPrompt);
 
     return NextResponse.json({
       ok: true,
-      template,
+      isCustomSvg: true,
+      svg: cleanedSvg,
+      themeName: typeof parsedResult.themeName === "string" ? parsedResult.themeName : "AI Custom Artwork",
+      names: finalNames,
+      subtitle: finalSubtitle,
+      dateText: finalDate,
+      venueText: typeof parsedResult.venueText === "string" ? parsedResult.venueText : "",
+      fontFamily: typeof parsedResult.fontFamily === "string" ? parsedResult.fontFamily : "Playfair Display",
+      textColor: typeof parsedResult.textColor === "string" ? parsedResult.textColor : "#ffffff",
+      bgColor: typeof parsedResult.bgColor === "string" ? parsedResult.bgColor : "#1f0408",
       source: "gemini",
     });
   } catch (error: unknown) {
@@ -152,96 +195,172 @@ export async function POST(req: NextRequest) {
   }
 }
 
-function buildSmartFallback(prompt: string) {
-  const p = prompt.toLowerCase();
-  const isRoyal = p.includes("royal") || p.includes("crest") || p.includes("monogram");
-  const isMaroon = p.includes("maroon") || p.includes("wine") || p.includes("red");
-  const isDark = p.includes("dark") || p.includes("black") || p.includes("midnight");
-  const isWreath = p.includes("wreath") || p.includes("botanical") || p.includes("leaf");
-  const isTransparent = p.includes("transparent") || p.includes("signature");
-
-  let detectedNames = "Arun & Keerthana";
-  if (prompt.includes("&")) {
-    detectedNames = prompt.split(/wedding|reception|engagement|in\s|on\s|at\s/i)[0].trim();
+function extractNames(prompt: string): string {
+  const p = prompt.trim();
+  const forMatch = p.match(/for\s+([A-Za-z0-9\s&]+?)(?=\s+(?:on|in|at|\d{1,2}[-/.]|\d{4}|$))/i);
+  if (forMatch && forMatch[1].trim()) {
+    return forMatch[1].trim().replace(/birthday|wedding|reception|function|ceremony/gi, "").trim();
   }
-
-  return {
-    preset: isRoyal
-      ? "royal-crest"
-      : isWreath
-      ? "botanical-wreath"
-      : isTransparent
-      ? "transparent-signature"
-      : "classic-arched-banner",
-    subtitle: p.includes("engagement")
-      ? "ENGAGEMENT CEREMONY OF"
-      : p.includes("reception")
-      ? "WEDDING RECEPTION OF"
-      : "THE WEDDING OF",
-    names: detectedNames || "Arun & Keerthana",
-    dateText: "14 FEBRUARY 2026",
-    venueText: "Chennai, Tamil Nadu",
-    fontFamily: isRoyal ? "Cinzel" : isWreath ? "Cormorant Garamond" : "Playfair Display",
-    isItalic: true,
-    namesFontSize: 85,
-    subtitleFontSize: 20,
-    dateFontSize: 18,
-    letterSpacing: 5,
-    arcHeight: 45,
-    bgColor: isDark ? "#141416" : isMaroon ? "#4a141b" : isTransparent ? "transparent" : "#faf6ee",
-    textColor: isDark || isMaroon ? "#dfb15b" : "#581c25",
-    borderColor: "#c49b66",
-    showBorder: true,
-    showCalendarIcon: true,
-    showDividers: true,
-    showVenue: p.includes("chennai") || p.includes("palace") || p.includes("hall"),
-  };
+  if (p.includes("&")) {
+    const parts = p.split(/&/);
+    const name1 = parts[0].trim().split(/\s+/).pop() || "Arun";
+    const name2 = parts[1].trim().split(/\s+/)[0] || "Keerthana";
+    return `${name1} & ${name2}`;
+  }
+  return "Rithvik";
 }
 
-function sanitizeConfig(config: Record<string, unknown>) {
-  const validPresets = [
-    "classic-arched-banner",
-    "minimalist-straight-banner",
-    "royal-crest",
-    "botanical-wreath",
-    "transparent-signature",
-  ];
-  const validFonts = [
-    "Playfair Display",
-    "Cormorant Garamond",
-    "Cinzel",
-    "Great Vibes",
-    "Alex Brush",
-    "Montserrat",
-  ];
+function extractSubtitle(prompt: string): string {
+  const p = prompt.toLowerCase();
+  if (p.includes("birthday")) return "HAPPY BIRTHDAY";
+  if (p.includes("engagement")) return "ENGAGEMENT CEREMONY OF";
+  if (p.includes("reception")) return "WEDDING RECEPTION OF";
+  if (p.includes("anniversary")) return "CELEBRATING ANNIVERSARY";
+  return "THE WEDDING OF";
+}
 
-  const preset = validPresets.includes(String(config.preset))
-    ? String(config.preset)
-    : "classic-arched-banner";
+function extractDate(prompt: string): string {
+  const dateMatch = prompt.match(/\b\d{1,2}[-/.]\d{1,2}[-/.]\d{2,4}\b|\b\d{1,2}\s+[A-Za-z]+\s+\d{4}\b/i);
+  if (dateMatch) return dateMatch[0].toUpperCase();
+  return "17 NOVEMBER 2026";
+}
 
-  const fontFamily = validFonts.includes(String(config.fontFamily))
-    ? String(config.fontFamily)
-    : "Playfair Display";
+function buildDynamicSvgFallback(prompt: string) {
+  const p = prompt.toLowerCase();
+  const names = extractNames(prompt);
+  const subtitle = extractSubtitle(prompt);
+  const dateText = extractDate(prompt);
+
+  if (p.includes("bubble")) {
+    // High-quality pastel bubble theme
+    const svg = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 320" width="1200" height="320">
+      <defs>
+        <linearGradient id="bg-grad" x1="0%" y1="100%" x2="0%" y2="0%">
+          <stop offset="0%" stop-color="#0b1329" stop-opacity="0.95"/>
+          <stop offset="100%" stop-color="#1c284e" stop-opacity="0.8"/>
+        </linearGradient>
+        <radialGradient id="bubble-grad" cx="30%" cy="30%" r="70%">
+          <stop offset="0%" stop-color="#ffffff" stop-opacity="0.7"/>
+          <stop offset="40%" stop-color="#8be9fd" stop-opacity="0.3"/>
+          <stop offset="100%" stop-color="#ff79c6" stop-opacity="0.15"/>
+        </radialGradient>
+        <filter id="glow" x="-20%" y="-20%" width="140%" height="140%">
+          <feGaussianBlur stdDeviation="4" result="blur"/>
+          <feComposite in="SourceGraphic" in2="blur" operator="over"/>
+        </filter>
+      </defs>
+      <rect id="svg-bg" width="1200" height="320" fill="url(#bg-grad)"/>
+      <g fill="none" stroke="url(#bubble-grad)" stroke-width="1.5">
+        <circle cx="120" cy="160" r="45" fill="url(#bubble-grad)"/>
+        <circle cx="240" cy="80" r="25" fill="url(#bubble-grad)"/>
+        <circle cx="900" cy="100" r="60" fill="url(#bubble-grad)"/>
+        <circle cx="1050" cy="200" r="35" fill="url(#bubble-grad)"/>
+        <circle cx="180" cy="260" r="30" fill="url(#bubble-grad)"/>
+        <circle cx="1000" cy="270" r="20" fill="url(#bubble-grad)"/>
+        <circle cx="600" cy="50" r="15" fill="url(#bubble-grad)"/>
+      </g>
+      <path d="M 100 290 Q 600 240 1100 290" fill="none" stroke="#ffd700" stroke-width="1.5" stroke-opacity="0.6"/>
+      <text id="svg-subtitle" x="600" y="160" text-anchor="middle" font-family="'Montserrat', sans-serif" font-size="18" font-weight="600" letter-spacing="6" fill="#ffd700" filter="url(#glow)">${subtitle}</text>
+      <text id="svg-names" x="600" y="225" text-anchor="middle" font-family="'Playfair Display', serif" font-size="56" font-style="italic" font-weight="700" fill="#ffffff" filter="url(#glow)">${names}</text>
+      <text id="svg-date" x="600" y="270" text-anchor="middle" font-family="'Montserrat', sans-serif" font-size="16" letter-spacing="4" fill="#8be9fd">${dateText}</text>
+    </svg>`;
+
+    return {
+      themeName: "Pastel Bubbles Celebration",
+      names,
+      subtitle,
+      dateText,
+      venueText: "",
+      fontFamily: "Playfair Display",
+      textColor: "#ffffff",
+      bgColor: "#0b1329",
+      svg,
+    };
+  }
+
+  if (p.includes("flower") || p.includes("rose") || p.includes("floral")) {
+    // Rich rose floral banner
+    const svg = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 320" width="1200" height="320">
+      <defs>
+        <linearGradient id="bgGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+          <stop offset="0%" stop-color="#1f0408"/>
+          <stop offset="50%" stop-color="#120204"/>
+          <stop offset="100%" stop-color="#1f0408"/>
+        </linearGradient>
+        <linearGradient id="goldGrad" x1="0%" y1="0%" x2="100%" y2="0%">
+          <stop offset="0%" stop-color="#dfbc7e"/>
+          <stop offset="50%" stop-color="#f7e8c4"/>
+          <stop offset="100%" stop-color="#c49b66"/>
+        </linearGradient>
+        <linearGradient id="roseGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+          <stop offset="0%" stop-color="#d46a84"/>
+          <stop offset="50%" stop-color="#9c3d54"/>
+          <stop offset="100%" stop-color="#591d2c"/>
+        </linearGradient>
+      </defs>
+      <rect id="svg-bg" width="1200" height="320" fill="url(#bgGrad)" opacity="0.95"/>
+      <rect x="20" y="20" width="1160" height="280" fill="none" stroke="url(#goldGrad)" stroke-width="1.5" stroke-opacity="0.6"/>
+      <rect x="28" y="28" width="1144" height="264" fill="none" stroke="url(#goldGrad)" stroke-width="0.5" stroke-opacity="0.3"/>
+      <g id="roses-left" transform="translate(120, 100)">
+        <path d="M-40,40 Q-20,0 0,40 T40,40" fill="none" stroke="#a38054" stroke-width="1.5"/>
+        <circle cx="0" cy="0" r="22" fill="url(#roseGrad)"/>
+        <circle cx="35" cy="25" r="15" fill="url(#roseGrad)"/>
+        <path d="M-50,20 Q-30,10 -20,-10" fill="none" stroke="#769960" stroke-width="2"/>
+        <path d="M-30,40 Q-10,30 10,20" fill="none" stroke="#769960" stroke-width="2"/>
+      </g>
+      <g id="roses-right" transform="translate(1080, 100) scale(-1, 1)">
+        <path d="M-40,40 Q-20,0 0,40 T40,40" fill="none" stroke="#a38054" stroke-width="1.5"/>
+        <circle cx="0" cy="0" r="22" fill="url(#roseGrad)"/>
+        <circle cx="35" cy="25" r="15" fill="url(#roseGrad)"/>
+        <path d="M-50,20 Q-30,10 -20,-10" fill="none" stroke="#769960" stroke-width="2"/>
+        <path d="M-30,40 Q-10,30 10,20" fill="none" stroke="#769960" stroke-width="2"/>
+      </g>
+      <g id="filigree" fill="none" stroke="url(#goldGrad)" stroke-width="1">
+        <path d="M200,60 C400,30 800,30 1000,60"/>
+        <path d="M200,260 C400,290 800,290 1000,260"/>
+        <circle cx="600" cy="45" r="3" fill="url(#goldGrad)"/></g>
+      <text id="svg-subtitle" x="600" y="135" text-anchor="middle" font-family="'Montserrat', sans-serif" font-size="16" font-weight="600" letter-spacing="8" fill="#dfbc7e">${subtitle}</text>
+      <text id="svg-names" x="600" y="205" text-anchor="middle" font-family="'Playfair Display', serif" font-size="64" font-style="italic" font-weight="700" fill="#ffffff">${names}</text>
+      <text id="svg-date" x="600" y="255" text-anchor="middle" font-family="'Montserrat', sans-serif" font-size="14" font-weight="500" letter-spacing="6" fill="#dfbc7e">${dateText}</text>
+    </svg>`;
+
+    return {
+      themeName: "Rose Floral Elegance",
+      names,
+      subtitle,
+      dateText,
+      venueText: "",
+      fontFamily: "Playfair Display",
+      textColor: "#ffffff",
+      bgColor: "#1f0408",
+      svg,
+    };
+  }
+
+  // Default Classic Ivory Flat Arched Banner
+  const svg = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 280" width="1200" height="280">
+    <defs>
+      <linearGradient id="ivoryBg" x1="0%" y1="0%" x2="0%" y2="100%">
+        <stop offset="0%" stop-color="#faf6ee" />
+        <stop offset="100%" stop-color="#f5efe1" />
+      </linearGradient>
+    </defs>
+    <path id="svg-bg" d="M 0,45 Q 600,0 1200,45 L 1200,280 L 0,280 Z" fill="url(#ivoryBg)" stroke="#c49b66" stroke-width="2"/>
+    <path d="M 12,54 Q 600,12 1188,54" fill="none" stroke="#c49b66" stroke-width="1" stroke-opacity="0.6"/>
+    <text id="svg-subtitle" x="600" y="110" text-anchor="middle" font-family="'Montserrat', sans-serif" font-size="18" font-weight="600" letter-spacing="6" fill="#581c25">${subtitle}</text>
+    <text id="svg-names" x="600" y="185" text-anchor="middle" font-family="'Playfair Display', serif" font-size="78" font-style="italic" font-weight="700" fill="#581c25">${names}</text>
+    <text id="svg-date" x="600" y="235" text-anchor="middle" font-family="'Montserrat', sans-serif" font-size="16" letter-spacing="4" fill="#581c25">${dateText}</text>
+  </svg>`;
 
   return {
-    preset,
-    subtitle: typeof config.subtitle === "string" && config.subtitle.trim() ? config.subtitle.trim() : "THE WEDDING OF",
-    names: typeof config.names === "string" && config.names.trim() ? config.names.trim() : "Arun & Keerthana",
-    dateText: typeof config.dateText === "string" && config.dateText.trim() ? config.dateText.trim() : "14 FEBRUARY 2026",
-    venueText: typeof config.venueText === "string" ? config.venueText.trim() : "Chennai, India",
-    fontFamily,
-    isItalic: typeof config.isItalic === "boolean" ? config.isItalic : true,
-    namesFontSize: typeof config.namesFontSize === "number" ? Math.max(45, Math.min(130, config.namesFontSize)) : 82,
-    subtitleFontSize: typeof config.subtitleFontSize === "number" ? Math.max(12, Math.min(36, config.subtitleFontSize)) : 20,
-    dateFontSize: typeof config.dateFontSize === "number" ? Math.max(12, Math.min(32, config.dateFontSize)) : 18,
-    letterSpacing: typeof config.letterSpacing === "number" ? Math.max(0, Math.min(14, config.letterSpacing)) : 5,
-    arcHeight: typeof config.arcHeight === "number" ? Math.max(0, Math.min(65, config.arcHeight)) : 45,
-    bgColor: typeof config.bgColor === "string" ? config.bgColor : "#faf6ee",
-    textColor: typeof config.textColor === "string" ? config.textColor : "#581c25",
-    borderColor: typeof config.borderColor === "string" ? config.borderColor : "#c49b66",
-    showBorder: typeof config.showBorder === "boolean" ? config.showBorder : true,
-    showCalendarIcon: typeof config.showCalendarIcon === "boolean" ? config.showCalendarIcon : true,
-    showDividers: typeof config.showDividers === "boolean" ? config.showDividers : true,
-    showVenue: typeof config.showVenue === "boolean" ? config.showVenue : false,
+    themeName: "Classic Ivory Arched Banner",
+    names,
+    subtitle,
+    dateText,
+    venueText: "",
+    fontFamily: "Playfair Display",
+    textColor: "#581c25",
+    bgColor: "#faf6ee",
+    svg,
   };
 }

@@ -50,6 +50,96 @@ const GOOGLE_FONTS_DEF = `
 @import url('https://fonts.googleapis.com/css2?family=Alex+Brush&family=Cinzel:wght@400;600;700&family=Cormorant+Garamond:ital,wght@0,500;0,600;0,700;1,400;1,600;1,700&family=Great+Vibes&family=Montserrat:wght@400;500;600;700&family=Playfair+Display:ital,wght@0,400;0,600;0,700;1,400;1,600;1,700&display=swap');
 `;
 
+function getRenderedCustomSvg(
+  baseSvg: string,
+  params: {
+    names: string;
+    subtitle: string;
+    dateText: string;
+    fontFamily: string;
+    isItalic: boolean;
+    namesFontSize: number;
+    subtitleFontSize: number;
+    dateFontSize: number;
+    textColor: string;
+    bgColor: string;
+  }
+): string {
+  let svg = baseSvg;
+
+  // 1. Update Names
+  if (params.names) {
+    svg = svg.replace(
+      /(<text[^>]*id=["']svg-names["'][^>]*>)([\s\S]*?)(<\/text>)/i,
+      (_match, open, _oldText, close) => {
+        let updatedOpen = open;
+        if (params.fontFamily) {
+          updatedOpen = updatedOpen.replace(
+            /font-family=["'][^"']*["']/i,
+            `font-family="'${params.fontFamily}', serif"`
+          );
+        }
+        if (params.namesFontSize) {
+          updatedOpen = updatedOpen.replace(
+            /font-size=["'][^"']*["']/i,
+            `font-size="${params.namesFontSize}"`
+          );
+        }
+        if (typeof params.isItalic === "boolean") {
+          if (updatedOpen.includes("font-style=")) {
+            updatedOpen = updatedOpen.replace(
+              /font-style=["'][^"']*["']/i,
+              `font-style="${params.isItalic ? "italic" : "normal"}"`
+            );
+          } else {
+            updatedOpen = updatedOpen.replace(
+              /<text/i,
+              `<text font-style="${params.isItalic ? "italic" : "normal"}"`
+            );
+          }
+        }
+        return `${updatedOpen}${params.names}${close}`;
+      }
+    );
+  }
+
+  // 2. Update Subtitle
+  if (params.subtitle) {
+    svg = svg.replace(
+      /(<text[^>]*id=["']svg-subtitle["'][^>]*>)([\s\S]*?)(<\/text>)/i,
+      (_match, open, _oldText, close) => {
+        let updatedOpen = open;
+        if (params.subtitleFontSize) {
+          updatedOpen = updatedOpen.replace(
+            /font-size=["'][^"']*["']/i,
+            `font-size="${params.subtitleFontSize}"`
+          );
+        }
+        return `${updatedOpen}${params.subtitle}${close}`;
+      }
+    );
+  }
+
+  // 3. Update Date
+  if (params.dateText) {
+    svg = svg.replace(
+      /(<text[^>]*id=["']svg-date["'][^>]*>)([\s\S]*?)(<\/text>)/i,
+      (_match, open, _oldText, close) => {
+        let updatedOpen = open;
+        if (params.dateFontSize) {
+          updatedOpen = updatedOpen.replace(
+            /font-size=["'][^"']*["']/i,
+            `font-size="${params.dateFontSize}"`
+          );
+        }
+        return `${updatedOpen}${params.dateText}${close}`;
+      }
+    );
+  }
+
+  return svg;
+}
+
 export function TemplateDesignerModal({
   isOpen,
   onClose,
@@ -101,6 +191,12 @@ export function TemplateDesignerModal({
   // SVG ref for exporting to PNG
   const svgRef = useRef<SVGSVGElement>(null);
 
+  // AI Dynamic Custom SVG state
+  const [isCustomAi, setIsCustomAi] = useState(false);
+  const [customSvgRaw, setCustomSvgRaw] = useState<string | null>(null);
+  const [themeName, setThemeName] = useState<string>("");
+  const customContainerRef = useRef<HTMLDivElement>(null);
+
   // Handle AI Template Generation with Gemini
   async function handleAiGenerate(promptToUse?: string) {
     const text = (promptToUse ?? aiPrompt).trim();
@@ -116,28 +212,43 @@ export function TemplateDesignerModal({
         body: JSON.stringify({ prompt: text }),
       });
       const data = await res.json();
-      if (data.ok && data.template) {
-        const t = data.template;
-        if (t.preset) setPreset(t.preset);
-        if (t.subtitle) setSubtitle(t.subtitle);
-        if (t.names) setNames(t.names);
-        if (t.dateText) setDateText(t.dateText);
-        if (t.venueText) setVenueText(t.venueText);
-        if (t.fontFamily) setFontFamily(t.fontFamily);
-        if (typeof t.isItalic === "boolean") setIsItalic(t.isItalic);
-        if (typeof t.namesFontSize === "number") setNamesFontSize(t.namesFontSize);
-        if (typeof t.subtitleFontSize === "number") setSubtitleFontSize(t.subtitleFontSize);
-        if (typeof t.dateFontSize === "number") setDateFontSize(t.dateFontSize);
-        if (typeof t.letterSpacing === "number") setLetterSpacing(t.letterSpacing);
-        if (typeof t.arcHeight === "number") setArcHeight(t.arcHeight);
-        if (t.bgColor) setBgColor(t.bgColor);
-        if (t.textColor) setTextColor(t.textColor);
-        if (typeof t.showBorder === "boolean") setShowBorder(t.showBorder);
-        if (typeof t.showCalendarIcon === "boolean") setShowCalendarIcon(t.showCalendarIcon);
-        if (typeof t.showDividers === "boolean") setShowDividers(t.showDividers);
-        if (typeof t.showVenue === "boolean") setShowVenue(t.showVenue);
+      if (data.ok) {
+        if (data.isCustomSvg && data.svg) {
+          setIsCustomAi(true);
+          setCustomSvgRaw(data.svg);
+          if (data.themeName) setThemeName(data.themeName);
+          if (data.names) setNames(data.names);
+          if (data.subtitle) setSubtitle(data.subtitle);
+          if (data.dateText) setDateText(data.dateText);
+          if (data.venueText) setVenueText(data.venueText);
+          if (data.fontFamily) setFontFamily(data.fontFamily);
+          if (data.textColor) setTextColor(data.textColor);
+          if (data.bgColor) setBgColor(data.bgColor);
+          toast.success("AI Graphic Generated!", `Custom ${data.themeName || "template"} created for "${data.names || text}"`);
+        } else if (data.template) {
+          const t = data.template;
+          setIsCustomAi(false);
+          if (t.preset) setPreset(t.preset);
+          if (t.subtitle) setSubtitle(t.subtitle);
+          if (t.names) setNames(t.names);
+          if (t.dateText) setDateText(t.dateText);
+          if (t.venueText) setVenueText(t.venueText);
+          if (t.fontFamily) setFontFamily(t.fontFamily);
+          if (typeof t.isItalic === "boolean") setIsItalic(t.isItalic);
+          if (typeof t.namesFontSize === "number") setNamesFontSize(t.namesFontSize);
+          if (typeof t.subtitleFontSize === "number") setSubtitleFontSize(t.subtitleFontSize);
+          if (typeof t.dateFontSize === "number") setDateFontSize(t.dateFontSize);
+          if (typeof t.letterSpacing === "number") setLetterSpacing(t.letterSpacing);
+          if (typeof t.arcHeight === "number") setArcHeight(t.arcHeight);
+          if (t.bgColor) setBgColor(t.bgColor);
+          if (t.textColor) setTextColor(t.textColor);
+          if (typeof t.showBorder === "boolean") setShowBorder(t.showBorder);
+          if (typeof t.showCalendarIcon === "boolean") setShowCalendarIcon(t.showCalendarIcon);
+          if (typeof t.showDividers === "boolean") setShowDividers(t.showDividers);
+          if (typeof t.showVenue === "boolean") setShowVenue(t.showVenue);
 
-        toast.success("AI Template Generated!", `Design updated for "${t.names}"`);
+          toast.success("AI Template Generated!", `Design updated for "${t.names}"`);
+        }
       } else {
         toast.error("Generation failed", data.error || "Please try again.");
       }
@@ -173,12 +284,17 @@ export function TemplateDesignerModal({
 
   // Export SVG to high-res PNG and apply as watermark
   async function handleApply() {
-    if (!svgRef.current) return;
+    let svgElement: SVGSVGElement | null = null;
+    if (isCustomAi && customContainerRef.current) {
+      svgElement = customContainerRef.current.querySelector("svg");
+    } else {
+      svgElement = svgRef.current;
+    }
+    if (!svgElement) return;
 
     try {
-      const svgElement = svgRef.current;
       const width = parseInt(svgElement.getAttribute("width") || "1200", 10);
-      const height = parseInt(svgElement.getAttribute("height") || "280", 10);
+      const height = parseInt(svgElement.getAttribute("height") || "320", 10);
 
       const svgClone = svgElement.cloneNode(true) as SVGSVGElement;
       svgClone.setAttribute("width", String(width));
@@ -211,10 +327,10 @@ export function TemplateDesignerModal({
           const file = new File([pngBlob], `template_${safeName}.png`, { type: "image/png" });
           const id = `tpl_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`;
 
-          const isBanner = preset === "classic-arched-banner" || preset === "minimalist-straight-banner";
+          const isBanner = isCustomAi || preset === "classic-arched-banner" || preset === "minimalist-straight-banner";
           onApplyTemplate({
             id,
-            name: `${names} (${preset === "classic-arched-banner" ? "Arched Banner" : preset})`,
+            name: `${names} (${isCustomAi ? (themeName || "AI Artwork") : (preset === "classic-arched-banner" ? "Arched Banner" : preset)})`,
             preview: dataUrl,
             dataUrl,
             sizeBytes: pngBlob.size,
@@ -303,10 +419,11 @@ export function TemplateDesignerModal({
           <div className="flex items-center gap-1.5 overflow-x-auto text-[10px] text-muted pb-0.5 scrollbar-none">
             <span className="shrink-0 font-semibold text-brand-800">Quick ideas:</span>
             {[
+              "Background bubble template for Rithvik birthday 17-11-2026",
+              "Flower template with elegant roses for Naveen & Meera wedding 24 Dec 2026",
+              "Festive party balloons with confetti for Birthday Celebration",
               "Royal maroon and gold wedding banner for Arun & Keerthana 14 Feb 2026",
               "Classic ivory arched banner for Naveen & Meera 22 August 2026 Jaipur",
-              "Minimalist white modern reception banner with gold line",
-              "Royal monogram crest for A & K with Cinzel font",
               "Transparent gold calligraphy signature watermark",
             ].map((p) => (
               <button
@@ -392,98 +509,121 @@ export function TemplateDesignerModal({
 
               {/* RENDERED SVG TEMPLATES (Positioned along bottom just like final photo) */}
               <div className="relative z-10 w-full flex items-end justify-center p-2">
-                {preset === "classic-arched-banner" && (
-                  <ClassicArchedBannerSVG
-                    ref={svgRef}
-                    subtitle={subtitle}
-                    names={names}
-                    dateText={dateText}
-                    venueText={venueText}
-                    fontFamily={fontFamily}
-                    isItalic={isItalic}
-                    namesFontSize={namesFontSize}
-                    subtitleFontSize={subtitleFontSize}
-                    dateFontSize={dateFontSize}
-                    letterSpacing={letterSpacing}
-                    arcHeight={arcHeight}
-                    bgColor={bgColor}
-                    textColor={textColor}
-                    borderColor={borderColor}
-                    showBorder={showBorder}
-                    showCalendarIcon={showCalendarIcon}
-                    showDividers={showDividers}
-                    showVenue={showVenue}
+                {isCustomAi && customSvgRaw ? (
+                  <div
+                    ref={customContainerRef}
+                    className="w-full flex items-center justify-center [&>svg]:w-full [&>svg]:h-auto [&>svg]:max-h-[220px] [&>svg]:drop-shadow-lg"
+                    dangerouslySetInnerHTML={{
+                      __html: getRenderedCustomSvg(customSvgRaw, {
+                        names,
+                        subtitle,
+                        dateText,
+                        fontFamily,
+                        isItalic,
+                        namesFontSize,
+                        subtitleFontSize,
+                        dateFontSize,
+                        textColor,
+                        bgColor,
+                      }),
+                    }}
                   />
-                )}
+                ) : (
+                  <>
+                    {preset === "classic-arched-banner" && (
+                      <ClassicArchedBannerSVG
+                        ref={svgRef}
+                        subtitle={subtitle}
+                        names={names}
+                        dateText={dateText}
+                        venueText={venueText}
+                        fontFamily={fontFamily}
+                        isItalic={isItalic}
+                        namesFontSize={namesFontSize}
+                        subtitleFontSize={subtitleFontSize}
+                        dateFontSize={dateFontSize}
+                        letterSpacing={letterSpacing}
+                        arcHeight={arcHeight}
+                        bgColor={bgColor}
+                        textColor={textColor}
+                        borderColor={borderColor}
+                        showBorder={showBorder}
+                        showCalendarIcon={showCalendarIcon}
+                        showDividers={showDividers}
+                        showVenue={showVenue}
+                      />
+                    )}
 
-                {preset === "minimalist-straight-banner" && (
-                  <MinimalistStraightBannerSVG
-                    ref={svgRef}
-                    subtitle={subtitle}
-                    names={names}
-                    dateText={dateText}
-                    venueText={venueText}
-                    fontFamily={fontFamily}
-                    isItalic={isItalic}
-                    namesFontSize={namesFontSize}
-                    subtitleFontSize={subtitleFontSize}
-                    dateFontSize={dateFontSize}
-                    letterSpacing={letterSpacing}
-                    bgColor={bgColor}
-                    textColor={textColor}
-                    borderColor={borderColor}
-                    showBorder={showBorder}
-                    showCalendarIcon={showCalendarIcon}
-                    showDividers={showDividers}
-                    showVenue={showVenue}
-                  />
-                )}
+                    {preset === "minimalist-straight-banner" && (
+                      <MinimalistStraightBannerSVG
+                        ref={svgRef}
+                        subtitle={subtitle}
+                        names={names}
+                        dateText={dateText}
+                        venueText={venueText}
+                        fontFamily={fontFamily}
+                        isItalic={isItalic}
+                        namesFontSize={namesFontSize}
+                        subtitleFontSize={subtitleFontSize}
+                        dateFontSize={dateFontSize}
+                        letterSpacing={letterSpacing}
+                        bgColor={bgColor}
+                        textColor={textColor}
+                        borderColor={borderColor}
+                        showBorder={showBorder}
+                        showCalendarIcon={showCalendarIcon}
+                        showDividers={showDividers}
+                        showVenue={showVenue}
+                      />
+                    )}
 
-                {preset === "royal-crest" && (
-                  <RoyalCrestSVG
-                    ref={svgRef}
-                    subtitle={subtitle}
-                    names={names}
-                    dateText={dateText}
-                    fontFamily={fontFamily}
-                    namesFontSize={namesFontSize}
-                    subtitleFontSize={subtitleFontSize}
-                    dateFontSize={dateFontSize}
-                    textColor={textColor}
-                    borderColor={borderColor}
-                  />
-                )}
+                    {preset === "royal-crest" && (
+                      <RoyalCrestSVG
+                        ref={svgRef}
+                        subtitle={subtitle}
+                        names={names}
+                        dateText={dateText}
+                        fontFamily={fontFamily}
+                        namesFontSize={namesFontSize}
+                        subtitleFontSize={subtitleFontSize}
+                        dateFontSize={dateFontSize}
+                        textColor={textColor}
+                        borderColor={borderColor}
+                      />
+                    )}
 
-                {preset === "botanical-wreath" && (
-                  <BotanicalWreathSVG
-                    ref={svgRef}
-                    subtitle={subtitle}
-                    names={names}
-                    dateText={dateText}
-                    fontFamily={fontFamily}
-                    namesFontSize={namesFontSize}
-                    subtitleFontSize={subtitleFontSize}
-                    dateFontSize={dateFontSize}
-                    textColor={textColor}
-                    borderColor={borderColor}
-                  />
-                )}
+                    {preset === "botanical-wreath" && (
+                      <BotanicalWreathSVG
+                        ref={svgRef}
+                        subtitle={subtitle}
+                        names={names}
+                        dateText={dateText}
+                        fontFamily={fontFamily}
+                        namesFontSize={namesFontSize}
+                        subtitleFontSize={subtitleFontSize}
+                        dateFontSize={dateFontSize}
+                        textColor={textColor}
+                        borderColor={borderColor}
+                      />
+                    )}
 
-                {preset === "transparent-signature" && (
-                  <TransparentSignatureSVG
-                    ref={svgRef}
-                    subtitle={subtitle}
-                    names={names}
-                    dateText={dateText}
-                    fontFamily={fontFamily}
-                    isItalic={isItalic}
-                    namesFontSize={namesFontSize}
-                    subtitleFontSize={subtitleFontSize}
-                    dateFontSize={dateFontSize}
-                    letterSpacing={letterSpacing}
-                    textColor={textColor}
-                    showDividers={showDividers}
-                  />
+                    {preset === "transparent-signature" && (
+                      <TransparentSignatureSVG
+                        ref={svgRef}
+                        subtitle={subtitle}
+                        names={names}
+                        dateText={dateText}
+                        fontFamily={fontFamily}
+                        isItalic={isItalic}
+                        namesFontSize={namesFontSize}
+                        subtitleFontSize={subtitleFontSize}
+                        dateFontSize={dateFontSize}
+                        letterSpacing={letterSpacing}
+                        textColor={textColor}
+                        showDividers={showDividers}
+                      />
+                    )}
+                  </>
                 )}
               </div>
             </div>
@@ -495,6 +635,30 @@ export function TemplateDesignerModal({
 
           {/* Right Column: Customization Controls (5 cols) */}
           <div className="lg:col-span-5 p-6 space-y-5 overflow-y-auto max-h-[75vh]">
+            {/* AI Custom Active Banner */}
+            {isCustomAi && (
+              <div className="rounded-xl border border-brand-300 bg-brand-50/80 p-3 flex items-center justify-between shadow-xs">
+                <div className="flex items-center gap-2">
+                  <Sparkles className="h-4 w-4 text-brand-600 animate-pulse shrink-0" />
+                  <div>
+                    <div className="text-xs font-bold text-brand-900">
+                      ✨ AI Custom Graphic: {themeName || "Generated Artwork"}
+                    </div>
+                    <div className="text-[10px] text-brand-700">
+                      Live vector rendering based on prompt. You can customize text and fonts below.
+                    </div>
+                  </div>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setIsCustomAi(false)}
+                  className="shrink-0 text-[11px] font-semibold text-brand-700 hover:text-brand-900 bg-white border border-brand-200 px-2.5 py-1 rounded-lg transition-colors cursor-pointer"
+                >
+                  Use Presets
+                </button>
+              </div>
+            )}
+
             {/* 1. Template Presets */}
             <div>
               <label className="text-xs font-bold uppercase tracking-wider text-muted flex items-center gap-1.5 mb-2">
@@ -506,13 +670,14 @@ export function TemplateDesignerModal({
                 <button
                   type="button"
                   onClick={() => {
+                    setIsCustomAi(false);
                     setPreset("classic-arched-banner");
                     setBgColor("#faf6ee");
                     setTextColor("#581c25");
                     setIsItalic(true);
                   }}
                   className={`flex flex-col text-left p-2.5 rounded-xl border transition-all cursor-pointer ${
-                    preset === "classic-arched-banner"
+                    !isCustomAi && preset === "classic-arched-banner"
                       ? "border-brand-500 bg-brand-50/50 ring-1 ring-brand-500 shadow-xs"
                       : "border-line bg-surface hover:border-brand-300"
                   }`}
@@ -524,12 +689,13 @@ export function TemplateDesignerModal({
                 <button
                   type="button"
                   onClick={() => {
+                    setIsCustomAi(false);
                     setPreset("minimalist-straight-banner");
                     setBgColor("#faf6ee");
                     setTextColor("#581c25");
                   }}
                   className={`flex flex-col text-left p-2.5 rounded-xl border transition-all cursor-pointer ${
-                    preset === "minimalist-straight-banner"
+                    !isCustomAi && preset === "minimalist-straight-banner"
                       ? "border-brand-500 bg-brand-50/50 ring-1 ring-brand-500 shadow-xs"
                       : "border-line bg-surface hover:border-brand-300"
                   }`}
@@ -541,11 +707,12 @@ export function TemplateDesignerModal({
                 <button
                   type="button"
                   onClick={() => {
+                    setIsCustomAi(false);
                     setPreset("royal-crest");
                     setTextColor("#dfb15b");
                   }}
                   className={`flex flex-col text-left p-2.5 rounded-xl border transition-all cursor-pointer ${
-                    preset === "royal-crest"
+                    !isCustomAi && preset === "royal-crest"
                       ? "border-brand-500 bg-brand-50/50 ring-1 ring-brand-500 shadow-xs"
                       : "border-line bg-surface hover:border-brand-300"
                   }`}
@@ -557,12 +724,13 @@ export function TemplateDesignerModal({
                 <button
                   type="button"
                   onClick={() => {
+                    setIsCustomAi(false);
                     setPreset("transparent-signature");
                     setTextColor("#ffffff");
                     setIsItalic(true);
                   }}
                   className={`flex flex-col text-left p-2.5 rounded-xl border transition-all cursor-pointer ${
-                    preset === "transparent-signature"
+                    !isCustomAi && preset === "transparent-signature"
                       ? "border-brand-500 bg-brand-50/50 ring-1 ring-brand-500 shadow-xs"
                       : "border-line bg-surface hover:border-brand-300"
                   }`}
