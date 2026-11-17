@@ -2,7 +2,7 @@
 
 import { useSearchParams } from "next/navigation";
 import { CheckCircle2, Eye, EyeOff, Lock, Mail } from "lucide-react";
-import { useState, type FormEvent } from "react";
+import { useState, useRef, type FormEvent } from "react";
 import { ApiError, CSRF_HEADER, errorMessage, toApiError } from "@/lib/api";
 import { cn } from "@/lib/format";
 
@@ -90,7 +90,9 @@ export function LoginForm() {
   const [forgotBusy, setForgotBusy] = useState(false);
   const [forgotSent, setForgotSent] = useState(false);
   const [forgotError, setForgotError] = useState<string | null>(null);
-  const [otpCode, setOtpCode] = useState("");
+  const [otpDigits, setOtpDigits] = useState<string[]>(["", "", "", "", "", ""]);
+  const [otpVerified, setOtpVerified] = useState(false);
+  const otpInputsRef = useRef<(HTMLInputElement | null)[]>([]);
   const [newPassword, setNewPassword] = useState("");
   const [confirmNewPassword, setConfirmNewPassword] = useState("");
   const [verifyBusy, setVerifyBusy] = useState(false);
@@ -147,6 +149,56 @@ export function LoginForm() {
     }
   }
 
+  // Handle OTP digit box changes
+  function handleOtpChange(index: number, val: string) {
+    const clean = val.replace(/\D/g, "");
+    if (clean.length > 1) {
+      // Pasted or typed multi-character string
+      const chars = clean.slice(0, 6).split("");
+      const nextDigits = [...otpDigits];
+      chars.forEach((c, i) => {
+        if (index + i < 6) nextDigits[index + i] = c;
+      });
+      setOtpDigits(nextDigits);
+      const focusTarget = Math.min(5, index + chars.length);
+      otpInputsRef.current[focusTarget]?.focus();
+      return;
+    }
+
+    const nextDigits = [...otpDigits];
+    nextDigits[index] = clean;
+    setOtpDigits(nextDigits);
+
+    if (clean && index < 5) {
+      otpInputsRef.current[index + 1]?.focus();
+    }
+  }
+
+  function handleOtpKeyDown(index: number, e: React.KeyboardEvent<HTMLInputElement>) {
+    if (e.key === "Backspace") {
+      if (!otpDigits[index] && index > 0) {
+        otpInputsRef.current[index - 1]?.focus();
+      }
+    } else if (e.key === "ArrowLeft" && index > 0) {
+      otpInputsRef.current[index - 1]?.focus();
+    } else if (e.key === "ArrowRight" && index < 5) {
+      otpInputsRef.current[index + 1]?.focus();
+    }
+  }
+
+  function handleOtpPaste(e: React.ClipboardEvent<HTMLInputElement>) {
+    e.preventDefault();
+    const pasted = e.clipboardData.getData("text").replace(/\D/g, "").slice(0, 6);
+    if (!pasted) return;
+    const nextDigits = [...otpDigits];
+    for (let i = 0; i < 6; i++) {
+      nextDigits[i] = pasted[i] || "";
+    }
+    setOtpDigits(nextDigits);
+    const focusTarget = Math.min(5, pasted.length);
+    otpInputsRef.current[focusTarget]?.focus();
+  }
+
   // Handle Send OTP (Forgot Password)
   async function onForgotSubmit(e: FormEvent) {
     e.preventDefault();
@@ -163,6 +215,11 @@ export function LoginForm() {
         throw new Error(data.error || "Failed to send OTP.");
       }
       setForgotSent(true);
+      setOtpVerified(false);
+      setOtpDigits(["", "", "", "", "", ""]);
+      setTimeout(() => {
+        otpInputsRef.current[0]?.focus();
+      }, 50);
     } catch (err: unknown) {
       setForgotError(err instanceof Error ? err.message : "Failed to send OTP.");
     } finally {
@@ -170,12 +227,65 @@ export function LoginForm() {
     }
   }
 
-  // Handle Verify OTP & Reset Password
-  async function onVerifyOtpSubmit(e: FormEvent) {
+  // Handle Resend OTP
+  async function onResendOtp() {
+    setForgotError(null);
+    setForgotBusy(true);
+    try {
+      const res = await fetch("/api/auth/otp/send", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ email: forgotEmail }),
+      });
+      const data = await res.json();
+      if (!res.ok || !data.ok) {
+        throw new Error(data.error || "Failed to resend OTP.");
+      }
+      setOtpDigits(["", "", "", "", "", ""]);
+      otpInputsRef.current[0]?.focus();
+    } catch (err: unknown) {
+      setForgotError(err instanceof Error ? err.message : "Failed to resend OTP.");
+    } finally {
+      setForgotBusy(false);
+    }
+  }
+
+  // Step 1: Handle Verify OTP (Image 1)
+  async function onVerifyOtpCode(e: FormEvent) {
+    e.preventDefault();
+    setForgotError(null);
+    const code = otpDigits.join("");
+    if (code.length !== 6) {
+      setForgotError("Please enter all 6 digits of the OTP code.");
+      return;
+    }
+
+    setVerifyBusy(true);
+    try {
+      const res = await fetch("/api/auth/otp/verify", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ email: forgotEmail, otp: code }),
+      });
+      const data = await res.json();
+      if (!res.ok || !data.ok) {
+        throw new Error(data.error || "Invalid verification code.");
+      }
+      setOtpVerified(true);
+      setForgotError(null);
+    } catch (err: unknown) {
+      setForgotError(err instanceof Error ? err.message : "Verification failed.");
+    } finally {
+      setVerifyBusy(false);
+    }
+  }
+
+  // Step 2: Handle Set New Password (Image 2)
+  async function onUpdatePassword(e: FormEvent) {
     e.preventDefault();
     setForgotError(null);
 
-    if (newPassword && newPassword !== confirmNewPassword) {
+    if (newPassword !== confirmNewPassword) {
       setForgotError("New passwords do not match.");
       return;
     }
@@ -189,26 +299,19 @@ export function LoginForm() {
 
     setVerifyBusy(true);
     try {
+      const code = otpDigits.join("");
       const res = await fetch("/api/auth/otp/verify", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ email: forgotEmail, otp: otpCode, newPassword }),
+        body: JSON.stringify({ email: forgotEmail, otp: code, newPassword }),
       });
       const data = await res.json();
       if (!res.ok || !data.ok) {
-        throw new Error(data.error || "Verification failed.");
+        throw new Error(data.error || "Password update failed.");
       }
-      setResetSuccess(data.message || "Password reset successfully!");
-      setTimeout(() => {
-        setView("login");
-        setForgotSent(false);
-        setOtpCode("");
-        setNewPassword("");
-        setConfirmNewPassword("");
-        setResetSuccess(null);
-      }, 2000);
+      setResetSuccess(data.message || "Your password has been reset successfully. You can now log in.");
     } catch (err: unknown) {
-      setForgotError(err instanceof Error ? err.message : "Verification failed.");
+      setForgotError(err instanceof Error ? err.message : "Failed to update password.");
     } finally {
       setVerifyBusy(false);
     }
@@ -423,9 +526,30 @@ export function LoginForm() {
 
       {/* ========================================================
           VIEW 2: FORGOT PASSWORD (RESET YOUR PASSWORD)
+          Matches Image 1 (Step 1: OTP with 6 individual boxes)
+          and Image 2 (Step 2: Password setup after verification)
       ======================================================== */}
       {view === "forgot" && (
         <div className="space-y-4 animate-fade-in">
+          {/* Top Green Notification Banner if OTP was sent / verified */}
+          {forgotSent && !otpVerified && !resetSuccess && (
+            <div className="rounded-xl border border-emerald-500/30 bg-emerald-500/10 p-2.5 sm:p-3 text-xs text-emerald-300 flex items-center justify-between gap-2 shadow-sm animate-fade-in">
+              <div className="flex items-center gap-2">
+                <CheckCircle2 className="h-4 w-4 shrink-0 text-emerald-400" />
+                <span className="leading-tight">
+                  Verification code sent successfully to <strong className="text-white font-medium">{forgotEmail}</strong>
+                </span>
+              </div>
+            </div>
+          )}
+
+          {forgotSent && otpVerified && !resetSuccess && (
+            <div className="rounded-xl border border-emerald-500/30 bg-emerald-500/10 p-2.5 sm:p-3 text-xs text-emerald-300 flex items-center gap-2 shadow-sm animate-fade-in">
+              <CheckCircle2 className="h-4 w-4 shrink-0 text-emerald-400" />
+              <span className="leading-tight">Code verified! Please enter your new password below.</span>
+            </div>
+          )}
+
           {/* Brand Logo, Tagline & Diamond Separator */}
           <BrandHeader />
 
@@ -436,8 +560,8 @@ export function LoginForm() {
             </h1>
             <p className="text-xs text-white/60">
               {forgotSent
-                ? `Enter the 6-digit OTP code sent to ${forgotEmail}`
-                : "We will send the OTP to your registered email address"}
+                ? "We've sent the 6 Digit OTP to your registered email address."
+                : "We will send the 6 Digit OTP to your registered email address."}
             </p>
           </div>
 
@@ -448,6 +572,7 @@ export function LoginForm() {
           )}
 
           {resetSuccess ? (
+            /* Success State */
             <div className="space-y-4 py-3 text-center">
               <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-full bg-emerald-500/10 text-emerald-400 ring-1 ring-emerald-500/20">
                 <CheckCircle2 className="h-6 w-6" />
@@ -458,127 +583,23 @@ export function LoginForm() {
               </div>
               <button
                 type="button"
-                onClick={() => setView("login")}
+                onClick={() => {
+                  setView("login");
+                  setForgotSent(false);
+                  setOtpVerified(false);
+                  setOtpDigits(["", "", "", "", "", ""]);
+                  setResetSuccess(null);
+                }}
                 className="w-full rounded-full bg-gradient-to-r from-red-600 via-red-500 to-red-600 py-3 text-sm font-semibold text-white shadow-[0_4px_24px_rgba(229,9,20,0.5)] hover:brightness-110 cursor-pointer"
               >
                 Sign In Now →
               </button>
             </div>
-          ) : forgotSent ? (
-            <form onSubmit={onVerifyOtpSubmit} className="space-y-3.5">
-              {/* 6-digit OTP Code */}
-              <div>
-                <label htmlFor="otp-code" className="sr-only">
-                  6-Digit OTP Code
-                </label>
-                <input
-                  id="otp-code"
-                  type="text"
-                  required
-                  autoFocus
-                  maxLength={6}
-                  placeholder="• • • • • •"
-                  value={otpCode}
-                  onChange={(e) => setOtpCode(e.target.value.replace(/\D/g, ""))}
-                  className="w-full rounded-full border border-white/20 bg-white/[0.07] px-4 py-3 text-center text-lg font-bold tracking-[8px] text-white placeholder:text-white/30 placeholder:tracking-normal placeholder:font-normal shadow-inner transition-all focus:border-[#e50914] focus:outline-none focus:ring-1 focus:ring-[#e50914]"
-                />
-              </div>
-
-              {/* New Password & Confirm Password with Eye toggles */}
-              <div className="grid grid-cols-2 gap-2">
-                <div>
-                  <div className="relative">
-                    <input
-                      id="reset-new-password"
-                      type={showResetNewPass ? "text" : "password"}
-                      required
-                      placeholder="New password"
-                      value={newPassword}
-                      onChange={(e) => setNewPassword(e.target.value)}
-                      className="w-full rounded-full border border-white/15 bg-white/[0.07] pl-3.5 pr-8 py-2.5 text-xs text-white placeholder:text-white/40 shadow-inner focus:border-[#e50914] focus:outline-none focus:ring-1 focus:ring-[#e50914]"
-                    />
-                    <button
-                      type="button"
-                      onClick={() => setShowResetNewPass((s) => !s)}
-                      className="absolute right-2.5 top-1/2 -translate-y-1/2 text-white/50 hover:text-white transition-colors cursor-pointer"
-                      aria-label={showResetNewPass ? "Hide password" : "Show password"}
-                    >
-                      {showResetNewPass ? <EyeOff className="h-3.5 w-3.5" /> : <Eye className="h-3.5 w-3.5" />}
-                    </button>
-                  </div>
-                  <PasswordRequirements password={newPassword} />
-                </div>
-                <div>
-                  <div className="relative">
-                    <input
-                      id="reset-confirm-password"
-                      type={showResetConfirmPass ? "text" : "password"}
-                      required
-                      placeholder="Repeat password"
-                      value={confirmNewPassword}
-                      onChange={(e) => setConfirmNewPassword(e.target.value)}
-                      className="w-full rounded-full border border-white/15 bg-white/[0.07] pl-3.5 pr-8 py-2.5 text-xs text-white placeholder:text-white/40 shadow-inner focus:border-[#e50914] focus:outline-none focus:ring-1 focus:ring-[#e50914]"
-                    />
-                    <button
-                      type="button"
-                      onClick={() => setShowResetConfirmPass((s) => !s)}
-                      className="absolute right-2.5 top-1/2 -translate-y-1/2 text-white/50 hover:text-white transition-colors cursor-pointer"
-                      aria-label={showResetConfirmPass ? "Hide password" : "Show password"}
-                    >
-                      {showResetConfirmPass ? <EyeOff className="h-3.5 w-3.5" /> : <Eye className="h-3.5 w-3.5" />}
-                    </button>
-                  </div>
-                </div>
-              </div>
-
-              {/* Reset Password Button */}
-              <button
-                type="submit"
-                disabled={verifyBusy}
-                className="w-full rounded-full bg-gradient-to-r from-red-600 via-red-500 to-red-600 py-3 text-center text-sm font-semibold tracking-wide text-white shadow-[0_4px_24px_rgba(229,9,20,0.5)] transition-all hover:brightness-110 active:scale-[0.99] disabled:opacity-50 cursor-pointer"
-              >
-                {verifyBusy ? "Verifying..." : "Verify OTP & Reset Password →"}
-              </button>
-
-              {/* Resend OTP button */}
-              <div className="flex items-center justify-between pt-1 text-xs text-white/60">
-                <button
-                  type="button"
-                  onClick={onForgotSubmit}
-                  disabled={forgotBusy}
-                  className="font-medium text-red-500 hover:underline transition-colors cursor-pointer"
-                >
-                  {forgotBusy ? "Sending..." : "Resend OTP"}
-                </button>
-                <button
-                  type="button"
-                  onClick={() => {
-                    setForgotSent(false);
-                    setOtpCode("");
-                    setForgotError(null);
-                  }}
-                  className="text-white/60 hover:text-white hover:underline cursor-pointer"
-                >
-                  Change Email
-                </button>
-              </div>
-
-              {/* Already a Member? Sign In Footer */}
-              <div className="pt-2 text-center text-xs text-white/60">
-                <span>Already a Member? </span>
-                <button
-                  type="button"
-                  onClick={() => setView("login")}
-                  className="font-semibold text-red-500 hover:text-red-400 hover:underline transition-colors cursor-pointer"
-                >
-                  Sign In
-                </button>
-              </div>
-            </form>
-          ) : (
+          ) : !forgotSent ? (
+            /* Initial State: Enter Email to Send OTP */
             <form onSubmit={onForgotSubmit} className="space-y-4">
               <div>
-                <label htmlFor="forgot-email" className="sr-only">
+                <label htmlFor="forgot-email" className="block text-xs font-semibold text-white/80 mb-1.5">
                   Email
                 </label>
                 <div className="relative">
@@ -598,7 +619,6 @@ export function LoginForm() {
                 </div>
               </div>
 
-              {/* Send OTP Button */}
               <button
                 type="submit"
                 disabled={forgotBusy}
@@ -607,7 +627,6 @@ export function LoginForm() {
                 {forgotBusy ? "Sending OTP..." : "Send OTP →"}
               </button>
 
-              {/* Already a Member? Sign In Footer */}
               <div className="pt-2 text-center text-xs text-white/60">
                 <span>Already a Member? </span>
                 <button
@@ -616,6 +635,178 @@ export function LoginForm() {
                   className="font-semibold text-red-500 hover:text-red-400 hover:underline transition-colors cursor-pointer"
                 >
                   Sign In
+                </button>
+              </div>
+            </form>
+          ) : !otpVerified ? (
+            /* Step 1: Enter 6 Individual Digit Boxes (Exact Image 1 Match) */
+            <form onSubmit={onVerifyOtpCode} className="space-y-4">
+              {/* Read-only Email display */}
+              <div>
+                <div className="flex items-center justify-between mb-1.5">
+                  <label className="text-xs font-semibold text-white/80">Email</label>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setForgotSent(false);
+                      setOtpDigits(["", "", "", "", "", ""]);
+                      setForgotError(null);
+                    }}
+                    className="text-[11px] text-white/60 hover:text-white hover:underline cursor-pointer"
+                  >
+                    Change Email
+                  </button>
+                </div>
+                <div className="w-full rounded-full border border-white/15 bg-white/[0.05] px-4 py-2.5 text-sm text-white/80 select-none">
+                  {forgotEmail}
+                </div>
+              </div>
+
+              {/* 6 Individual Square OTP Boxes */}
+              <div>
+                <label className="block text-xs font-semibold text-white/80 mb-2">
+                  Enter 6-digit OTP
+                </label>
+                <div className="grid grid-cols-6 gap-2 sm:gap-2.5">
+                  {otpDigits.map((digit, idx) => (
+                    <input
+                      key={idx}
+                      ref={(el) => {
+                        otpInputsRef.current[idx] = el;
+                      }}
+                      type="text"
+                      inputMode="numeric"
+                      pattern="[0-9]*"
+                      maxLength={1}
+                      autoFocus={idx === 0}
+                      value={digit}
+                      onChange={(e) => handleOtpChange(idx, e.target.value)}
+                      onKeyDown={(e) => handleOtpKeyDown(idx, e)}
+                      onPaste={handleOtpPaste}
+                      className="h-12 w-full rounded-2xl border border-white/20 bg-white/[0.08] text-center text-xl font-bold text-white shadow-inner focus:border-[#e50914] focus:bg-white/[0.12] focus:outline-none focus:ring-1 focus:ring-[#e50914] transition-all"
+                    />
+                  ))}
+                </div>
+              </div>
+
+              {/* Verify OTP Button */}
+              <button
+                type="submit"
+                disabled={verifyBusy || otpDigits.join("").length !== 6}
+                className="w-full rounded-full bg-gradient-to-r from-red-600 via-red-500 to-red-600 py-3 text-center text-sm font-semibold tracking-wide text-white shadow-[0_4px_24px_rgba(229,9,20,0.5)] transition-all hover:brightness-110 active:scale-[0.99] disabled:opacity-50 cursor-pointer"
+              >
+                {verifyBusy ? "Verifying OTP..." : "Verify OTP"}
+              </button>
+
+              {/* Bottom links: Already a Member? Sign In | Didn't Received? Resend OTP */}
+              <div className="space-y-1.5 pt-1 text-center text-xs text-white/60">
+                <div>
+                  <span>Already a Member? </span>
+                  <button
+                    type="button"
+                    onClick={() => setView("login")}
+                    className="font-semibold text-red-500 hover:text-red-400 hover:underline transition-colors cursor-pointer"
+                  >
+                    Sign In
+                  </button>
+                </div>
+                <div>
+                  <span>Didn&apos;t Received? </span>
+                  <button
+                    type="button"
+                    onClick={onResendOtp}
+                    disabled={forgotBusy}
+                    className="font-semibold text-red-500 hover:text-red-400 hover:underline transition-colors cursor-pointer"
+                  >
+                    {forgotBusy ? "Resending..." : "Resend OTP"}
+                  </button>
+                </div>
+              </div>
+            </form>
+          ) : (
+            /* Step 2: Password Setup (Exact Image 2 Match) */
+            <form onSubmit={onUpdatePassword} className="space-y-3.5">
+              {/* New Password */}
+              <div>
+                <div className="flex items-center justify-between mb-1">
+                  <label className="text-xs font-semibold text-white/80">
+                    New Password <span className="text-[#e50914]">*</span>
+                  </label>
+                  <span className="text-[10px] text-white/50">
+                    (Min. 8 chars, 1 uppercase, 1 lowercase, 1 symbol)
+                  </span>
+                </div>
+                <div className="relative">
+                  <input
+                    type={showResetNewPass ? "text" : "password"}
+                    required
+                    autoFocus
+                    placeholder="Enter new password"
+                    value={newPassword}
+                    onChange={(e) => setNewPassword(e.target.value)}
+                    className="w-full rounded-full border border-white/15 bg-white/[0.07] pl-4 pr-11 py-3 text-sm text-white placeholder:text-white/40 shadow-inner focus:border-[#e50914] focus:outline-none focus:ring-1 focus:ring-[#e50914]"
+                  />
+                  <button
+                    type="button"
+                    onClick={() => setShowResetNewPass((s) => !s)}
+                    className="absolute right-4 top-1/2 -translate-y-1/2 text-white/50 hover:text-white transition-colors cursor-pointer"
+                    aria-label={showResetNewPass ? "Hide password" : "Show password"}
+                  >
+                    {showResetNewPass ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                  </button>
+                </div>
+              </div>
+
+              {/* Confirm New Password */}
+              <div>
+                <label className="block text-xs font-semibold text-white/80 mb-1">
+                  Confirm New Password <span className="text-[#e50914]">*</span>
+                </label>
+                <div className="relative">
+                  <input
+                    type={showResetConfirmPass ? "text" : "password"}
+                    required
+                    placeholder="Re-enter your new password"
+                    value={confirmNewPassword}
+                    onChange={(e) => setConfirmNewPassword(e.target.value)}
+                    className="w-full rounded-full border border-white/15 bg-white/[0.07] pl-4 pr-11 py-3 text-sm text-white placeholder:text-white/40 shadow-inner focus:border-[#e50914] focus:outline-none focus:ring-1 focus:ring-[#e50914]"
+                  />
+                  <button
+                    type="button"
+                    onClick={() => setShowResetConfirmPass((s) => !s)}
+                    className="absolute right-4 top-1/2 -translate-y-1/2 text-white/50 hover:text-white transition-colors cursor-pointer"
+                    aria-label={showResetConfirmPass ? "Hide password" : "Show password"}
+                  >
+                    {showResetConfirmPass ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                  </button>
+                </div>
+              </div>
+
+              <PasswordRequirements password={newPassword} />
+
+              {/* Update Password Button */}
+              <button
+                type="submit"
+                disabled={verifyBusy}
+                className="w-full rounded-full bg-gradient-to-r from-red-600 via-red-500 to-red-600 py-3 text-center text-sm font-semibold tracking-wide text-white shadow-[0_4px_24px_rgba(229,9,20,0.5)] transition-all hover:brightness-110 active:scale-[0.99] disabled:opacity-50 cursor-pointer"
+              >
+                {verifyBusy ? "Updating Password..." : "Update Password"}
+              </button>
+
+              {/* Back to Sign In Link */}
+              <div className="pt-2 text-center text-xs text-white/60">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setView("login");
+                    setForgotSent(false);
+                    setOtpVerified(false);
+                    setOtpDigits(["", "", "", "", "", ""]);
+                    setForgotError(null);
+                  }}
+                  className="text-white/70 hover:text-white hover:underline transition-colors cursor-pointer"
+                >
+                  Back to Sign In
                 </button>
               </div>
             </form>

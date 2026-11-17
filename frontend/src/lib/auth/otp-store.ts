@@ -4,6 +4,7 @@ interface StoredOtp {
   code: string;
   expiresAt: number;
   attempts: number;
+  verified?: boolean;
 }
 
 // In-memory OTP registry keyed by lowercase email
@@ -24,7 +25,7 @@ export function generateOtp(email: string): string {
   return code;
 }
 
-export function verifyOtp(email: string, codeInput: string): { valid: boolean; reason?: string } {
+export function verifyOtp(email: string, codeInput: string, consume: boolean = true): { valid: boolean; reason?: string } {
   const cleanEmail = email.trim().toLowerCase();
   const entry = otpMap.get(cleanEmail);
 
@@ -35,6 +36,14 @@ export function verifyOtp(email: string, codeInput: string): { valid: boolean; r
   if (Date.now() > entry.expiresAt) {
     otpMap.delete(cleanEmail);
     return { valid: false, reason: "OTP has expired. Please request a new code." };
+  }
+
+  // If already verified in a previous step, allow through
+  if (entry.verified) {
+    if (consume) {
+      otpMap.delete(cleanEmail);
+    }
+    return { valid: true };
   }
 
   if (entry.attempts >= MAX_ATTEMPTS) {
@@ -51,8 +60,14 @@ export function verifyOtp(email: string, codeInput: string): { valid: boolean; r
     return { valid: false, reason: "Incorrect OTP code. Please check and try again." };
   }
 
-  // Once successfully verified, remove it
-  otpMap.delete(cleanEmail);
+  // If consume is true, remove it. Otherwise mark verified and extend expiration
+  if (consume) {
+    otpMap.delete(cleanEmail);
+  } else {
+    entry.verified = true;
+    entry.expiresAt = Date.now() + OTP_EXPIRY_MS;
+  }
+
   return { valid: true };
 }
 

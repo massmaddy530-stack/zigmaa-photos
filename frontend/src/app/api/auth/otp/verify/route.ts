@@ -22,7 +22,8 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    const verification = verifyOtp(email, otp);
+    const hasPassword = Boolean(newPassword);
+    const verification = verifyOtp(email, otp, hasPassword);
     if (!verification.valid) {
       return NextResponse.json(
         { ok: false, error: verification.reason || "Invalid verification code." },
