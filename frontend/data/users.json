@@ -16,14 +16,6 @@
     "createdAt": 1700000000000
   },
   {
-    "id": "admin-seed-admin",
-    "email": "admin",
-    "name": "Studio Administrator",
-    "passwordHash": "scrypt$16384$8$5$WHyZeot7L8+sJHzOxUuu4w==$O44VqRiQDMR/jO/74TIFjkQybd14EMvLhGkMA8VJFmc=",
-    "role": "admin",
-    "createdAt": 1700000000000
-  },
-  {
     "id": "admin-seed-3",
     "email": "zigmaatech@gmail.com",
     "name": "Zigmaa Tech",
@@ -32,18 +24,19 @@
     "createdAt": 1700000000000
   },
   {
-    "id": "admin-seed-zigmaa-report",
-    "email": "zigmaatechreport@gmail.com",
-    "name": "Zigmaa Tech",
+    "id": "admin-seed-admin",
+    "email": "admin",
+    "name": "Studio Administrator",
     "passwordHash": "scrypt$16384$8$5$WHyZeot7L8+sJHzOxUuu4w==$O44VqRiQDMR/jO/74TIFjkQybd14EMvLhGkMA8VJFmc=",
     "role": "admin",
-    "createdAt": 1794633975994
+    "createdAt": 1700000000000
   },
   {
     "id": "admin-seed-thoufiq",
     "email": "mdthoufiq0507@gmail.com",
+    "passwordHash": "scrypt$16384$8$5$BJ1A9r63E9O5uhNL2uk6hw==$EdK3IELi+gyHxHKrkRLCF3e6wd8IyLPuweoBmZMdqGE=",
     "name": "Mohamed Thoufiq",
-    "passwordHash": "scrypt$16384$8$5$3LQhimP+G1Tm4cT+g2bx8A==$VcxpLppdg2eygm6jOvqFvCp/LtjzvY7k3zsBUWQwhuY=",
+    "picture": "https://lh3.googleusercontent.com/a/ACg8ocKb-LGSBEOirujA2TBuHdzpb827yKCcfgwfUyjTQ_M_mziHEHg=s96-c",
     "role": "admin",
     "createdAt": 1794633975994
   },
@@ -54,5 +47,22 @@
     "passwordHash": "scrypt$16384$8$5$3LQhimP+G1Tm4cT+g2bx8A==$VcxpLppdg2eygm6jOvqFvCp/LtjzvY7k3zsBUWQwhuY=",
     "role": "admin",
     "createdAt": 1794633975994
+  },
+  {
+    "id": "admin-seed-zigmaa-report",
+    "email": "zigmaatechreport@gmail.com",
+    "name": "Zigmaa Tech",
+    "passwordHash": "scrypt$16384$8$5$WHyZeot7L8+sJHzOxUuu4w==$O44VqRiQDMR/jO/74TIFjkQybd14EMvLhGkMA8VJFmc=",
+    "role": "admin",
+    "createdAt": 1794633975994
+  },
+  {
+    "id": "usr_1794823176797_bn5ja",
+    "email": "owner@example.test",
+    "passwordHash": "",
+    "name": "owner",
+    "picture": "",
+    "role": "admin",
+    "createdAt": 1794823176797
   }
 ]

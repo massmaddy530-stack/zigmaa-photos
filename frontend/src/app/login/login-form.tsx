@@ -479,7 +479,7 @@ export function LoginForm() {
                     setForgotSent(false);
                     setView("forgot");
                   }}
-                  className="text-xs font-normal text-white/70 hover:text-white hover:underline transition-colors cursor-pointer"
+                  className="text-xs font-medium text-red-500 hover:text-red-400 hover:underline transition-colors cursor-pointer"
                 >
                   Forgot Password ?
                 </button>
