@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { hashPassword } from "@/lib/auth/password";
 import { createSessionToken } from "@/lib/auth/session";
-import { isEmailRegistered, saveUser, type StoredUser } from "@/lib/auth/user-store";
+import { isEmailRegistered, saveUserAsync, type StoredUser } from "@/lib/auth/user-store";
 import { authConfig, cookieSecure, SESSION_COOKIE, SESSION_MAX_AGE_S } from "@/lib/server-config";
 
 export const runtime = "nodejs";
@@ -57,7 +57,7 @@ export async function POST(req: NextRequest) {
       createdAt: Date.now(),
     };
 
-    saveUser(newUser);
+    await saveUserAsync(newUser);
 
     const res = NextResponse.json(
       { ok: true, message: "Account created successfully!" },

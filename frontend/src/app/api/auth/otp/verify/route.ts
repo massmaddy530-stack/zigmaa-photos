@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { verifyOtp } from "@/lib/auth/otp-store";
 import { hashPassword, saveDynamicPasswordHash } from "@/lib/auth/password";
-import { updateUserPassword } from "@/lib/auth/user-store";
+import { updateUserPasswordAsync } from "@/lib/auth/user-store";
 import { promises as fs } from "node:fs";
 import path from "node:path";
 
@@ -45,8 +45,8 @@ export async function POST(req: NextRequest) {
       const newHash = await hashPassword(newPassword);
       process.env.ADMIN_PASSWORD_HASH = newHash;
       saveDynamicPasswordHash(newHash);
-      updateUserPassword(email, newHash);
-      updateUserPassword("admin", newHash);
+      await updateUserPasswordAsync(email, newHash);
+      await updateUserPasswordAsync("admin", newHash);
 
       // Update .env.local file so it persists across restarts
       try {

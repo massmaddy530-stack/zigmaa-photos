@@ -15,7 +15,7 @@ import {
 import { loginLimiter } from "@/lib/auth/rate-limit";
 import { clientIp } from "@/lib/auth/request";
 import { createSessionToken } from "@/lib/auth/session";
-import { findUserAsync, findUserByEmail, saveUser, updateUserProfile } from "@/lib/auth/user-store";
+import { findUserAsync, findUserByEmail, saveUserAsync, updateUserProfileAsync } from "@/lib/auth/user-store";
 import { authConfig, cookieSecure, googleConfig, LEGACY_SESSION_COOKIE, SESSION_COOKIE, SESSION_MAX_AGE_S } from "@/lib/server-config";
 
 export const runtime = "nodejs";
@@ -70,7 +70,7 @@ export async function GET(req: NextRequest) {
 
   const existingUser = (await findUserAsync(verifiedUser.email)) || findUserByEmail(verifiedUser.email);
   if (!existingUser) {
-    saveUser({
+    await saveUserAsync({
       id: `usr_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`,
       email: verifiedUser.email,
       passwordHash: "",
@@ -80,7 +80,7 @@ export async function GET(req: NextRequest) {
       createdAt: Date.now(),
     });
   } else if (verifiedUser.name || verifiedUser.picture) {
-    updateUserProfile(verifiedUser.email, {
+    await updateUserProfileAsync(verifiedUser.email, {
       name: verifiedUser.name || existingUser.name,
       picture: verifiedUser.picture || existingUser.picture,
     });

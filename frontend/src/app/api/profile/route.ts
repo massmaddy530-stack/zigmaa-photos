@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { checkCredentials, hashPassword, saveDynamicPasswordHash } from "@/lib/auth/password";
 import { createSessionToken, verifySessionToken } from "@/lib/auth/session";
-import { findUserAsync, findUserByEmail, updateUserPassword, updateUserProfile } from "@/lib/auth/user-store";
+import { findUserAsync, findUserByEmail, updateUserPasswordAsync, updateUserProfileAsync } from "@/lib/auth/user-store";
 import { authConfig, cookieSecure, SESSION_COOKIE, SESSION_MAX_AGE_S } from "@/lib/server-config";
 import { promises as fs } from "node:fs";
 import path from "node:path";
@@ -132,13 +132,13 @@ export async function PATCH(req: NextRequest) {
       saveDynamicPasswordHash(newHash);
       const targetEmail = currentProfile.email || email || config.username;
       if (targetEmail) {
-        updateUserPassword(targetEmail, newHash);
+        await updateUserPasswordAsync(targetEmail, newHash);
       }
       if (email && email !== targetEmail) {
-        updateUserPassword(email, newHash);
+        await updateUserPasswordAsync(email, newHash);
       }
-      updateUserPassword("admin", newHash);
-      updateUserPassword(config.username, newHash);
+      await updateUserPasswordAsync("admin", newHash);
+      await updateUserPasswordAsync(config.username, newHash);
 
       // Update .env.local file
       try {
@@ -163,7 +163,7 @@ export async function PATCH(req: NextRequest) {
 
     // Persist full profile with picture into user store
     if (currentProfile.email) {
-      updateUserProfile(currentProfile.email, {
+      await updateUserProfileAsync(currentProfile.email, {
         name: updatedProfile.name,
         email: updatedProfile.email,
         picture: updatedProfile.picture,

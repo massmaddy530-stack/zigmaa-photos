@@ -206,6 +206,15 @@ export function saveUser(user: StoredUser): void {
   void saveUserToDb(user).catch(() => {});
 }
 
+export async function saveUserAsync(user: StoredUser): Promise<void> {
+  const map = initMemoryMap();
+  map.set(user.email.toLowerCase(), user);
+  persistToFile(map);
+  await saveUserToDb(user).catch((err) => {
+    console.warn("saveUserToDb failed:", err);
+  });
+}
+
 export function updateUserPassword(email: string, newPasswordHash: string): boolean {
   const map = initMemoryMap();
   const norm = email.trim().toLowerCase();
@@ -226,6 +235,16 @@ export function updateUserPassword(email: string, newPasswordHash: string): bool
   persistToFile(map);
   void updateUserPasswordInDb(norm, newPasswordHash).catch(() => {});
   return true;
+}
+
+export async function updateUserPasswordAsync(email: string, newPasswordHash: string): Promise<boolean> {
+  updateUserPassword(email, newPasswordHash);
+  const norm = email.trim().toLowerCase();
+  const res = await updateUserPasswordInDb(norm, newPasswordHash).catch((err) => {
+    console.warn("updateUserPasswordInDb failed:", err);
+    return false;
+  });
+  return res;
 }
 
 export function updateUserProfile(email: string, updates: Partial<StoredUser>): boolean {
@@ -255,4 +274,14 @@ export function updateUserProfile(email: string, updates: Partial<StoredUser>): 
   persistToFile(map);
   void updateUserProfileInDb(norm, updates).catch(() => {});
   return true;
+}
+
+export async function updateUserProfileAsync(email: string, updates: Partial<StoredUser>): Promise<boolean> {
+  updateUserProfile(email, updates);
+  const norm = email.trim().toLowerCase();
+  const res = await updateUserProfileInDb(norm, updates).catch((err) => {
+    console.warn("updateUserProfileInDb failed:", err);
+    return false;
+  });
+  return res;
 }
