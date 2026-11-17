@@ -334,7 +334,7 @@ export function ProfileMenu() {
             className="relative w-full max-w-[480px] max-h-[92vh] overflow-y-auto rounded-3xl bg-white shadow-2xl animate-in zoom-in-95"
             onClick={(e) => e.stopPropagation()}
           >
-            {/* Gradient Header matching Zigmaa Photos red theme */}
+            {/* Gradient Header matching Zigmaa Moments red theme */}
             <div className="bg-gradient-to-r from-[#e50914] via-[#ee202c] to-[#ff3b4e] p-6 text-white relative">
               <div className="flex items-start justify-between">
                 <div className="flex items-center gap-3.5">
@@ -344,7 +344,7 @@ export function ProfileMenu() {
                   <div>
                     <h2 className="text-xl font-bold tracking-tight text-white leading-tight">Help & Support</h2>
                     <p className="text-xs text-white/90 mt-0.5 font-normal">
-                      We&apos;re here to assist you with your Zigmaa Photos workspace
+                      We&apos;re here to assist you with your Zigmaa Moments workspace
                     </p>
                   </div>
                 </div>

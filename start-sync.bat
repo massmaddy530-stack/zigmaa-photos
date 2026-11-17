@@ -1,8 +1,8 @@
 @echo off
 setlocal enabledelayedexpansion
-title Zigmaa Photos - Camera Auto Sync
+title Zigmaa Moments - Camera Auto Sync
 echo ===================================================
-echo       Zigmaa Photos - Camera Auto Sync Agent
+echo       Zigmaa Moments - Camera Auto Sync Agent
 echo ===================================================
 echo.
 

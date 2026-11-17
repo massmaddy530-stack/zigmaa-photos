@@ -1,8 +1,8 @@
 @echo off
 setlocal enabledelayedexpansion
-title Zigmaa Photos - Camera Sync Setup Installer
+title Zigmaa Moments - Camera Sync Setup Installer
 echo ========================================================
-echo        Zigmaa Photos - Camera Sync Setup Installer
+echo        Zigmaa Moments - Camera Sync Setup Installer
 echo ========================================================
 echo.
 

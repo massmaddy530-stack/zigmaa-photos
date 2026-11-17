@@ -1,7 +1,7 @@
 """Combined FTP server + Ingestion Agent for Sony FX3 / Wi-Fi camera tethering.
 
 Receives photos directly from Sony FX3 (or Canon/Nikon FTP) over Wi-Fi into WATCH_FOLDER,
-and immediately uploads and indexes them in Zigmaa Photos.
+and immediately uploads and indexes them in Zigmaa Moments.
 """
 
 from __future__ import annotations
@@ -83,7 +83,7 @@ def run_ftp_server(watch_dir: Path, port: int = 21) -> tuple[FTPServer, int]:
 
     handler = FTPHandler
     handler.authorizer = authorizer
-    handler.banner = "Zigmaa Photos Multi-Camera Receiver Ready"
+    handler.banner = "Zigmaa Moments Multi-Camera Receiver Ready"
     handler.passive_ports = range(60000, 60050)
 
     chosen_port = port
@@ -97,7 +97,7 @@ def run_ftp_server(watch_dir: Path, port: int = 21) -> tuple[FTPServer, int]:
 
     local_ip = get_local_ip()
     print("\n" + "=" * 65)
-    print("   ZIGMAA PHOTOS — ALL WI-FI CAMERAS FTP RECEIVER ACTIVE")
+    print("   ZIGMAA MOMENTS — ALL WI-FI CAMERAS FTP RECEIVER ACTIVE")
     print("=" * 65)
     print(f"  Target Folder : {watch_dir}")
     print(f"  Laptop IP     : {local_ip}")

@@ -14,7 +14,7 @@ export function Logo({ className }: { className?: string; admin?: boolean }) {
     <span className={cn("inline-flex items-center gap-2.5", className)}>
       <img src="/logo.png" alt="Zigmaa Logo" className="h-9 w-9 rounded-xl object-cover shadow-sm ring-1 ring-brand-500/20" />
       <span className="font-display text-[21px] font-bold tracking-wide text-ink">
-        Zigmaa <span className="text-[var(--color-brand-500)]">Photos</span>
+        Zigmaa <span className="text-[var(--color-brand-500)]">Moments</span>
       </span>
     </span>
   );

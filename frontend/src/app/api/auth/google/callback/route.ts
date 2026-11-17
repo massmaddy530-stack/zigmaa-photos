@@ -89,7 +89,7 @@ export async function GET(req: NextRequest) {
   const next = escapeHtml(safeNextPath(tx.next));
   const html = `<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="robots" content="noindex">`
     + `<meta http-equiv="refresh" content="0;url=${next}">`
-    + `<title>Signing in · Zigmaa Photos</title>`
+    + `<title>Signing in · Zigmaa Moments</title>`
     + `<style>`
     + `* { box-sizing: border-box; margin: 0; padding: 0; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; }`
     + `body { display: flex; align-items: center; justify-content: center; min-height: 100vh; background: #0f172a; color: #f8fafc; text-align: center; padding: 1.5rem; }`
@@ -106,7 +106,7 @@ export async function GET(req: NextRequest) {
     + `<div class="spinner"></div>`
     + `<h1>Signing you in...</h1>`
     + `<p>Signed in. Taking you to your dashboard.</p>`
-    + `<a href="${next}">Continue to Zigmaa Photos</a>`
+    + `<a href="${next}">Continue to Zigmaa Moments</a>`
     + `</div>`
     + `<script>`
     + `setTimeout(function(){ try { window.location.replace("${next}"); } catch(e) { window.location.href = "${next}"; } }, 80);`

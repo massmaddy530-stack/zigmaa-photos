@@ -89,7 +89,7 @@ def _check_done(spool: Spool, log: logging.Logger, ok: bool) -> int:
 
 
 def main(argv: list[str] | None = None) -> int:
-    parser = argparse.ArgumentParser(prog="zigmaa_agent", description="Zigmaa Photos camera ingestion agent")
+    parser = argparse.ArgumentParser(prog="zigmaa_agent", description="Zigmaa Moments camera ingestion agent")
     parser.add_argument("-v", "--verbose", action="store_true")
     sub = parser.add_subparsers(dest="command", required=True)
     sub.add_parser("check", help="validate config, backend access and the camera; uploads nothing")

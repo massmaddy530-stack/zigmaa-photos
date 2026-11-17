@@ -3,7 +3,7 @@ import { Suspense } from "react";
 import { LoginForm } from "./login-form";
 
 export const metadata: Metadata = {
-  title: { absolute: "Sign in · Zigmaa Photos" },
+  title: { absolute: "Sign in · Zigmaa Moments" },
   robots: { index: false },
 };
 
@@ -13,7 +13,7 @@ export default async function LoginPage() {
       {/* Full-bleed Luxury Studio Photography Background */}
       <img
         src="/zigmaa-login-hero.png"
-        alt="Zigmaa Photography Studio"
+        alt="Zigmaa Moments Photography Studio"
         className="absolute inset-0 h-full w-full object-cover object-center select-none pointer-events-none"
       />
 

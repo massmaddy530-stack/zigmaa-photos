@@ -19,7 +19,7 @@ const GEMINI_MODELS = [
 ];
 
 const SYSTEM_INSTRUCTION = `
-You are a world-class luxury CGI and vector artist specializing in photorealistic, high-end 3D event watermark overlays for Zigmaa Photos.
+You are a world-class luxury CGI and vector artist specializing in photorealistic, high-end 3D event watermark overlays for Zigmaa Moments.
 The user wants a REALISTIC, stunning visual masterpiece matching this prompt: e.g. "background bubble template", "flower template with roses", "celebration balloons", "royal crest", "classic arched banner", etc.
 
 CRITICAL VISUAL REALISM REQUIREMENTS:

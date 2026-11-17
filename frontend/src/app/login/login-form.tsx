@@ -54,7 +54,7 @@ function BrandHeader() {
     <div className="mb-4 text-center select-none flex flex-col items-center">
       <img
         src="/zigmaa-logo.png"
-        alt="Zigmaa Photos"
+        alt="Zigmaa Moments"
         width={180}
         height={62}
         style={{ maxHeight: "56px", maxWidth: "180px", width: "auto", height: "auto" }}
@@ -398,7 +398,7 @@ export function LoginForm() {
               <p className="text-[11px] text-amber-200/80 leading-snug">
                 {googleError === "google_unavailable"
                   ? "Google sign-in is not configured on this server."
-                  : "This Google account is not registered with Zigmaa Photos. Only registered studio accounts can sign in."}
+                  : "This Google account is not registered with Zigmaa Moments. Only registered studio accounts can sign in."}
               </p>
               {googleError !== "google_unavailable" && (
                 <button

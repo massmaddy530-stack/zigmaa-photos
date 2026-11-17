@@ -20,7 +20,7 @@ export function getMailer() {
 
 export async function sendOtpEmail(toEmail: string, otp: string): Promise<boolean> {
   const transporter = getMailer();
-  const from = process.env.SMTP_FROM || `"Zigmaa Photos" <massmaddy530@gmail.com>`;
+  const from = process.env.SMTP_FROM || `"Zigmaa Moments" <massmaddy530@gmail.com>`;
 
   const html = `
 <!DOCTYPE html>
@@ -28,7 +28,7 @@ export async function sendOtpEmail(toEmail: string, otp: string): Promise<boolea
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Your Zigmaa Photos Verification Code</title>
+  <title>Your Zigmaa Moments Verification Code</title>
 </head>
 <body style="margin: 0; padding: 0; background-color: #0b0f19; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; color: #f8fafc;">
   <table role="presentation" width="100%" border="0" cellspacing="0" cellpadding="0" style="background-color: #0b0f19; padding: 40px 16px;">
@@ -41,7 +41,7 @@ export async function sendOtpEmail(toEmail: string, otp: string): Promise<boolea
             <td style="padding: 32px 32px 24px; text-align: center; border-bottom: 1px solid rgba(255,255,255,0.06); background: radial-gradient(circle at top, rgba(229, 9, 20, 0.15) 0%, transparent 70%);">
               <div style="display: inline-block; padding: 10px 16px; background: rgba(229, 9, 20, 0.1); border: 1px solid rgba(229, 9, 20, 0.3); border-radius: 12px; margin-bottom: 16px;">
                 <span style="font-size: 20px; font-weight: 800; letter-spacing: 2px; color: #ffffff;">
-                  ZIGMAA <span style="color: #e50914;">PHOTOS</span>
+                  ZIGMAA <span style="color: #e50914;">MOMENTS</span>
                 </span>
               </div>
               <h1 style="margin: 0; font-size: 22px; font-weight: 700; color: #ffffff;">Password Reset Verification</h1>
@@ -56,7 +56,7 @@ export async function sendOtpEmail(toEmail: string, otp: string): Promise<boolea
                 Hello,
               </p>
               <p style="margin: 0 0 24px; font-size: 14px; line-height: 1.6; color: #cbd5e1;">
-                We received a request to verify your account or reset your password for Zigmaa Photos. Use the 6-digit one-time passcode below:
+                We received a request to verify your account or reset your password for Zigmaa Moments. Use the 6-digit one-time passcode below:
               </p>
 
               <!-- OTP Code Display -->
@@ -81,7 +81,7 @@ export async function sendOtpEmail(toEmail: string, otp: string): Promise<boolea
           <tr>
             <td style="padding: 24px 32px; background: #0b0f19; border-top: 1px solid rgba(255,255,255,0.06); text-align: center;">
               <p style="margin: 0; font-size: 11px; color: #64748b;">
-                © ${new Date().getFullYear()} Zigmaa Photos Studio. All rights reserved.
+                © ${new Date().getFullYear()} Zigmaa Moments Studio. All rights reserved.
               </p>
               <p style="margin: 6px 0 0; font-size: 11px; color: #475569;">
                 This is an automated notification. Replies to this email are not monitored.
@@ -101,8 +101,8 @@ export async function sendOtpEmail(toEmail: string, otp: string): Promise<boolea
     const info = await transporter.sendMail({
       from,
       to: toEmail,
-      subject: `Your Zigmaa Photos OTP: ${otp}`,
-      text: `Your Zigmaa Photos verification code is ${otp}. Valid for 10 minutes. Do not share this code.`,
+      subject: `Your Zigmaa Moments OTP: ${otp}`,
+      text: `Your Zigmaa Moments verification code is ${otp}. Valid for 10 minutes. Do not share this code.`,
       html,
     });
     console.log(`[SMTP] OTP email sent to ${toEmail}: ${info.messageId}`);

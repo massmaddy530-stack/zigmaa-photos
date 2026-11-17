@@ -1,4 +1,4 @@
-"""Zigmaa Photos - Standalone Camera Auto Sync Agent.
+"""Zigmaa Moments - Standalone Camera Auto Sync Agent.
 
 Executable entry point for field cameramen (Sony FX3, Canon, Nikon Wi-Fi FTP, folder ingestion).
 Allows double-clicking without requiring Python or terminal setup.
@@ -91,7 +91,7 @@ def run_ftp_server(watch_dir: Path, port: int = 21):
 
     handler = FTPHandler
     handler.authorizer = authorizer
-    handler.banner = "Zigmaa Photos Camera Receiver Ready"
+    handler.banner = "Zigmaa Moments Camera Receiver Ready"
     handler.passive_ports = range(60000, 60050)
 
     chosen_port = port
@@ -106,7 +106,7 @@ def run_ftp_server(watch_dir: Path, port: int = 21):
     local_ip = get_local_ip()
     print()
     print("=" * 65)
-    print("      ZIGMAA PHOTOS — CAMERA WI-FI FTP RECEIVER ACTIVE")
+    print("      ZIGMAA MOMENTS — CAMERA WI-FI FTP RECEIVER ACTIVE")
     print("=" * 65)
     print(f"  Target Folder : {watch_dir}")
     print(f"  Laptop IP     : {local_ip}")
@@ -133,7 +133,7 @@ def run_ftp_server(watch_dir: Path, port: int = 21):
 def main():
     print()
     print("===================================================")
-    print("     Zigmaa Photos — Camera Auto Sync Agent")
+    print("     Zigmaa Moments — Camera Auto Sync Agent")
     print("===================================================")
     print()
 

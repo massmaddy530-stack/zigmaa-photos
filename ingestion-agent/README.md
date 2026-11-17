@@ -1,4 +1,4 @@
-# Zigmaa Photos camera ingestion agent
+# Zigmaa Moments camera ingestion agent
 
 Gets event photos from a camera onto the server automatically. It uploads them to one explicitly selected event
 through the backend's existing agent API. The backend does all validation, size limits, storage, de-duplication,
@@ -78,7 +78,7 @@ you, folder mode needs nothing else. Switch the camera to JPEG (or RAW+JPEG). Th
 The virtual environment already exists in `ingestion-agent\.venv`. No new packages are needed for folder mode.
 
 ```powershell
-cd "C:\Users\madha\Desktop\zigmaa photos\ingestion-agent"
+cd ingestion-agent
 .\.venv\Scripts\Activate.ps1                      # if blocked: Set-ExecutionPolicy -Scope CurrentUser RemoteSigned
 python -m pip install -r requirements.txt         # only if packages are missing (requirements-dev.txt adds pytest)
 if (-not (Test-Path .env)) { Copy-Item .env.example .env }   # never overwrites an existing .env
@@ -131,7 +131,7 @@ In `.env` set:
 1. Start the backend (terminal 1):
 
    ```powershell
-   cd "C:\Users\madha\Desktop\zigmaa photos\backend"
+   cd backend
    .\.venv\Scripts\Activate.ps1
    uvicorn app.main:app --reload --host 127.0.0.1 --port 8000
    ```
@@ -142,7 +142,7 @@ In `.env` set:
 3. Run the agent (terminal 2):
 
    ```powershell
-   cd "C:\Users\madha\Desktop\zigmaa photos\ingestion-agent"
+   cd ingestion-agent
    .\.venv\Scripts\Activate.ps1
    python -m zigmaa_agent check                  # config + backend + camera; uploads nothing
    python -m zigmaa_agent run --max-captures 3   # 3 stills, then stop
