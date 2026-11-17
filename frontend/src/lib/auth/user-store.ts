@@ -163,15 +163,16 @@ export function findUserByEmail(email: string): StoredUser | null {
 export async function findUserAsync(email: string): Promise<StoredUser | null> {
   const norm = email.trim().toLowerCase();
   const map = initMemoryMap();
-  const cached = map.get(norm);
-  if (cached) return cached;
 
+  // Always query database first for the latest live password & profile
   const dbUser = await findUserInDb(norm);
   if (dbUser) {
     map.set(norm, dbUser);
     return dbUser;
   }
-  return null;
+
+  // Fallback to local memory map only if DB is not configured or offline
+  return map.get(norm) ?? null;
 }
 
 const STUDIO_DEFAULT_EMAILS = new Set([
@@ -197,6 +198,13 @@ export function isEmailRegistered(email: string): boolean {
 
   const map = initMemoryMap();
   return map.has(norm);
+}
+
+export async function isEmailRegisteredAsync(email: string): Promise<boolean> {
+  const norm = email.trim().toLowerCase();
+  const dbUser = await findUserInDb(norm);
+  if (dbUser) return true;
+  return isEmailRegistered(email);
 }
 
 export function saveUser(user: StoredUser): void {

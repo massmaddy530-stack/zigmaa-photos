@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { hashPassword } from "@/lib/auth/password";
 import { createSessionToken } from "@/lib/auth/session";
-import { isEmailRegistered, saveUserAsync, type StoredUser } from "@/lib/auth/user-store";
+import { isEmailRegisteredAsync, saveUserAsync, type StoredUser } from "@/lib/auth/user-store";
 import { authConfig, cookieSecure, SESSION_COOKIE, SESSION_MAX_AGE_S } from "@/lib/server-config";
 
 export const runtime = "nodejs";
@@ -36,7 +36,7 @@ export async function POST(req: NextRequest) {
     }
 
     // Check if account already exists
-    if (isEmailRegistered(email)) {
+    if (await isEmailRegisteredAsync(email)) {
       return NextResponse.json(
         { ok: false, error: "An account with this email address already exists. Please sign in." },
         { status: 409 }

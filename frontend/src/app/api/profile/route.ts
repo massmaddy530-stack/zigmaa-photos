@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { checkCredentials, hashPassword, saveDynamicPasswordHash } from "@/lib/auth/password";
-import { createSessionToken, verifySessionToken } from "@/lib/auth/session";
+import { createSessionToken, verifyMiddlewareSession, verifySessionToken } from "@/lib/auth/session";
 import { findUserAsync, findUserByEmail, updateUserPasswordAsync, updateUserProfileAsync } from "@/lib/auth/user-store";
 import { authConfig, cookieSecure, SESSION_COOKIE, SESSION_MAX_AGE_S } from "@/lib/server-config";
 import { promises as fs } from "node:fs";
@@ -13,7 +13,13 @@ export async function GET(req: NextRequest) {
   try {
     const token = req.cookies.get(SESSION_COOKIE)?.value;
     const config = authConfig();
-    if (!token || !config || !(await verifySessionToken(token, config, SESSION_MAX_AGE_S))) {
+    const sessionValid = Boolean(
+      token && config && (
+        (await verifySessionToken(token, config, SESSION_MAX_AGE_S)) !== null ||
+        (await verifyMiddlewareSession(token, config.sessionSecret, SESSION_MAX_AGE_S))
+      )
+    );
+    if (!sessionValid) {
       return NextResponse.json({ ok: false, error: "Unauthorized" }, { status: 401 });
     }
 
@@ -62,7 +68,13 @@ export async function GET(req: NextRequest) {
 export async function PATCH(req: NextRequest) {
   const token = req.cookies.get(SESSION_COOKIE)?.value;
   const config = authConfig();
-  if (!token || !config || !(await verifySessionToken(token, config, SESSION_MAX_AGE_S))) {
+  const sessionValid = Boolean(
+    token && config && (
+      (await verifySessionToken(token, config, SESSION_MAX_AGE_S)) !== null ||
+      (await verifyMiddlewareSession(token, config.sessionSecret, SESSION_MAX_AGE_S))
+    )
+  );
+  if (!sessionValid || !config) {
     return NextResponse.json({ ok: false, error: "Unauthorized" }, { status: 401 });
   }
 

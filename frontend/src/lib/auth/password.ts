@@ -102,16 +102,8 @@ function digest(value: string): Buffer {
   return createHash("sha256").update(value, "utf8").digest();
 }
 
-// Built-in studio admin hashes: Maddy@2002, Admin12345678!, Thoufiq, and Masthan@08
-const KNOWN_ADMIN_HASHES = [
-  "scrypt$16384$8$5$WHyZeot7L8+sJHzOxUuu4w==$O44VqRiQDMR/jO/74TIFjkQybd14EMvLhGkMA8VJFmc=", // Maddy@2002
-  "scrypt$16384$8$5$3lDOiyOND/ViqEfjFqZchw==$+2i86f3jGATMexT03gB5QPp68Zjceb7w4QxlI1O125c=", // Admin12345678!
-  "scrypt$16384$8$5$3LQhimP+G1Tm4cT+g2bx8A==$VcxpLppdg2eygm6jOvqFvCp/LtjzvY7k3zsBUWQwhuY=", // Thoufiq
-  "scrypt$16384$8$5$Uzh6ivDRzeMU8peR7wcHqQ==$IUBrQ47Kdk1o/byFVx90xLxvoC2O2zC2wTBgRzbYJe4=", // Masthan@08
-];
-
 /**
- * Checks a username and password against the configured admin or verified studio email.
+ * Checks a username and password against the configured admin or registered user.
  * The primary password hash is always verified first (and throws on malformed hash) so timing does not leak.
  */
 export async function checkCredentials(
@@ -125,92 +117,25 @@ export async function checkCredentials(
   // Exact match for configured admin username (timing-safe, case-sensitive)
   const usernameOk = timingSafeEqual(digest(username), digest(admin.username));
 
-  // If exact match with admin username
-  if (usernameOk) {
-    if (passwordOk) return true;
-    const dynHash = getDynamicPasswordHash();
-    if (dynHash && dynHash !== admin.passwordHash) {
-      try {
-        if (await verifyPassword(password, dynHash)) return true;
-      } catch {
-        // ignore
-      }
-    }
-    for (const h of KNOWN_ADMIN_HASHES) {
-      if (h !== admin.passwordHash) {
-        try {
-          if (await verifyPassword(password, h)) return true;
-        } catch {
-          // ignore
-        }
-      }
-    }
-    return false;
-  }
-
-  // Not exact admin username. Check studio admin email aliases:
   const normUser = username.trim().toLowerCase();
-  const studioEmails = new Set([
-    "massmaddy530@gmail.com",
-    "madhavansep28@gmail.com",
-    "zigmaatech@gmail.com",
-    "zigmaatechreport@gmail.com",
-    "mdthoufiq0507@gmail.com",
-    "thoufiqarsath84@gmail.com",
-    ...(process.env.ADMIN_GOOGLE_EMAILS || "")
-      .split(",")
-      .map((e) => e.trim().toLowerCase())
-      .filter((e) => /^[^@\s]+@[^@\s]+$/.test(e)),
-  ]);
 
-  if (studioEmails.has(normUser)) {
-    if (passwordOk) return true;
-    const dynHash = getDynamicPasswordHash();
-    if (dynHash && dynHash !== admin.passwordHash) {
-      try {
-        if (await verifyPassword(password, dynHash)) return true;
-      } catch {
-        // ignore
-      }
-    }
-    for (const h of KNOWN_ADMIN_HASHES) {
-      if (h !== admin.passwordHash) {
-        try {
-          if (await verifyPassword(password, h)) return true;
-        } catch {
-          // ignore
-        }
-      }
-    }
-    const storedAdmin = (await findUserAsync(normUser)) || findUserByEmail(normUser);
-    if (storedAdmin) {
-      try {
-        if (await verifyPassword(password, storedAdmin.passwordHash)) return true;
-      } catch {
-        // ignore
-      }
-    }
-    return false;
-  }
-
-  // Otherwise, registered user in user-store
+  // 1. Look up the user in Supabase DB / user store
   const storedUser = (await findUserAsync(normUser)) || findUserByEmail(normUser);
-  if (storedUser) {
+  if (storedUser && storedUser.passwordHash) {
     try {
-      if (await verifyPassword(password, storedUser.passwordHash)) return true;
+      // ONLY check the active password set for this account in the database.
+      // If password matches, return true. If not, reject (old passwords will NOT work).
+      return await verifyPassword(password, storedUser.passwordHash);
     } catch {
-      // ignore
+      return false;
     }
-    const dynHash = getDynamicPasswordHash();
-    if (dynHash && dynHash !== storedUser.passwordHash) {
-      try {
-        if (await verifyPassword(password, dynHash)) return true;
-      } catch {
-        // ignore
-      }
-    }
-    return false;
   }
 
+  // 2. Fallback for the primary admin username (when not yet populated in DB)
+  if (usernameOk) {
+    return passwordOk;
+  }
+
+  // 3. Any unregistered email or unknown username is rejected
   return false;
 }

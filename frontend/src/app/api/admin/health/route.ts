@@ -1,7 +1,7 @@
 // Backend health for the dashboard, for signed-in admins only. The backend's /health is not exposed through this
 // origin: it runs a database query on every call and reports version and infrastructure details.
 import { NextRequest, NextResponse } from "next/server";
-import { verifySessionToken } from "@/lib/auth/session";
+import { verifyMiddlewareSession, verifySessionToken } from "@/lib/auth/session";
 import {
   API_BASE_URL,
   authConfig,
@@ -24,7 +24,13 @@ export async function GET(req: NextRequest) {
     return errorJson(503, "auth_not_configured", "Sign-in is not configured on the server. Contact the administrator.");
   }
   const token = req.cookies.get(SESSION_COOKIE)?.value;
-  if (!token || !(await verifySessionToken(token, config, SESSION_MAX_AGE_S))) {
+  const sessionValid = Boolean(
+    token && (
+      (await verifySessionToken(token, config, SESSION_MAX_AGE_S)) !== null ||
+      (await verifyMiddlewareSession(token, config.sessionSecret, SESSION_MAX_AGE_S))
+    )
+  );
+  if (!token || !sessionValid) {
     const res = errorJson(401, "unauthorized", "Please sign in.");
     if (token) res.cookies.delete(SESSION_COOKIE);
     if (req.cookies.has(LEGACY_SESSION_COOKIE)) res.cookies.delete(LEGACY_SESSION_COOKIE);
