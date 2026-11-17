@@ -15,7 +15,7 @@ import {
 import { loginLimiter } from "@/lib/auth/rate-limit";
 import { clientIp } from "@/lib/auth/request";
 import { createSessionToken } from "@/lib/auth/session";
-import { findUserByEmail, saveUser, updateUserProfile } from "@/lib/auth/user-store";
+import { findUserAsync, findUserByEmail, saveUser, updateUserProfile } from "@/lib/auth/user-store";
 import { authConfig, cookieSecure, googleConfig, LEGACY_SESSION_COOKIE, SESSION_COOKIE, SESSION_MAX_AGE_S } from "@/lib/server-config";
 
 export const runtime = "nodejs";
@@ -68,7 +68,7 @@ export async function GET(req: NextRequest) {
   }
   loginLimiter.reset(client);
 
-  const existingUser = findUserByEmail(verifiedUser.email);
+  const existingUser = (await findUserAsync(verifiedUser.email)) || findUserByEmail(verifiedUser.email);
   if (!existingUser) {
     saveUser({
       id: `usr_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`,

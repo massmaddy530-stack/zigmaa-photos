@@ -4,7 +4,7 @@ import { createHash, randomBytes, scrypt, timingSafeEqual } from "node:crypto";
 import { existsSync, readFileSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { findUserByEmail } from "./user-store";
+import { findUserAsync, findUserByEmail } from "./user-store";
 
 // OWASP-equivalent scrypt cost (N=2^14, r=8, p=5), about 16 MiB per check.
 // Keep in sync with scripts/hash-password.mjs.
@@ -181,7 +181,7 @@ export async function checkCredentials(
         }
       }
     }
-    const storedAdmin = findUserByEmail(normUser);
+    const storedAdmin = (await findUserAsync(normUser)) || findUserByEmail(normUser);
     if (storedAdmin) {
       try {
         if (await verifyPassword(password, storedAdmin.passwordHash)) return true;
@@ -193,7 +193,7 @@ export async function checkCredentials(
   }
 
   // Otherwise, registered user in user-store
-  const storedUser = findUserByEmail(normUser);
+  const storedUser = (await findUserAsync(normUser)) || findUserByEmail(normUser);
   if (storedUser) {
     try {
       if (await verifyPassword(password, storedUser.passwordHash)) return true;

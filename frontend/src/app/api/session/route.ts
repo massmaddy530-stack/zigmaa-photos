@@ -6,7 +6,7 @@ import { checkCredentials, MAX_PASSWORD_LENGTH, PasswordHashFormatError } from "
 import { loginLimiter } from "@/lib/auth/rate-limit";
 import { clientIp, hasCsrfHeader, isSameOrigin } from "@/lib/auth/request";
 import { createSessionToken } from "@/lib/auth/session";
-import { findUserByEmail } from "@/lib/auth/user-store";
+import { findUserAsync, findUserByEmail } from "@/lib/auth/user-store";
 import {
   authConfig,
   cookieSecure,
@@ -77,7 +77,7 @@ export async function POST(req: NextRequest) {
   }
   loginLimiter.reset(client);
 
-  const storedUser = findUserByEmail(username);
+  const storedUser = (await findUserAsync(username)) || findUserByEmail(username);
   const resolvedName = storedUser?.name && storedUser.name !== "Studio Admin"
     ? storedUser.name
     : username.toLowerCase() === "admin"

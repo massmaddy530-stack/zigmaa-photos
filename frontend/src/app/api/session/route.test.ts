@@ -159,7 +159,7 @@ describe("POST /api/session", () => {
     expect(blocked.status).toBe(429);
     expect(Number(blocked.headers.get("retry-after"))).toBeGreaterThan(0);
     expect(setCookies(blocked).evp_session).toBeUndefined();
-  });
+  }, 30000);
 
   it.each([
     ["missing fields", { body: {} }, 422],

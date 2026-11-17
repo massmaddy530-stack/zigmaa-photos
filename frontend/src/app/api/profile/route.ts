@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { checkCredentials, hashPassword, saveDynamicPasswordHash } from "@/lib/auth/password";
 import { createSessionToken, verifySessionToken } from "@/lib/auth/session";
-import { findUserByEmail, updateUserPassword, updateUserProfile } from "@/lib/auth/user-store";
+import { findUserAsync, findUserByEmail, updateUserPassword, updateUserProfile } from "@/lib/auth/user-store";
 import { authConfig, cookieSecure, SESSION_COOKIE, SESSION_MAX_AGE_S } from "@/lib/server-config";
 import { promises as fs } from "node:fs";
 import path from "node:path";
@@ -40,7 +40,9 @@ export async function GET(req: NextRequest) {
     }
 
     // Always fetch latest persisted name & avatar from store if available
-    const storedUser = profile.email ? findUserByEmail(profile.email) : null;
+    const storedUser = profile.email
+      ? ((await findUserAsync(profile.email)) || findUserByEmail(profile.email))
+      : null;
     if (storedUser) {
       if (storedUser.name && storedUser.name !== "Studio Admin") profile.name = storedUser.name;
       if (storedUser.picture) profile.picture = storedUser.picture;

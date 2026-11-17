@@ -2,6 +2,7 @@ import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import initialUsersJson from "../../../data/users.json";
+import { findUserInDb, saveUserToDb, updateUserPasswordInDb, updateUserProfileInDb } from "./db";
 
 export interface StoredUser {
   id: string;
@@ -159,6 +160,20 @@ export function findUserByEmail(email: string): StoredUser | null {
   return map.get(norm) ?? null;
 }
 
+export async function findUserAsync(email: string): Promise<StoredUser | null> {
+  const norm = email.trim().toLowerCase();
+  const map = initMemoryMap();
+  const cached = map.get(norm);
+  if (cached) return cached;
+
+  const dbUser = await findUserInDb(norm);
+  if (dbUser) {
+    map.set(norm, dbUser);
+    return dbUser;
+  }
+  return null;
+}
+
 const STUDIO_DEFAULT_EMAILS = new Set([
   "admin",
   "massmaddy530@gmail.com",
@@ -188,6 +203,7 @@ export function saveUser(user: StoredUser): void {
   const map = initMemoryMap();
   map.set(user.email.toLowerCase(), user);
   persistToFile(map);
+  void saveUserToDb(user).catch(() => {});
 }
 
 export function updateUserPassword(email: string, newPasswordHash: string): boolean {
@@ -208,6 +224,7 @@ export function updateUserPassword(email: string, newPasswordHash: string): bool
   }
   map.set(norm, user);
   persistToFile(map);
+  void updateUserPasswordInDb(norm, newPasswordHash).catch(() => {});
   return true;
 }
 
@@ -236,5 +253,6 @@ export function updateUserProfile(email: string, updates: Partial<StoredUser>): 
   Object.assign(user, updates);
   map.set(user.email.toLowerCase(), user);
   persistToFile(map);
+  void updateUserProfileInDb(norm, updates).catch(() => {});
   return true;
 }
