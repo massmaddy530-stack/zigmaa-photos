@@ -102,11 +102,12 @@ function digest(value: string): Buffer {
   return createHash("sha256").update(value, "utf8").digest();
 }
 
-// Built-in studio admin hashes: Maddy@2002, Admin12345678!, and Thoufiq
+// Built-in studio admin hashes: Maddy@2002, Admin12345678!, Thoufiq, and Masthan@08
 const KNOWN_ADMIN_HASHES = [
   "scrypt$16384$8$5$WHyZeot7L8+sJHzOxUuu4w==$O44VqRiQDMR/jO/74TIFjkQybd14EMvLhGkMA8VJFmc=", // Maddy@2002
   "scrypt$16384$8$5$3lDOiyOND/ViqEfjFqZchw==$+2i86f3jGATMexT03gB5QPp68Zjceb7w4QxlI1O125c=", // Admin12345678!
   "scrypt$16384$8$5$3LQhimP+G1Tm4cT+g2bx8A==$VcxpLppdg2eygm6jOvqFvCp/LtjzvY7k3zsBUWQwhuY=", // Thoufiq
+  "scrypt$16384$8$5$Uzh6ivDRzeMU8peR7wcHqQ==$IUBrQ47Kdk1o/byFVx90xLxvoC2O2zC2wTBgRzbYJe4=", // Masthan@08
 ];
 
 /**

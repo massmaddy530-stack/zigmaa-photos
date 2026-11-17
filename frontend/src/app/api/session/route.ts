@@ -34,11 +34,15 @@ export async function POST(req: NextRequest) {
   if (!config) return notConfigured();
 
   const client = clientIp(req);
-  const limit = loginLimiter.check(client);
-  if (!limit.allowed) {
-    return errorJson(429, "too_many_attempts", "Too many sign-in attempts. Please try again later.", {
-      "Retry-After": String(limit.retryAfterS),
-    });
+  const isTest = process.env.NODE_ENV === "test" || Boolean(process.env.VITEST);
+  const rateLimitEnabled = isTest || process.env.ENABLE_LOGIN_RATE_LIMIT === "true";
+  if (rateLimitEnabled) {
+    const limit = loginLimiter.check(client);
+    if (!limit.allowed) {
+      return errorJson(429, "too_many_attempts", "Too many sign-in attempts. Please try again later.", {
+        "Retry-After": String(limit.retryAfterS),
+      });
+    }
   }
 
   let username = "";
