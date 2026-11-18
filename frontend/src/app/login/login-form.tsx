@@ -52,19 +52,15 @@ function GoogleIcon() {
 function BrandHeader() {
   return (
     <div className="mb-4 text-center select-none flex flex-col items-center">
-      <div className="relative flex items-center justify-center">
-        {/* Soft atmospheric ambient glow behind the logo */}
-        <div className="absolute inset-0 -m-4 rounded-full bg-red-600/20 blur-xl pointer-events-none" />
-        <img
-          src="/zigmaa-logo.png"
-          alt="Zigmaa Moments"
-          width={260}
-          height={100}
-          style={{ width: "auto", height: "auto" }}
-          className="relative mx-auto h-16 sm:h-[76px] w-auto max-w-[250px] sm:max-w-[270px] object-contain drop-shadow-[0_4px_16px_rgba(0,0,0,0.85)] drop-shadow-[0_0_14px_rgba(229,9,20,0.4)]"
-        />
-      </div>
-      <p className="mt-2.5 text-xs font-medium tracking-wide text-white/80">
+      <img
+        src="/zigmaa-logo.png"
+        alt="Zigmaa Moments"
+        width={180}
+        height={62}
+        style={{ maxHeight: "56px", maxWidth: "180px", width: "auto", height: "auto" }}
+        className="mx-auto h-12 sm:h-14 w-auto max-w-[180px] object-contain drop-shadow-[0_2px_8px_rgba(0,0,0,0.85)]"
+      />
+      <p className="mt-1 text-[11px] font-medium tracking-wide text-white/70">
         Event Photo Management Platform
       </p>
       <div className="flex items-center justify-center gap-3 my-3.5 w-full">
