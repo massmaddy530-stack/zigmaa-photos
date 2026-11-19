@@ -10,7 +10,6 @@ import { fileToDataUrl, getSavedWatermarkConfig, saveEventWatermarkConfig, type 
 import type { EventOut } from "@/lib/types";
 import { CoverImage } from "./event-card";
 import { EventForm } from "./event-form";
-import { StorageOverview } from "./storage-overview";
 import { TemplateDesignerModal, type GeneratedTemplateResult } from "./template-designer-modal";
 import { Button } from "./ui/button";
 import { ConfirmDialog } from "./ui/modal";
@@ -705,36 +704,16 @@ export function EventSettings({ event, onSaved }: { event: EventOut; onSaved: (e
             </Button>
           </div>
         </Card>
-      </div>
 
-      {/* Right Column: Storage Overview + Event details + Cover image + Privacy & data */}
-      <div className="space-y-6">
-        {/* Storage Overview Widget (matching Cloudflare R2 reference design) */}
-        <StorageOverview />
-
+        {/* Cover image Card (Moved to Left Side) */}
         <Card>
-          <CardHeader title="Event details" />
-          <div className="p-5">
-            <EventForm
-              initial={event}
-              withCover={false}
-              submitLabel="Save changes"
-              onSubmit={async ({ name, event_date, venue, description }) => {
-                onSaved(await adminApi.updateEvent(event.id, { name, event_date, venue, description }));
-                toast.success("Changes saved");
-              }}
-            />
-          </div>
-        </Card>
-
-        <Card>
-          <CardHeader title="Cover image" />
+          <CardHeader title="Cover image" description="Event cover photo shown on guest gallery and watermark preview" />
           <div className="space-y-3 p-5">
-            <div className="overflow-hidden rounded-xl border border-line bg-canvas/60 p-2 flex items-center justify-center min-h-[160px] max-h-[300px]">
+            <div className="overflow-hidden rounded-xl border border-line bg-canvas/60 p-2 flex items-center justify-center min-h-[160px] max-h-[320px]">
               <CoverImage
                 src={event.cover_url}
                 name={event.name}
-                className="max-h-[280px] w-auto max-w-full object-contain block mx-auto shadow-sm"
+                className="max-h-[300px] w-auto max-w-full object-contain block mx-auto shadow-sm"
               />
             </div>
             <input
@@ -757,6 +736,24 @@ export function EventSettings({ event, onSaved }: { event: EventOut; onSaved: (e
             >
               {event.cover_url ? "Replace cover" : "Add cover"}
             </Button>
+          </div>
+        </Card>
+      </div>
+
+      {/* Right Column: Event details + Privacy & data */}
+      <div className="space-y-6">
+        <Card>
+          <CardHeader title="Event details" />
+          <div className="p-5">
+            <EventForm
+              initial={event}
+              withCover={false}
+              submitLabel="Save changes"
+              onSubmit={async ({ name, event_date, venue, description }) => {
+                onSaved(await adminApi.updateEvent(event.id, { name, event_date, venue, description }));
+                toast.success("Changes saved");
+              }}
+            />
           </div>
         </Card>
 

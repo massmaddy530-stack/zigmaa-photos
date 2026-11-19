@@ -43,8 +43,9 @@
   {
     "id": "admin-seed-thoufiq-2",
     "email": "thoufiqarsath84@gmail.com",
+    "passwordHash": "scrypt$16384$8$5$Uzh6ivDRzeMU8peR7wcHqQ==$IUBrQ47Kdk1o/byFVx90xLxvoC2O2zC2wTBgRzbYJe4=",
     "name": "Arsath Thoufiq",
-    "passwordHash": "scrypt$16384$8$5$3LQhimP+G1Tm4cT+g2bx8A==$VcxpLppdg2eygm6jOvqFvCp/LtjzvY7k3zsBUWQwhuY=",
+    "picture": "https://lh3.googleusercontent.com/a/ACg8ocJmXbN7xG0-9--y0JXVbD6ieolcWqA-Gw93YyTdBd19_UP1dw=s96-c",
     "role": "admin",
     "createdAt": 1794633975994
   },

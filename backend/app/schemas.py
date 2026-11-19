@@ -248,7 +248,7 @@ class MatchPage(BaseModel):
 class StorageOverviewOut(BaseModel):
     used_bytes: int
     quota_bytes: int
-    used_percent: int
+    used_percent: float
     used_gb: float
     available_gb: float
     total_gb: float

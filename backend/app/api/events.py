@@ -217,18 +217,20 @@ async def compute_storage_overview(session: SessionDep, settings: SettingsDep) -
         disk_bytes = sum(f.stat().st_size for f in settings.local_storage_dir.rglob("*") if f.is_file())
         real_db_bytes = max(real_db_bytes, disk_bytes)
 
-    total_gb = float(settings.storage_quota_gb or 300.0)
+    total_gb = float(settings.storage_quota_gb or 10.0)
     quota_bytes = int(total_gb * (1024**3))
 
-    baseline_gb = float(settings.storage_used_gb if settings.storage_used_gb is not None else 216.4)
-    baseline_bytes = int(baseline_gb * (1024**3))
+    if settings.storage_used_gb is not None:
+        used_bytes = int(float(settings.storage_used_gb) * (1024**3)) + real_db_bytes
+    else:
+        used_bytes = real_db_bytes
 
-    used_bytes = baseline_bytes + real_db_bytes
-    used_gb = round(used_bytes / (1024**3), 1)
-    available_gb = max(0.0, round(total_gb - used_gb, 1))
-    used_percent = min(100, max(0, round((used_gb / total_gb) * 100)))
+    used_gb = round(used_bytes / (1024**3), 3)
+    available_bytes = max(0, quota_bytes - used_bytes)
+    available_gb = round(available_bytes / (1024**3), 2)
+    used_percent = round((used_bytes / quota_bytes) * 100, 2) if quota_bytes > 0 else 0.0
 
-    provider_name = "Cloudflare R2" if settings.storage_backend in ("r2", "local") else "Supabase Storage"
+    provider_name = "Cloudflare R2"
 
     return StorageOverviewOut(
         used_bytes=used_bytes,
