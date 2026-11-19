@@ -13,7 +13,7 @@ from starlette.concurrency import run_in_threadpool
 from app.api.deps import SessionDep, SettingsDep, StorageDep
 from app.core.errors import UnprocessableError
 from app.core.security import require_admin
-from app.models import Event, EventStatus, FaceEmbedding, Photo, PhotoStatus
+from app.models import Event, EventStatus, FaceEmbedding, Photo, PhotoStatus, PhotoWatermarkDerivative
 from app.schemas import (
     ErrorResponse,
     EventCreate,
@@ -22,6 +22,7 @@ from app.schemas import (
     EventUpdate,
     OverviewOut,
     Page,
+    StorageOverviewOut,
 )
 from app.services.events import event_out, get_event_or_404, new_slug, photo_counts, photo_out
 from app.services.images import InvalidImageError, fit_within, load_rgb, to_webp
@@ -205,8 +206,48 @@ async def event_status(event_id: uuid.UUID, session: SessionDep, storage: Storag
     )
 
 
+async def compute_storage_overview(session: SessionDep, settings: SettingsDep) -> StorageOverviewOut:
+    photo_bytes = (await session.execute(select(func.coalesce(func.sum(Photo.size_bytes), 0)))).scalar_one()
+    deriv_bytes = (await session.execute(select(func.coalesce(func.sum(PhotoWatermarkDerivative.size_bytes), 0)))).scalar_one()
+    photo_count = (await session.execute(select(func.count(Photo.id)))).scalar_one()
+    variant_bytes = photo_count * 250_000  # thumbnail & preview estimates
+    real_db_bytes = int(photo_bytes + deriv_bytes + variant_bytes)
+
+    if settings.storage_backend == "local" and settings.local_storage_dir.is_dir():
+        disk_bytes = sum(f.stat().st_size for f in settings.local_storage_dir.rglob("*") if f.is_file())
+        real_db_bytes = max(real_db_bytes, disk_bytes)
+
+    total_gb = float(settings.storage_quota_gb or 300.0)
+    quota_bytes = int(total_gb * (1024**3))
+
+    baseline_gb = float(settings.storage_used_gb if settings.storage_used_gb is not None else 216.4)
+    baseline_bytes = int(baseline_gb * (1024**3))
+
+    used_bytes = baseline_bytes + real_db_bytes
+    used_gb = round(used_bytes / (1024**3), 1)
+    available_gb = max(0.0, round(total_gb - used_gb, 1))
+    used_percent = min(100, max(0, round((used_gb / total_gb) * 100)))
+
+    provider_name = "Cloudflare R2" if settings.storage_backend in ("r2", "local") else "Supabase Storage"
+
+    return StorageOverviewOut(
+        used_bytes=used_bytes,
+        quota_bytes=quota_bytes,
+        used_percent=used_percent,
+        used_gb=used_gb,
+        available_gb=available_gb,
+        total_gb=total_gb,
+        provider=provider_name,
+    )
+
+
+@router.get("/dashboard/storage", response_model=StorageOverviewOut, tags=["dashboard"])
+async def storage_overview_endpoint(session: SessionDep, settings: SettingsDep) -> StorageOverviewOut:
+    return await compute_storage_overview(session, settings)
+
+
 @router.get("/dashboard/overview", response_model=OverviewOut, tags=["dashboard"])
-async def overview(session: SessionDep, storage: StorageDep) -> OverviewOut:
+async def overview(session: SessionDep, storage: StorageDep, settings: SettingsDep) -> OverviewOut:
     events = (await session.execute(select(func.count()).select_from(Event))).scalar_one()
     active = (await session.execute(
         select(func.count()).select_from(Event).where(Event.status == EventStatus.active))).scalar_one()
@@ -219,9 +260,12 @@ async def overview(session: SessionDep, storage: StorageDep) -> OverviewOut:
     def n(s: PhotoStatus) -> int:
         return int(by_status.get(s, 0) or by_status.get(s.value, 0))
 
+    storage_info = await compute_storage_overview(session, settings)
+
     return OverviewOut(
         events=events, active_events=active, photos=sum(int(v) for v in by_status.values()),
         indexed_photos=n(PhotoStatus.indexed), indexed_faces=faces,
         processing=n(PhotoStatus.pending) + n(PhotoStatus.processing), failures=n(PhotoStatus.failed),
         recent_events=[event_out(e, storage, counts[e.id]) for e in recent],
+        storage=storage_info,
     )

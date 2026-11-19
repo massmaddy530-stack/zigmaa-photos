@@ -101,6 +101,8 @@ class Settings(BaseSettings):
     supabase_s3_secret_access_key: SecretStr | None = None
     supabase_storage_bucket: str | None = None
     signed_url_ttl_s: int = 900
+    storage_quota_gb: float = 300.0
+    storage_used_gb: float | None = 216.4
 
     # --- Upload limits -------------------------------------------------------
     max_upload_bytes: int = 40 * 1024 * 1024

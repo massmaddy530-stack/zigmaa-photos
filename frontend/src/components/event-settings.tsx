@@ -10,6 +10,7 @@ import { fileToDataUrl, getSavedWatermarkConfig, saveEventWatermarkConfig, type 
 import type { EventOut } from "@/lib/types";
 import { CoverImage } from "./event-card";
 import { EventForm } from "./event-form";
+import { StorageOverview } from "./storage-overview";
 import { TemplateDesignerModal, type GeneratedTemplateResult } from "./template-designer-modal";
 import { Button } from "./ui/button";
 import { ConfirmDialog } from "./ui/modal";
@@ -307,32 +308,8 @@ export function EventSettings({ event, onSaved }: { event: EventOut; onSaved: (e
 
   return (
     <div className="grid gap-6 lg:grid-cols-3">
-      <Card className="lg:col-span-2">
-        <CardHeader title="Event details" />
-        <div className="p-5">
-          <EventForm initial={event} withCover={false} submitLabel="Save changes"
-            onSubmit={async ({ name, event_date, venue, description }) => {
-              onSaved(await adminApi.updateEvent(event.id, { name, event_date, venue, description }));
-              toast.success("Changes saved");
-            }} />
-        </div>
-      </Card>
-
-      <div className="space-y-6">
-        <Card>
-          <CardHeader title="Cover image" />
-          <div className="space-y-3 p-5">
-            <div className="overflow-hidden rounded-xl border border-line bg-canvas/60 p-2 flex items-center justify-center min-h-[160px] max-h-[300px]">
-              <CoverImage src={event.cover_url} name={event.name} className="max-h-[280px] w-auto max-w-full object-contain block mx-auto shadow-sm" />
-            </div>
-            <input ref={coverRef} type="file" accept={ACCEPTED_IMAGE_TYPES.join(",")} className="sr-only" tabIndex={-1}
-                   onChange={(e) => { void changeCover(e.target.files?.[0]); e.target.value = ""; }} />
-            <Button variant="outline" className="w-full" loading={coverBusy} onClick={() => coverRef.current?.click()}
-                    icon={<ImagePlus className="h-4 w-4" />}>{event.cover_url ? "Replace cover" : "Add cover"}</Button>
-          </div>
-        </Card>
-
-        {/* Watermark Template & Customization Card */}
+      {/* Left 2 Columns: Watermark Template & Customization */}
+      <div className="lg:col-span-2 space-y-6">
         <Card>
           <CardHeader
             title="Watermark template"
@@ -343,12 +320,12 @@ export function EventSettings({ event, onSaved }: { event: EventOut; onSaved: (e
             <div
               ref={previewRef}
               onClick={handlePreviewClick}
-              className="relative mx-auto max-h-56 w-full overflow-hidden rounded-xl border border-line bg-canvas flex items-center justify-center cursor-crosshair group select-none shadow-sm"
+              className="relative mx-auto min-h-[260px] max-h-[460px] w-full overflow-hidden rounded-xl border border-line bg-canvas flex items-center justify-center cursor-crosshair group select-none shadow-sm"
             >
               <img
                 src={event.cover_url || "/default-cover.jpg"}
                 alt="Cover Preview"
-                className="max-h-52 w-auto max-w-full object-contain block mx-auto"
+                className="max-h-[440px] w-auto max-w-full object-contain block mx-auto"
               />
               {/* All Enabled Watermarks Rendered Simultaneously */}
               {wm.templates && wm.templates.length > 0 ? (
@@ -454,7 +431,7 @@ export function EventSettings({ event, onSaved }: { event: EventOut; onSaved: (e
                     </button>
                   </div>
 
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 max-h-[220px] overflow-y-auto p-1">
+                  <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-2 max-h-[220px] overflow-y-auto p-1">
                     {wm.templates.map((t) => {
                       const isActive = t.id === (wm.activeTemplateId || wm.templates![0]?.id);
                       const isEnabled = t.enabled !== false;
@@ -728,14 +705,84 @@ export function EventSettings({ event, onSaved }: { event: EventOut; onSaved: (e
             </Button>
           </div>
         </Card>
+      </div>
+
+      {/* Right Column: Storage Overview + Event details + Cover image + Privacy & data */}
+      <div className="space-y-6">
+        {/* Storage Overview Widget (matching Cloudflare R2 reference design) */}
+        <StorageOverview />
+
+        <Card>
+          <CardHeader title="Event details" />
+          <div className="p-5">
+            <EventForm
+              initial={event}
+              withCover={false}
+              submitLabel="Save changes"
+              onSubmit={async ({ name, event_date, venue, description }) => {
+                onSaved(await adminApi.updateEvent(event.id, { name, event_date, venue, description }));
+                toast.success("Changes saved");
+              }}
+            />
+          </div>
+        </Card>
+
+        <Card>
+          <CardHeader title="Cover image" />
+          <div className="space-y-3 p-5">
+            <div className="overflow-hidden rounded-xl border border-line bg-canvas/60 p-2 flex items-center justify-center min-h-[160px] max-h-[300px]">
+              <CoverImage
+                src={event.cover_url}
+                name={event.name}
+                className="max-h-[280px] w-auto max-w-full object-contain block mx-auto shadow-sm"
+              />
+            </div>
+            <input
+              ref={coverRef}
+              type="file"
+              accept={ACCEPTED_IMAGE_TYPES.join(",")}
+              className="sr-only"
+              tabIndex={-1}
+              onChange={(e) => {
+                void changeCover(e.target.files?.[0]);
+                e.target.value = "";
+              }}
+            />
+            <Button
+              variant="outline"
+              className="w-full"
+              loading={coverBusy}
+              onClick={() => coverRef.current?.click()}
+              icon={<ImagePlus className="h-4 w-4" />}
+            >
+              {event.cover_url ? "Replace cover" : "Add cover"}
+            </Button>
+          </div>
+        </Card>
 
         <Card className="border-red-200">
           <CardHeader title="Privacy & data" description="Irreversible actions" />
           <div className="space-y-3 p-5">
-            <Button variant="outline" className="w-full" onClick={() => setDialog("purge")} disabled={event.counts.faces === 0}
-                    icon={<ScanFace className="h-4 w-4" />}>Delete face data ({formatNumber(event.counts.faces)})</Button>
-            <Button variant="danger" className="w-full" onClick={() => { setConfirmName(""); setDialog("delete"); }}
-                    icon={<Trash2 className="h-4 w-4" />}>Delete event</Button>
+            <Button
+              variant="outline"
+              className="w-full"
+              onClick={() => setDialog("purge")}
+              disabled={event.counts.faces === 0}
+              icon={<ScanFace className="h-4 w-4" />}
+            >
+              Delete face data ({formatNumber(event.counts.faces)})
+            </Button>
+            <Button
+              variant="danger"
+              className="w-full"
+              onClick={() => {
+                setConfirmName("");
+                setDialog("delete");
+              }}
+              icon={<Trash2 className="h-4 w-4" />}
+            >
+              Delete event
+            </Button>
           </div>
         </Card>
       </div>

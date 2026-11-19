@@ -125,6 +125,16 @@ export interface RetryResponse {
   photo_ids: string[];
 }
 
+export interface StorageOverviewOut {
+  used_bytes: number;
+  quota_bytes: number;
+  used_percent: number;
+  used_gb: number;
+  available_gb: number;
+  total_gb: number;
+  provider: string;
+}
+
 export interface OverviewOut {
   events: number;
   active_events: number;
@@ -134,6 +144,7 @@ export interface OverviewOut {
   processing: number;
   failures: number;
   recent_events: EventOut[];
+  storage?: StorageOverviewOut;
 }
 
 export interface PublicEventOut {

@@ -18,6 +18,7 @@ import type {
   PhotoStatus,
   PublicEventOut,
   RetryResponse,
+  StorageOverviewOut,
   UploadResponse,
 } from "./types";
 
@@ -146,6 +147,7 @@ function admin<T>(path: string, opts: RequestOpts = {}): Promise<T> {
 
 export const adminApi = {
   overview: () => admin<OverviewOut>("dashboard/overview"),
+  storageOverview: () => admin<StorageOverviewOut>("dashboard/storage"),
 
   listEvents: (params: { q?: string; status?: EventStatus | ""; limit?: number; offset?: number }) =>
     admin<Page<EventOut>>("events", { query: params }),

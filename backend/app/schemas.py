@@ -245,6 +245,16 @@ class MatchPage(BaseModel):
 # --------------------------------------------------------------------------- dashboard
 
 
+class StorageOverviewOut(BaseModel):
+    used_bytes: int
+    quota_bytes: int
+    used_percent: int
+    used_gb: float
+    available_gb: float
+    total_gb: float
+    provider: str
+
+
 class OverviewOut(BaseModel):
     events: int
     active_events: int
@@ -254,6 +264,7 @@ class OverviewOut(BaseModel):
     processing: int
     failures: int
     recent_events: list[EventOut]
+    storage: StorageOverviewOut | None = None
 
 
 class HealthOut(BaseModel):

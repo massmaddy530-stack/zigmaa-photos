@@ -98,6 +98,21 @@ async def test_overview(client):
     assert r.status_code == 200
     body = r.json()
     assert body["events"] == 1 and body["photos"] == 0 and len(body["recent_events"]) == 1
+    assert "storage" in body
+    assert body["storage"]["total_gb"] == 300.0
+
+
+async def test_storage_overview_endpoint(client):
+    r = await client.get("/api/v1/dashboard/storage", headers=ADMIN)
+    assert r.status_code == 200
+    body = r.json()
+    assert "used_bytes" in body
+    assert "quota_bytes" in body
+    assert "used_percent" in body
+    assert "used_gb" in body
+    assert "available_gb" in body
+    assert body["total_gb"] == 300.0
+    assert body["provider"] in ("Cloudflare R2", "Supabase Storage")
 
 
 async def test_delete_event_removes_everything(client, storage):

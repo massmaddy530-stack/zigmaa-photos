@@ -13,6 +13,7 @@ import {
 import { Suspense, useState } from "react";
 import { EventCard, EventCardSkeleton } from "@/components/event-card";
 import { StatCard } from "@/components/stat-card";
+import { StorageOverview } from "@/components/storage-overview";
 import { ButtonLink } from "@/components/ui/button";
 import { Pagination } from "@/components/ui/pagination";
 import { Card, Input } from "@/components/ui/primitives";
@@ -88,6 +89,12 @@ export default function DashboardPage() {
                   : undefined
               }
             />
+          </div>
+        )}
+
+        {o && (
+          <div className="mt-4 max-w-xl">
+            <StorageOverview initialData={o.storage} />
           </div>
         )}
       </section>
