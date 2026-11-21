@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from collections.abc import AsyncIterator
 
+from sqlalchemy import event as sa_event
 from sqlalchemy.ext.asyncio import AsyncEngine, AsyncSession, async_sessionmaker, create_async_engine
 from sqlalchemy.pool import NullPool
 
@@ -22,7 +23,14 @@ def build_engine(url: str | None = None, *, null_pool: bool = False) -> AsyncEng
         kwargs["poolclass"] = NullPool
     else:
         kwargs.update(pool_size=settings.db_pool_size, max_overflow=settings.db_max_overflow)
-    return create_async_engine(url, **kwargs)
+    engine = create_async_engine(url, **kwargs)
+    if url.startswith("sqlite"):
+        @sa_event.listens_for(engine.sync_engine, "connect")
+        def _set_sqlite_pragma(dbapi_connection, connection_record):
+            cursor = dbapi_connection.cursor()
+            cursor.execute("PRAGMA foreign_keys=ON")
+            cursor.close()
+    return engine
 
 
 def get_engine() -> AsyncEngine:

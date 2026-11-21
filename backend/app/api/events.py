@@ -157,6 +157,8 @@ async def delete_event(event_id: uuid.UUID, session: SessionDep, storage: Storag
     )).all() for k in row if k]
     if event.cover_key:
         keys.append(event.cover_key)
+    await session.execute(delete(PhotoWatermarkDerivative).where(PhotoWatermarkDerivative.event_id == event.id))
+    await session.execute(delete(Photo).where(Photo.event_id == event.id))
     await session.execute(delete(FaceEmbedding).where(FaceEmbedding.event_id == event.id))
     await session.delete(event)
     await session.commit()
@@ -207,9 +209,15 @@ async def event_status(event_id: uuid.UUID, session: SessionDep, storage: Storag
 
 
 async def compute_storage_overview(session: SessionDep, settings: SettingsDep) -> StorageOverviewOut:
-    photo_bytes = (await session.execute(select(func.coalesce(func.sum(Photo.size_bytes), 0)))).scalar_one()
-    deriv_bytes = (await session.execute(select(func.coalesce(func.sum(PhotoWatermarkDerivative.size_bytes), 0)))).scalar_one()
-    photo_count = (await session.execute(select(func.count(Photo.id)))).scalar_one()
+    photo_bytes = (await session.execute(
+        select(func.coalesce(func.sum(Photo.size_bytes), 0)).join(Event, Photo.event_id == Event.id)
+    )).scalar_one()
+    deriv_bytes = (await session.execute(
+        select(func.coalesce(func.sum(PhotoWatermarkDerivative.size_bytes), 0)).join(Event, PhotoWatermarkDerivative.event_id == Event.id)
+    )).scalar_one()
+    photo_count = (await session.execute(
+        select(func.count(Photo.id)).join(Event, Photo.event_id == Event.id)
+    )).scalar_one()
     variant_bytes = photo_count * 250_000  # thumbnail & preview estimates
     real_db_bytes = int(photo_bytes + deriv_bytes + variant_bytes)
 
@@ -254,8 +262,11 @@ async def overview(session: SessionDep, storage: StorageDep, settings: SettingsD
     active = (await session.execute(
         select(func.count()).select_from(Event).where(Event.status == EventStatus.active))).scalar_one()
     by_status = dict((await session.execute(
-        select(Photo.status, func.count()).group_by(Photo.status))).all())
-    faces = (await session.execute(select(func.count()).select_from(FaceEmbedding))).scalar_one()
+        select(Photo.status, func.count()).join(Event, Photo.event_id == Event.id).group_by(Photo.status)
+    )).all())
+    faces = (await session.execute(
+        select(func.count()).select_from(FaceEmbedding).join(Event, FaceEmbedding.event_id == Event.id)
+    )).scalar_one()
     recent = (await session.execute(select(Event).order_by(Event.created_at.desc()).limit(5))).scalars().all()
     counts = await photo_counts(session, [e.id for e in recent])
 
