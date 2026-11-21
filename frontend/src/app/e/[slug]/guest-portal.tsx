@@ -3,27 +3,36 @@
 import {
   CalendarDays,
   Camera,
+  Check,
   CheckCircle2,
   Clock,
+  Download,
+  Folder,
+  FolderOpen,
   ImageIcon,
+  ImageOff,
+  Loader2,
   Lock,
   MapPin,
   RotateCcw,
   ScanFace,
+  Search,
   SearchX,
   WifiOff,
 } from "lucide-react";
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { Logo } from "@/components/app-shell";
+import { GridSkeleton, Lightbox, PhotoGrid, PhotoTile, type GalleryItem } from "@/components/gallery";
 import { MatchResults } from "@/components/match-results";
 import { SelfieCapture } from "@/components/selfie-capture";
 import { Button } from "@/components/ui/button";
-import { Skeleton } from "@/components/ui/primitives";
-import { Alert, ErrorState } from "@/components/ui/states";
+import { Input, Skeleton } from "@/components/ui/primitives";
+import { Alert, EmptyState, ErrorState } from "@/components/ui/states";
 import { ApiError, errorMessage, publicApi } from "@/lib/api";
-import { formatDate, formatNumber } from "@/lib/format";
-import { useQuery } from "@/lib/hooks";
-import type { MatchResponse, PublicEventOut } from "@/lib/types";
+import { cn, formatDate, formatNumber } from "@/lib/format";
+import { useDebounced, useQuery } from "@/lib/hooks";
+import { downloadImage, downloadImagesInBatch } from "@/lib/image";
+import type { MatchResponse, PublicEventOut, PublicPhotoItem } from "@/lib/types";
 
 type Stage = "start" | "searching" | "results";
 
@@ -116,7 +125,10 @@ function Shell({ children }: { children: React.ReactNode }) {
   );
 }
 
+type PortalTab = "face" | "all";
+
 function Portal({ event, slug }: { event: PublicEventOut; slug: string }) {
+  const [activeTab, setActiveTab] = useState<PortalTab>("face");
   const [stage, setStage] = useState<Stage>("start");
   const [consent, setConsent] = useState(false);
   const [selfieUrl, setSelfieUrl] = useState<string | null>(null);
@@ -198,129 +210,460 @@ function Portal({ event, slug }: { event: PublicEventOut; slug: string }) {
         </div>
       </header>
 
-      <main className="mx-auto max-w-2xl px-4">
+      <main className={cn("mx-auto px-4 pb-16 transition-all", activeTab === "all" ? "max-w-5xl" : "max-w-2xl")}>
         {event.description && <p className="mt-6 whitespace-pre-line text-[15px] leading-relaxed text-ink/80">{event.description}</p>}
 
-        {!online && (
-          <Alert tone="warning" className="mt-6" icon={<WifiOff className="h-4 w-4" />} title="You're offline">
-            Photos can&apos;t be searched or downloaded until your mobile data or Wi-Fi reconnects.
-          </Alert>
-        )}
+        {/* Tab Switcher: Find My Face (Selfie) vs Browse All Photos */}
+        <div className="mt-6 flex rounded-2xl bg-zinc-100 p-1.5 shadow-inner dark:bg-zinc-800">
+          <button
+            type="button"
+            onClick={() => setActiveTab("face")}
+            className={cn(
+              "flex flex-1 items-center justify-center gap-2 rounded-xl py-2.5 text-xs font-semibold sm:text-sm transition-all",
+              activeTab === "face"
+                ? "bg-white text-ink shadow-sm dark:bg-zinc-900"
+                : "text-muted hover:text-ink",
+            )}
+          >
+            <ScanFace className="h-4 w-4 text-brand-600" />
+            <span>Find My Face (Selfie)</span>
+          </button>
+          <button
+            type="button"
+            onClick={() => setActiveTab("all")}
+            className={cn(
+              "flex flex-1 items-center justify-center gap-2 rounded-xl py-2.5 text-xs font-semibold sm:text-sm transition-all",
+              activeTab === "all"
+                ? "bg-white text-ink shadow-sm dark:bg-zinc-900"
+                : "text-muted hover:text-ink",
+            )}
+          >
+            <ImageIcon className="h-4 w-4 text-brand-600" />
+            <span>Browse All Photos ({formatNumber(event.photo_count)})</span>
+          </button>
+        </div>
 
-        {stage !== "results" && (
-          <section className="mt-6 rounded-3xl border border-line bg-surface p-5 shadow-[var(--shadow-card)] sm:p-7" aria-labelledby="find-heading">
-            <h2 id="find-heading" className="font-display text-2xl font-medium">Find your photos</h2>
-            <ol className="mt-4 grid gap-3 sm:grid-cols-3">
-              {[
-                { icon: Camera, title: "Take a selfie", text: "Or upload a clear photo of your face." },
-                { icon: ScanFace, title: "We match faces", text: "Only within this event's photos." },
-                { icon: CheckCircle2, title: "See your photos", text: "View and download them instantly." },
-              ].map(({ icon: Icon, title, text }, i) => (
-                <li key={title} className="flex gap-3 rounded-2xl border border-line bg-canvas p-3 sm:flex-col sm:gap-2">
-                  <span className="grid h-9 w-9 shrink-0 place-items-center rounded-xl bg-brand-100 text-brand-700"><Icon className="h-[18px] w-[18px]" aria-hidden /></span>
-                  <div>
-                    <p className="text-sm font-semibold"><span className="sr-only">Step {i + 1}: </span>{title}</p>
-                    <p className="text-xs text-muted">{text}</p>
+        {activeTab === "all" ? (
+          <AllPhotosView slug={slug} event={event} />
+        ) : (
+          <>
+            {!online && (
+              <Alert tone="warning" className="mt-6" icon={<WifiOff className="h-4 w-4" />} title="You're offline">
+                Photos can&apos;t be searched or downloaded until your mobile data or Wi-Fi reconnects.
+              </Alert>
+            )}
+
+            {stage !== "results" && (
+              <section className="mt-6 rounded-3xl border border-line bg-surface p-5 shadow-[var(--shadow-card)] sm:p-7" aria-labelledby="find-heading">
+                <h2 id="find-heading" className="font-display text-2xl font-medium">Find your photos</h2>
+                <ol className="mt-4 grid gap-3 sm:grid-cols-3">
+                  {[
+                    { icon: Camera, title: "Take a selfie", text: "Or upload a clear photo of your face." },
+                    { icon: ScanFace, title: "We match faces", text: "Only within this event's photos." },
+                    { icon: CheckCircle2, title: "See your photos", text: "View and download them instantly." },
+                  ].map(({ icon: Icon, title, text }, i) => (
+                    <li key={title} className="flex gap-3 rounded-2xl border border-line bg-canvas p-3 sm:flex-col sm:gap-2">
+                      <span className="grid h-9 w-9 shrink-0 place-items-center rounded-xl bg-brand-100 text-brand-700"><Icon className="h-[18px] w-[18px]" aria-hidden /></span>
+                      <div>
+                        <p className="text-sm font-semibold"><span className="sr-only">Step {i + 1}: </span>{title}</p>
+                        <p className="text-xs text-muted">{text}</p>
+                      </div>
+                    </li>
+                  ))}
+                </ol>
+
+                {!event.matching_available && (
+                  <Alert tone="warning" className="mt-5" title="Photo search isn't available yet">
+                    The organiser&apos;s system is still being set up. Please check back later.
+                  </Alert>
+                )}
+                {event.matching_available && event.photo_count === 0 && (
+                  <Alert tone="info" className="mt-5" icon={<Clock className="h-4 w-4" />} title="Photos are on their way">
+                    No photos have been published yet. Check back soon. You can still try a search.
+                  </Alert>
+                )}
+
+                {copy && (
+                  <Alert tone={copy.retake ? "warning" : "error"} className="mt-5" title={copy.title}>
+                    {copy.body}
+                    {copy.retry && lastSelfie.current && consent && (
+                      <div className="mt-3">
+                        <Button size="sm" variant="secondary" icon={<RotateCcw className="h-4 w-4" />}
+                                onClick={() => lastSelfie.current && void search(lastSelfie.current)}>
+                          Try again with the same selfie
+                        </Button>
+                      </div>
+                    )}
+                  </Alert>
+                )}
+
+                {stage === "searching" ? (
+                  <div className="mt-6 flex flex-col items-center gap-4 py-6 text-center" role="status" aria-live="polite">
+                    <div className="relative">
+                      {selfieUrl && <img src={selfieUrl} alt="Your selfie" className="h-28 w-28 rounded-full object-cover ring-4 ring-brand-100" />}
+                      <span className="absolute inset-0 animate-ping rounded-full ring-2 ring-brand-400" aria-hidden />
+                    </div>
+                    <div className="w-full max-w-xs">
+                      {progress < 1 ? (
+                        <>
+                          <p className="font-semibold">Uploading your selfie… {Math.round(progress * 100)}%</p>
+                          <div className="mt-2 h-1.5 overflow-hidden rounded-full bg-brand-100" role="progressbar"
+                               aria-valuemin={0} aria-valuemax={100} aria-valuenow={Math.round(progress * 100)}>
+                            <div className="h-full rounded-full bg-brand-600 transition-[width]" style={{ width: `${Math.round(progress * 100)}%` }} />
+                          </div>
+                        </>
+                      ) : (
+                        <>
+                          <p className="font-semibold">Searching {formatNumber(event.photo_count)} photos…</p>
+                          <p className="text-sm text-muted">This usually takes a few seconds.</p>
+                        </>
+                      )}
+                    </div>
+                    <Button variant="ghost" size="sm" onClick={startOver}>Cancel</Button>
                   </div>
-                </li>
-              ))}
-            </ol>
-
-            {!event.matching_available && (
-              <Alert tone="warning" className="mt-5" title="Photo search isn't available yet">
-                The organiser&apos;s system is still being set up. Please check back later.
-              </Alert>
-            )}
-            {event.matching_available && event.photo_count === 0 && (
-              <Alert tone="info" className="mt-5" icon={<Clock className="h-4 w-4" />} title="Photos are on their way">
-                No photos have been published yet. Check back soon. You can still try a search.
-              </Alert>
-            )}
-
-            {copy && (
-              <Alert tone={copy.retake ? "warning" : "error"} className="mt-5" title={copy.title}>
-                {copy.body}
-                {copy.retry && lastSelfie.current && consent && (
-                  <div className="mt-3">
-                    <Button size="sm" variant="secondary" icon={<RotateCcw className="h-4 w-4" />}
-                            onClick={() => lastSelfie.current && void search(lastSelfie.current)}>
-                      Try again with the same selfie
-                    </Button>
+                ) : (
+                  <div className="mt-6 space-y-4">
+                    <label className="flex cursor-pointer gap-3 rounded-2xl border border-line p-4 transition has-[:checked]:border-brand-300 has-[:checked]:bg-brand-50/50">
+                      <input type="checkbox" checked={consent} onChange={(e) => setConsent(e.target.checked)}
+                             className="mt-0.5 h-5 w-5 shrink-0 accent-[var(--color-brand-600)]" />
+                      <span className="text-sm leading-relaxed text-ink/85">
+                        I agree to use my selfie to find my event photos. Selfies are processed in memory and never stored.
+                      </span>
+                    </label>
+                    <SelfieCapture onCapture={search} disabled={!consent || !event.matching_available} />
+                    {!consent && <p className="text-center text-xs text-muted">Tick the box above to continue.</p>}
                   </div>
                 )}
-              </Alert>
+              </section>
             )}
 
-            {stage === "searching" ? (
-              <div className="mt-6 flex flex-col items-center gap-4 py-6 text-center" role="status" aria-live="polite">
-                <div className="relative">
-                  {selfieUrl && <img src={selfieUrl} alt="Your selfie" className="h-28 w-28 rounded-full object-cover ring-4 ring-brand-100" />}
-                  <span className="absolute inset-0 animate-ping rounded-full ring-2 ring-brand-400" aria-hidden />
+            {stage === "results" && result && (
+              <section ref={resultsRef} className="mt-6 scroll-mt-4" aria-labelledby="results-heading">
+                <div className="mb-4 flex items-center justify-between gap-3 rounded-3xl border border-line bg-surface p-4 shadow-[var(--shadow-card)]">
+                  <div className="flex min-w-0 items-center gap-3">
+                    {selfieUrl && <img src={selfieUrl} alt="" className="h-12 w-12 shrink-0 rounded-full object-cover ring-2 ring-brand-100" />}
+                    <div className="min-w-0">
+                      <h2 id="results-heading" className="font-display text-xl font-medium">
+                        {result.total ? `We found ${formatNumber(result.total)} photo${result.total === 1 ? "" : "s"} of you` : "No photos found yet"}
+                      </h2>
+                      <p className="text-xs text-muted">Tap a photo to view it. Download saves the original, full-quality file.</p>
+                    </div>
+                  </div>
+                  <Button variant="outline" size="sm" onClick={startOver} icon={<RotateCcw className="h-4 w-4" />}>
+                    <span className="hidden sm:inline">New search</span>
+                  </Button>
                 </div>
-                <div className="w-full max-w-xs">
-                  {progress < 1 ? (
-                    <>
-                      <p className="font-semibold">Uploading your selfie… {Math.round(progress * 100)}%</p>
-                      <div className="mt-2 h-1.5 overflow-hidden rounded-full bg-brand-100" role="progressbar"
-                           aria-valuemin={0} aria-valuemax={100} aria-valuenow={Math.round(progress * 100)}>
-                        <div className="h-full rounded-full bg-brand-600 transition-[width]" style={{ width: `${Math.round(progress * 100)}%` }} />
-                      </div>
-                    </>
-                  ) : (
-                    <>
-                      <p className="font-semibold">Searching {formatNumber(event.photo_count)} photos…</p>
-                      <p className="text-sm text-muted">This usually takes a few seconds.</p>
-                    </>
-                  )}
-                </div>
-                <Button variant="ghost" size="sm" onClick={startOver}>Cancel</Button>
-              </div>
-            ) : (
-              <div className="mt-6 space-y-4">
-                <label className="flex cursor-pointer gap-3 rounded-2xl border border-line p-4 transition has-[:checked]:border-brand-300 has-[:checked]:bg-brand-50/50">
-                  <input type="checkbox" checked={consent} onChange={(e) => setConsent(e.target.checked)}
-                         className="mt-0.5 h-5 w-5 shrink-0 accent-[var(--color-brand-600)]" />
-                  <span className="text-sm leading-relaxed text-ink/85">
-                    I agree to use my selfie to find my event photos. Selfies are processed in memory and never stored.
-                  </span>
-                </label>
-                <SelfieCapture onCapture={search} disabled={!consent || !event.matching_available} />
-                {!consent && <p className="text-center text-xs text-muted">Tick the box above to continue.</p>}
-              </div>
+                <MatchResults key={result.match_token ?? "empty"} initial={result}
+                  loadPage={(token, cursor) => publicApi.matchPage(slug, token, cursor)}
+                  downloadPrefix={event.name.replace(/[^\w-]+/g, "-").toLowerCase()}
+                  emptyTitle="We didn't find you in these photos yet"
+                  emptyDescription="More photos may still be uploading. You can also try a clearer, front-facing selfie in good light."
+                  onExpired={startOver} />
+                {result.total === 0 && (
+                  <div className="mt-2 flex justify-center">
+                    <Button onClick={startOver} icon={<SearchX className="h-4 w-4" />} variant="secondary">Try another selfie</Button>
+                  </div>
+                )}
+              </section>
             )}
-          </section>
-        )}
-
-        {stage === "results" && result && (
-          <section ref={resultsRef} className="mt-6 scroll-mt-4" aria-labelledby="results-heading">
-            <div className="mb-4 flex items-center justify-between gap-3 rounded-3xl border border-line bg-surface p-4 shadow-[var(--shadow-card)]">
-              <div className="flex min-w-0 items-center gap-3">
-                {selfieUrl && <img src={selfieUrl} alt="" className="h-12 w-12 shrink-0 rounded-full object-cover ring-2 ring-brand-100" />}
-                <div className="min-w-0">
-                  <h2 id="results-heading" className="font-display text-xl font-medium">
-                    {result.total ? `We found ${formatNumber(result.total)} photo${result.total === 1 ? "" : "s"} of you` : "No photos found yet"}
-                  </h2>
-                  <p className="text-xs text-muted">Tap a photo to view it. Download saves the original, full-quality file.</p>
-                </div>
-              </div>
-              <Button variant="outline" size="sm" onClick={startOver} icon={<RotateCcw className="h-4 w-4" />}>
-                <span className="hidden sm:inline">New search</span>
-              </Button>
-            </div>
-            <MatchResults key={result.match_token ?? "empty"} initial={result}
-              loadPage={(token, cursor) => publicApi.matchPage(slug, token, cursor)}
-              downloadPrefix={event.name.replace(/[^\w-]+/g, "-").toLowerCase()}
-              emptyTitle="We didn't find you in these photos yet"
-              emptyDescription="More photos may still be uploading. You can also try a clearer, front-facing selfie in good light."
-              onExpired={startOver} />
-            {result.total === 0 && (
-              <div className="mt-2 flex justify-center">
-                <Button onClick={startOver} icon={<SearchX className="h-4 w-4" />} variant="secondary">Try another selfie</Button>
-              </div>
-            )}
-          </section>
+          </>
         )}
       </main>
     </Shell>
+  );
+}
+
+function AllPhotosView({ slug }: { slug: string; event: PublicEventOut }) {
+  const [photos, setPhotos] = useState<PublicPhotoItem[]>([]);
+  const [folders, setFolders] = useState<string[]>([]);
+  const [selectedFolder, setSelectedFolder] = useState<string>("all");
+  const [searchQuery, setSearchQuery] = useState("");
+  const dq = useDebounced(searchQuery.trim(), 300);
+  const [cursor, setCursor] = useState<number | null>(null);
+  const [total, setTotal] = useState(0);
+  const [loading, setLoading] = useState(true);
+  const [loadingMore, setLoadingMore] = useState(false);
+  const [error, setError] = useState<unknown>(null);
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
+  const [openIndex, setOpenIndex] = useState<number | null>(null);
+  const [batchDownloading, setBatchDownloading] = useState(false);
+  const [batchProgress, setBatchProgress] = useState<{ done: number; total: number } | null>(null);
+
+  const loadPhotos = useCallback(async (fld: string, q: string) => {
+    setLoading(true);
+    setError(null);
+    try {
+      const page = await publicApi.listPhotos(slug, {
+        folder: fld === "all" ? undefined : fld,
+        q: q || undefined,
+        cursor: 0,
+        limit: 48,
+      });
+      setPhotos(page.items);
+      setTotal(page.total);
+      setCursor(page.next_cursor);
+      setFolders(page.folders);
+    } catch (err) {
+      setError(err);
+    } finally {
+      setLoading(false);
+    }
+  }, [slug]);
+
+  useEffect(() => {
+    void loadPhotos(selectedFolder, dq);
+  }, [loadPhotos, selectedFolder, dq]);
+
+  const loadMore = async () => {
+    if (cursor === null || loadingMore) return;
+    setLoadingMore(true);
+    try {
+      const page = await publicApi.listPhotos(slug, {
+        folder: selectedFolder === "all" ? undefined : selectedFolder,
+        q: dq || undefined,
+        cursor,
+        limit: 48,
+      });
+      setPhotos((prev) => {
+        const seen = new Set(prev.map((p) => p.photo_id));
+        return [...prev, ...page.items.filter((p) => !seen.has(p.photo_id))];
+      });
+      setCursor(page.next_cursor);
+    } catch (err) {
+      setError(err);
+    } finally {
+      setLoadingMore(false);
+    }
+  };
+
+  const toggleSelect = (photoId: string) => {
+    setSelectedIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(photoId)) next.delete(photoId);
+      else next.add(photoId);
+      return next;
+    });
+  };
+
+  const selectAll = () => {
+    if (selectedIds.size === photos.length && photos.length > 0) {
+      setSelectedIds(new Set());
+    } else {
+      setSelectedIds(new Set(photos.map((p) => p.photo_id)));
+    }
+  };
+
+  const downloadBatch = async (targets: PublicPhotoItem[]) => {
+    if (targets.length === 0) return;
+    setBatchDownloading(true);
+    setBatchProgress({ done: 0, total: targets.length });
+    const downloadList = targets
+      .map((p) => {
+        const url = p.download_url ?? p.preview_url;
+        if (!url) return null;
+        return {
+          url,
+          filename: p.original_filename || `photo-${p.photo_id.slice(0, 8)}.jpg`,
+        };
+      })
+      .filter((x): x is { url: string; filename: string } => x !== null);
+
+    try {
+      await downloadImagesInBatch(downloadList, undefined, (done, total) => {
+        setBatchProgress({ done, total });
+      });
+    } catch (err) {
+      console.error("Batch download failed", err);
+    } finally {
+      setBatchDownloading(false);
+      setBatchProgress(null);
+    }
+  };
+
+  const allSelected = photos.length > 0 && selectedIds.size === photos.length;
+  const gallery: GalleryItem[] = photos.map((p, i) => ({
+    id: p.photo_id,
+    thumbnailUrl: p.thumbnail_url,
+    previewUrl: p.preview_url,
+    alt: p.original_filename || `Photo ${i + 1}`,
+  }));
+
+  return (
+    <section className="mt-6 space-y-4" aria-label="All event photos">
+      {/* Folder Chips & Search Bar */}
+      <div className="flex flex-col gap-3 rounded-2xl border border-line bg-surface p-4 shadow-sm sm:flex-row sm:items-center sm:justify-between">
+        <div className="relative flex-1 sm:max-w-xs">
+          <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-zinc-400" aria-hidden />
+          <Input
+            type="search"
+            placeholder="Search by filename"
+            value={searchQuery}
+            onChange={(e) => setSearchQuery(e.target.value)}
+            className="pl-9 text-xs"
+          />
+        </div>
+
+        {folders.length > 0 && (
+          <div className="flex flex-wrap items-center gap-1.5 overflow-x-auto pb-1 sm:pb-0">
+            <button
+              type="button"
+              onClick={() => setSelectedFolder("all")}
+              className={cn(
+                "inline-flex items-center gap-1.5 rounded-full px-3 py-1 text-xs font-medium transition",
+                selectedFolder === "all"
+                  ? "bg-brand-600 text-white shadow-sm"
+                  : "bg-canvas text-muted hover:bg-zinc-200 dark:hover:bg-zinc-700 hover:text-ink",
+              )}
+            >
+              <Folder className="h-3.5 w-3.5" /> All ({total})
+            </button>
+            {folders.map((fld) => (
+              <button
+                key={fld}
+                type="button"
+                onClick={() => setSelectedFolder(fld)}
+                className={cn(
+                  "inline-flex items-center gap-1.5 rounded-full px-3 py-1 text-xs font-medium transition",
+                  selectedFolder === fld
+                    ? "bg-brand-600 text-white shadow-sm"
+                    : "bg-canvas text-muted hover:bg-zinc-200 dark:hover:bg-zinc-700 hover:text-ink",
+                )}
+              >
+                <FolderOpen className="h-3.5 w-3.5" /> {fld}
+              </button>
+            ))}
+          </div>
+        )}
+      </div>
+
+      {/* Selection & Download Actions */}
+      {photos.length > 0 && (
+        <div className="flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-line bg-surface p-3.5 shadow-sm sm:px-4">
+          <div className="flex items-center gap-3">
+            <label className="flex cursor-pointer items-center gap-2 text-xs font-semibold text-ink select-none">
+              <input
+                type="checkbox"
+                checked={allSelected}
+                onChange={selectAll}
+                className="h-4 w-4 rounded border-zinc-300 text-brand-600 accent-brand-600 focus:ring-brand-500"
+              />
+              <span>{allSelected ? "Deselect all" : "Select all photos"}</span>
+            </label>
+            {selectedIds.size > 0 && (
+              <span className="inline-flex items-center rounded-full bg-brand-100 px-2.5 py-0.5 text-xs font-medium text-brand-800">
+                {selectedIds.size} of {photos.length} selected
+              </span>
+            )}
+          </div>
+
+          <div className="flex flex-wrap items-center gap-2">
+            {selectedIds.size > 0 && (
+              <Button
+                size="sm"
+                onClick={() => void downloadBatch(photos.filter((p) => selectedIds.has(p.photo_id)))}
+                disabled={batchDownloading}
+                icon={batchDownloading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Download className="h-4 w-4" />}
+              >
+                {batchDownloading && batchProgress
+                  ? `Downloading (${batchProgress.done}/${batchProgress.total})…`
+                  : `Download selected (${selectedIds.size})`}
+              </Button>
+            )}
+            <Button
+              size="sm"
+              variant="outline"
+              onClick={() => void downloadBatch(photos)}
+              disabled={batchDownloading}
+              icon={batchDownloading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Download className="h-4 w-4" />}
+            >
+              Download all ({photos.length})
+            </Button>
+          </div>
+        </div>
+      )}
+
+      {error ? (
+        <Alert tone="error" title="Couldn't load photos">
+          {errorMessage(error)}
+        </Alert>
+      ) : loading ? (
+        <GridSkeleton count={12} />
+      ) : photos.length === 0 ? (
+        <EmptyState
+          icon={<ImageOff className="h-6 w-6 text-muted" />}
+          title={searchQuery || selectedFolder !== "all" ? "No photos found" : "No photos published yet"}
+          description={
+            searchQuery || selectedFolder !== "all"
+              ? "Try clearing your filters or searching for something else."
+              : "The photographer hasn't published photos for this event yet. Check back soon!"
+          }
+        />
+      ) : (
+        <div className="space-y-6">
+          <PhotoGrid>
+            {photos.map((p, i) => {
+              const isSelected = selectedIds.has(p.photo_id);
+              return (
+                <PhotoTile
+                  key={p.photo_id}
+                  src={p.thumbnail_url}
+                  alt={p.original_filename || `Photo ${i + 1}`}
+                  selected={isSelected}
+                  onClick={() => setOpenIndex(i)}
+                  overlay={
+                    <button
+                      type="button"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        toggleSelect(p.photo_id);
+                      }}
+                      aria-label={isSelected ? "Deselect photo" : "Select photo"}
+                      className={cn(
+                        "absolute right-2 top-2 z-10 flex h-6 w-6 items-center justify-center rounded-md border shadow-sm transition-all",
+                        isSelected
+                          ? "border-brand-600 bg-brand-600 text-white shadow-brand-600/30"
+                          : "border-white/80 bg-black/40 text-transparent hover:border-white hover:bg-black/60",
+                      )}
+                    >
+                      <Check className={cn("h-3.5 w-3.5 stroke-[3]", isSelected ? "opacity-100" : "opacity-0")} />
+                    </button>
+                  }
+                />
+              );
+            })}
+          </PhotoGrid>
+
+          {cursor !== null && (
+            <div className="flex justify-center pt-2">
+              <Button variant="outline" onClick={loadMore} loading={loadingMore}>
+                {loadingMore ? "Loading more photos…" : `Show more (${total - photos.length} left)`}
+              </Button>
+            </div>
+          )}
+        </div>
+      )}
+
+      <Lightbox
+        items={gallery}
+        index={openIndex}
+        onIndexChange={setOpenIndex}
+        onClose={() => setOpenIndex(null)}
+        toolbar={(item) => {
+          const p = photos.find((x) => x.photo_id === item.id);
+          if (!p) return null;
+          const url = p.download_url ?? p.preview_url;
+          if (!url) return null;
+          return (
+            <button
+              onClick={() => void downloadImage(url, p.original_filename || "photo.jpg")}
+              className="inline-flex h-10 items-center gap-2 rounded-full bg-white/15 px-4 text-sm font-medium text-white hover:bg-white/25"
+            >
+              <Download className="h-4 w-4" />
+              Download
+            </button>
+          );
+        }}
+      />
+    </section>
   );
 }

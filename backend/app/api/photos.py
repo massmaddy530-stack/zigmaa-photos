@@ -10,14 +10,14 @@ from typing import Annotated
 from fastapi import APIRouter, Depends, File, Form, Query, Response, UploadFile, status
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel, Field
-from sqlalchemy import func, select
+from sqlalchemy import delete, func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from starlette.concurrency import run_in_threadpool
 
 from app.api.deps import SessionDep, SettingsDep, StorageDep
 from app.core.errors import AppError, ConflictError, NotFoundError, error_body
 from app.core.security import Role, require_admin, require_uploader
-from app.models import EventStatus, FaceEmbedding, Photo, PhotoStatus, ProcessingJob
+from app.models import EventStatus, FaceEmbedding, Photo, PhotoStatus, PhotoWatermarkDerivative, ProcessingJob
 from app.schemas import (
     ErrorResponse,
     FaceOut,
@@ -262,3 +262,52 @@ async def delete_photo(event_id: uuid.UUID, photo_id: uuid.UUID, session: Sessio
         except StorageError:
             logger.warning("Could not delete object %s", k)
     return Response(status_code=status.HTTP_204_NO_CONTENT)
+
+
+class BatchDeletePhotosRequest(BaseModel):
+    photo_ids: list[uuid.UUID]
+
+
+class BatchDeletePhotosResponse(BaseModel):
+    deleted: int
+
+
+@router.post("/batch-delete", response_model=BatchDeletePhotosResponse, dependencies=[Depends(require_admin)],
+             summary="Permanently delete multiple photos by their IDs")
+async def batch_delete_photos(
+    event_id: uuid.UUID,
+    body: BatchDeletePhotosRequest,
+    session: SessionDep,
+    storage: StorageDep,
+) -> BatchDeletePhotosResponse:
+    await get_event_or_404(session, event_id)
+    if not body.photo_ids:
+        return BatchDeletePhotosResponse(deleted=0)
+
+    photos = (await session.execute(
+        select(Photo).where(Photo.event_id == event_id, Photo.id.in_(body.photo_ids))
+    )).scalars().all()
+
+    if not photos:
+        return BatchDeletePhotosResponse(deleted=0)
+
+    keys: list[str] = []
+    pids: list[uuid.UUID] = []
+    for p in photos:
+        pids.append(p.id)
+        for k in (p.original_key, p.thumbnail_key, p.preview_key):
+            if k:
+                keys.append(k)
+
+    await session.execute(delete(PhotoWatermarkDerivative).where(PhotoWatermarkDerivative.photo_id.in_(pids)))
+    await session.execute(delete(FaceEmbedding).where(FaceEmbedding.photo_id.in_(pids)))
+    await session.execute(delete(Photo).where(Photo.id.in_(pids)))
+    await session.commit()
+
+    for k in keys:
+        try:
+            await run_in_threadpool(storage.delete, k)
+        except StorageError:
+            logger.warning("Could not delete object %s", k)
+
+    return BatchDeletePhotosResponse(deleted=len(pids))

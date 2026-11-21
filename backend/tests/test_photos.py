@@ -371,3 +371,22 @@ async def test_delete_photo(client, storage):
     assert not list(storage.root.rglob(f"{pid}*"))
     async with get_sessionmaker()() as s:
         assert (await s.execute(select(func.count()).select_from(FaceEmbedding))).scalar_one() == 0
+
+
+async def test_batch_delete_photos(client, storage):
+    ev = await create_event(client)
+    r1 = await upload(client, ev["id"], ("a.png", make_image(["alice"], seed=10), "image/png"))
+    r2 = await upload(client, ev["id"], ("b.png", make_image(["bob"], seed=20), "image/png"))
+    p1 = r1.json()["items"][0]["photo_id"]
+    p2 = r2.json()["items"][0]["photo_id"]
+    assert (await client.get(f"/api/v1/events/{ev['id']}/photos", headers=ADMIN)).json()["total"] == 2
+
+    # Batch delete both photos
+    res = await client.post(
+        f"/api/v1/events/{ev['id']}/photos/batch-delete",
+        json={"photo_ids": [p1, p2]},
+        headers=ADMIN,
+    )
+    assert res.status_code == 200
+    assert res.json()["deleted"] == 2
+    assert (await client.get(f"/api/v1/events/{ev['id']}/photos", headers=ADMIN)).json()["total"] == 0

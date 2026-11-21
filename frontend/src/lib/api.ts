@@ -2,6 +2,7 @@ import { PUBLIC_API_BASE_URL } from "./config";
 import { browserMediaUrl } from "./image";
 import type {
   ApiErrorBody,
+  BatchDeletePhotosResponse,
   EventCreate,
   EventOut,
   EventStatus,
@@ -17,6 +18,7 @@ import type {
   PhotoOut,
   PhotoStatus,
   PublicEventOut,
+  PublicPhotosPage,
   RetryResponse,
   StorageOverviewOut,
   UploadResponse,
@@ -171,6 +173,11 @@ export const adminApi = {
   getPhoto: (eventId: string, photoId: string) => admin<PhotoDetailOut>(`events/${eventId}/photos/${photoId}`),
   deletePhoto: (eventId: string, photoId: string) =>
     admin<void>(`events/${eventId}/photos/${photoId}`, { method: "DELETE" }),
+  batchDeletePhotos: (eventId: string, photoIds: string[]) =>
+    admin<BatchDeletePhotosResponse>(`events/${eventId}/photos/batch-delete`, {
+      method: "POST",
+      json: { photo_ids: photoIds },
+    }),
   retryPhoto: (eventId: string, photoId: string) =>
     admin<RetryResponse>(`events/${eventId}/photos/${photoId}/retry`, { method: "POST" }),
   retryFailed: (eventId: string, includePending = false) =>
@@ -229,7 +236,10 @@ export function uploadPhotos(
     xhr.onabort = () => reject(new ApiError(0, "aborted", "Upload cancelled"));
     signal?.addEventListener("abort", () => xhr.abort());
     const fd = new FormData();
-    for (const f of files) fd.append("files", f, f.name);
+    for (const f of files) {
+      const relPath = (f as { webkitRelativePath?: string }).webkitRelativePath;
+      fd.append("files", f, relPath && relPath.includes("/") ? relPath : f.name);
+    }
     fd.append("source", "dashboard");
     xhr.send(fd);
   });
@@ -292,6 +302,22 @@ export const publicApi = {
       `${PUBLIC_API_BASE_URL}/api/v1/public/events/${encodeURIComponent(slug)}/matches/${encodeURIComponent(token)}`,
       { query: { cursor, limit } },
     ).then(guestMatchItems),
+  listPhotos: (
+    slug: string,
+    params: { q?: string; folder?: string; cursor?: number; limit?: number } = {},
+  ) =>
+    request<PublicPhotosPage>(
+      `${PUBLIC_API_BASE_URL}/api/v1/public/events/${encodeURIComponent(slug)}/photos`,
+      { query: params },
+    ).then((page) => ({
+      ...page,
+      items: page.items.map((m) => ({
+        ...m,
+        thumbnail_url: browserMediaUrl(m.thumbnail_url),
+        preview_url: browserMediaUrl(m.preview_url),
+        download_url: browserMediaUrl(m.download_url),
+      })),
+    })),
 };
 
 /** Fetch backend health through the signed-in admin route; returns the body even when "degraded" (HTTP 503). */

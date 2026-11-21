@@ -192,6 +192,28 @@ export interface MatchPage {
   next_cursor: number | null;
 }
 
+export interface PublicPhotoItem {
+  photo_id: string;
+  original_filename: string;
+  width: number | null;
+  height: number | null;
+  thumbnail_url: string | null;
+  preview_url: string | null;
+  download_url?: string | null;
+  folder?: string | null;
+}
+
+export interface PublicPhotosPage {
+  total: number;
+  items: PublicPhotoItem[];
+  next_cursor: number | null;
+  folders: string[];
+}
+
+export interface BatchDeletePhotosResponse {
+  deleted: number;
+}
+
 export interface HealthOut {
   status: "ok" | "degraded";
   version: string;

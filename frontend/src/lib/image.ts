@@ -394,6 +394,31 @@ export async function downloadImage(url: string, filename: string, config?: Wate
   }
 }
 
+/**
+ * Downloads multiple images sequentially with a short delay so browsers don't block multiple downloads.
+ */
+export async function downloadImagesInBatch(
+  items: Array<{ url: string; filename: string }>,
+  config?: WatermarkConfig,
+  onProgress?: (current: number, total: number) => void,
+): Promise<{ successful: number; failed: number }> {
+  let successful = 0;
+  let failed = 0;
+  for (let i = 0; i < items.length; i++) {
+    onProgress?.(i + 1, items.length);
+    try {
+      await downloadImage(items[i].url, items[i].filename, config);
+      successful++;
+    } catch {
+      failed++;
+    }
+    if (i < items.length - 1) {
+      await new Promise((resolve) => setTimeout(resolve, 350));
+    }
+  }
+  return { successful, failed };
+}
+
 const LOOPBACK_HOSTS = new Set(["localhost", "127.0.0.1", "[::1]"]);
 
 /**

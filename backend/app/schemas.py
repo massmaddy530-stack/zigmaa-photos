@@ -133,6 +133,24 @@ class PublicEventOut(BaseModel):
     matching_available: bool
 
 
+class PublicPhotoItem(BaseModel):
+    photo_id: uuid.UUID
+    original_filename: str
+    width: int | None = None
+    height: int | None = None
+    thumbnail_url: str | None = None
+    preview_url: str | None = None
+    download_url: str | None = None
+    folder: str | None = None
+
+
+class PublicPhotosPage(BaseModel):
+    total: int
+    items: list[PublicPhotoItem]
+    next_cursor: int | None = None
+    folders: list[str] = []
+
+
 # --------------------------------------------------------------------------- photos
 
 

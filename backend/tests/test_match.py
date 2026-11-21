@@ -196,3 +196,16 @@ async def test_threshold_is_configurable(client, settings, threshold, expected):
     settings.match_similarity_threshold = threshold
     r = await _match(client, ev["slug"], ["alice"])
     assert r.json()["total"] == expected
+
+
+async def test_public_event_photos(client):
+    ev = await create_event(client)
+    await upload(client, ev["id"], ("a.png", make_image(["alice"], seed=1), "image/png"),
+                 ("b.png", make_image(["bob"], seed=2), "image/png"))
+    res = await client.get(f"/api/v1/public/events/{ev['slug']}/photos")
+    assert res.status_code == 200
+    data = res.json()
+    assert data["total"] == 2
+    assert len(data["items"]) == 2
+    assert data["items"][0]["thumbnail_url"] is not None
+    assert data["items"][0]["download_url"] is not None

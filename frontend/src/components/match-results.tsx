@@ -1,9 +1,10 @@
 "use client";
 
-import { Download, ImageOff, Loader2 } from "lucide-react";
+import { Check, Download, ImageOff, Loader2 } from "lucide-react";
 import { useState } from "react";
 import { ApiError, errorMessage } from "@/lib/api";
-import { DownloadError, downloadImage, urlExtension } from "@/lib/image";
+import { DownloadError, downloadImage, downloadImagesInBatch, urlExtension } from "@/lib/image";
+import { cn } from "@/lib/format";
 import type { MatchItem, MatchPage, MatchResponse } from "@/lib/types";
 import { Lightbox, PhotoGrid, PhotoTile, type GalleryItem } from "./gallery";
 import { Button } from "./ui/button";
@@ -25,9 +26,55 @@ export function MatchResults({ initial, loadPage, showSimilarity, emptyTitle, em
   const [open, setOpen] = useState<number | null>(null);
   const [downloading, setDownloading] = useState<string | null>(null);
   const [downloadError, setDownloadError] = useState<DownloadError | null>(null);
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
+  const [batchDownloading, setBatchDownloading] = useState(false);
+  const [batchProgress, setBatchProgress] = useState<{ done: number; total: number } | null>(null);
+
+  const toggleSelect = (photoId: string) => {
+    setSelectedIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(photoId)) next.delete(photoId);
+      else next.add(photoId);
+      return next;
+    });
+  };
+
+  const selectAll = () => {
+    if (selectedIds.size === items.length) {
+      setSelectedIds(new Set());
+    } else {
+      setSelectedIds(new Set(items.map((m) => m.photo_id)));
+    }
+  };
+
+  async function downloadBatch(targetItems: MatchItem[]) {
+    if (targetItems.length === 0) return;
+    setBatchDownloading(true);
+    setBatchProgress({ done: 0, total: targetItems.length });
+    const downloadList = targetItems
+      .map((m) => {
+        const url = m.download_url ?? m.preview_url;
+        if (!url) return null;
+        return {
+          url,
+          filename: `${downloadPrefix}-${m.photo_id.slice(0, 8)}${urlExtension(url, m.download_url ? ".jpg" : ".webp")}`,
+        };
+      })
+      .filter((x): x is { url: string; filename: string } => x !== null);
+
+    try {
+      await downloadImagesInBatch(downloadList, undefined, (done, total) => {
+        setBatchProgress({ done, total });
+      });
+    } catch (err) {
+      setError(err);
+    } finally {
+      setBatchDownloading(false);
+      setBatchProgress(null);
+    }
+  }
 
   async function download(m: MatchItem) {
-    // Prefer the original (full quality); older API responses only had the preview.
     const url = m.download_url ?? m.preview_url;
     if (!url) return;
     setDownloading(m.photo_id);
@@ -67,18 +114,93 @@ export function MatchResults({ initial, loadPage, showSimilarity, emptyTitle, em
     id: m.photo_id, thumbnailUrl: m.thumbnail_url, previewUrl: m.preview_url, alt: `Photo ${i + 1}`,
   }));
   const expired = error instanceof ApiError && error.code === "match_expired";
+  const allSelected = items.length > 0 && selectedIds.size === items.length;
 
   return (
-    <div className="space-y-5">
+    <div className="space-y-4">
+      {/* Action / Selection Bar */}
+      <div className="flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-line bg-surface p-3.5 shadow-sm sm:px-4">
+        <div className="flex items-center gap-3">
+          <label className="flex cursor-pointer items-center gap-2 text-xs font-semibold text-ink select-none">
+            <input
+              type="checkbox"
+              checked={allSelected}
+              onChange={selectAll}
+              className="h-4 w-4 rounded border-zinc-300 text-brand-600 accent-brand-600 focus:ring-brand-500"
+            />
+            <span>{allSelected ? "Deselect all" : "Select all"}</span>
+          </label>
+          {selectedIds.size > 0 && (
+            <span className="inline-flex items-center rounded-full bg-brand-100 px-2.5 py-0.5 text-xs font-medium text-brand-800">
+              {selectedIds.size} of {items.length} selected
+            </span>
+          )}
+        </div>
+
+        <div className="flex flex-wrap items-center gap-2">
+          {selectedIds.size > 0 && (
+            <Button
+              size="sm"
+              onClick={() => void downloadBatch(items.filter((m) => selectedIds.has(m.photo_id)))}
+              disabled={batchDownloading}
+              icon={batchDownloading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Download className="h-4 w-4" />}
+            >
+              {batchDownloading && batchProgress
+                ? `Downloading (${batchProgress.done}/${batchProgress.total})…`
+                : `Download selected (${selectedIds.size})`}
+            </Button>
+          )}
+          <Button
+            size="sm"
+            variant="outline"
+            onClick={() => void downloadBatch(items)}
+            disabled={batchDownloading}
+            icon={batchDownloading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Download className="h-4 w-4" />}
+          >
+            Download all ({items.length})
+          </Button>
+        </div>
+      </div>
+
       <PhotoGrid>
-        {items.map((m, i) => (
-          <PhotoTile key={m.photo_id} src={m.thumbnail_url} alt={`Open photo ${i + 1}`} onClick={() => setOpen(i)}
-            overlay={showSimilarity ? (
-              <span className="absolute bottom-2 left-2 rounded-full bg-black/55 px-2 py-0.5 text-[11px] font-medium tabular-nums text-white backdrop-blur">
-                {(m.similarity * 100).toFixed(0)}% similar
-              </span>
-            ) : undefined} />
-        ))}
+        {items.map((m, i) => {
+          const isSelected = selectedIds.has(m.photo_id);
+          return (
+            <PhotoTile
+              key={m.photo_id}
+              src={m.thumbnail_url}
+              alt={`Open photo ${i + 1}`}
+              selected={isSelected}
+              onClick={() => setOpen(i)}
+              overlay={
+                <>
+                  <button
+                    type="button"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      toggleSelect(m.photo_id);
+                    }}
+                    aria-label={isSelected ? "Deselect photo" : "Select photo"}
+                    className={cn(
+                      "absolute right-2 top-2 z-10 flex h-6 w-6 items-center justify-center rounded-md border shadow-sm transition-all",
+                      isSelected
+                        ? "border-brand-600 bg-brand-600 text-white shadow-brand-600/30"
+                        : "border-white/80 bg-black/40 text-transparent hover:border-white hover:bg-black/60",
+                    )}
+                  >
+                    <Check className={cn("h-3.5 w-3.5 stroke-[3]", isSelected ? "opacity-100" : "opacity-0")} />
+                  </button>
+
+                  {showSimilarity && (
+                    <span className="absolute bottom-2 left-2 rounded-full bg-black/55 px-2 py-0.5 text-[11px] font-medium tabular-nums text-white backdrop-blur">
+                      {(m.similarity * 100).toFixed(0)}% similar
+                    </span>
+                  )}
+                </>
+              }
+            />
+          );
+        })}
       </PhotoGrid>
 
       {error ? (

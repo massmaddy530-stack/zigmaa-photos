@@ -20,7 +20,7 @@ from app.core.errors import AppError, NotFoundError, PayloadTooLargeError
 from app.core.ratelimit import RateLimiter
 from app.core.security import require_admin
 from app.models import Event, Photo, PhotoStatus
-from app.schemas import ErrorResponse, MatchPage, MatchResponse, MatchTimings, PublicEventOut
+from app.schemas import ErrorResponse, MatchPage, MatchResponse, MatchTimings, PublicEventOut, PublicPhotoItem, PublicPhotosPage
 from app.services.events import get_event_or_404, get_public_event_or_404, public_url
 from app.services.face.engine import analyzer_available
 from app.services.match_store import get_match_store
@@ -177,6 +177,87 @@ async def public_match_page(slug: str, token: str, session: SessionDep, storage:
                             limit: Annotated[int, Query(ge=1, le=200)] = DEFAULT_PAGE) -> MatchPage:
     event = await get_public_event_or_404(session, slug)
     return await _page(session, event, token, cursor, limit, storage)
+
+
+@public_router.get("/{slug}/photos", response_model=PublicPhotosPage, responses={404: {"model": ErrorResponse}},
+                   summary="Public gallery photos for an event (indexed photos, optional folder/filename filter)")
+async def public_event_photos(
+    slug: str,
+    session: SessionDep,
+    storage: StorageDep,
+    q: Annotated[str | None, Query(max_length=100, description="Filter by filename")] = None,
+    folder: Annotated[str | None, Query(max_length=100, description="Filter by folder")] = None,
+    cursor: Annotated[int, Query(ge=0)] = 0,
+    limit: Annotated[int, Query(ge=1, le=100)] = 48,
+) -> PublicPhotosPage:
+    event = await get_public_event_or_404(session, slug)
+    stmt = select(Photo).where(Photo.event_id == event.id, Photo.status == PhotoStatus.indexed)
+    if q:
+        stmt = stmt.where(func.lower(Photo.original_filename).like(f"%{q.strip().lower()}%"))
+    if folder and folder.lower() != "all":
+        clean_folder = folder.strip()
+        stmt = stmt.where(
+            Photo.original_filename.like(f"{clean_folder}/%")
+            | Photo.original_filename.like(f"{clean_folder}\\%")
+        )
+
+    total = (await session.execute(select(func.count()).select_from(stmt.subquery()))).scalar_one()
+    photos = (await session.execute(
+        stmt.order_by(Photo.created_at.desc(), Photo.id).limit(limit).offset(cursor)
+    )).scalars().all()
+
+    # Query distinct filenames to extract distinct folder names
+    all_filenames = (await session.execute(
+        select(Photo.original_filename).where(Photo.event_id == event.id, Photo.status == PhotoStatus.indexed)
+    )).scalars().all()
+    folders_set: set[str] = set()
+    for fn in all_filenames:
+        clean = fn.replace("\\", "/")
+        if "/" in clean:
+            folders_set.add(clean.split("/")[0])
+    folders = sorted(list(folders_set))
+
+    items: list[PublicPhotoItem] = []
+    for p in photos:
+        thumb = getattr(p, "r2_thumbnail_url", None)
+        if thumb and "localhost" in thumb:
+            thumb = None
+        if not thumb and p.thumbnail_key:
+            thumb = storage.signed_url(p.thumbnail_key)
+
+        prev = getattr(p, "r2_preview_url", None)
+        if prev and "localhost" in prev:
+            prev = None
+        if not prev and p.preview_key:
+            prev = storage.signed_url(p.preview_key)
+
+        orig = getattr(p, "r2_original_url", None)
+        if orig and "localhost" in orig:
+            orig = None
+        if not orig and p.original_key:
+            orig = storage.signed_url(p.original_key)
+
+        clean_fn = p.original_filename.replace("\\", "/")
+        fld = clean_fn.split("/")[0] if "/" in clean_fn else None
+
+        items.append(PublicPhotoItem(
+            photo_id=p.id,
+            original_filename=clean_fn.split("/")[-1] if "/" in clean_fn else p.original_filename,
+            width=p.width,
+            height=p.height,
+            thumbnail_url=thumb,
+            preview_url=prev,
+            download_url=orig or prev,
+            folder=fld,
+        ))
+
+    nxt = cursor + limit
+    return PublicPhotosPage(
+        total=total,
+        items=items,
+        next_cursor=nxt if nxt < total else None,
+        folders=folders,
+    )
 
 
 match_selfie_router = APIRouter(tags=["selfie-matching"])

@@ -1,6 +1,6 @@
 "use client";
 
-import { Download, ExternalLink, ImageIcon, RotateCcw, ScanFace, Search, Trash2, UploadCloud } from "lucide-react";
+import { Check, CheckSquare, Download, ExternalLink, ImageIcon, RotateCcw, ScanFace, Search, Trash2, UploadCloud } from "lucide-react";
 import { useCallback, useEffect, useState } from "react";
 import { adminApi, errorMessage } from "@/lib/api";
 import { downloadImage, getSavedWatermarkConfig } from "@/lib/image";
@@ -25,12 +25,17 @@ export function EventPhotos({ eventId, refreshKey, pollWhileProcessing, onChange
   onChanged: () => void;
   onGoUpload?: () => void;
 }) {
+  const toast = useToast();
   const [status, setStatus] = useState<PhotoStatus | "">("");
   const [faces, setFaces] = useState<"" | "yes" | "no">("");
   const [q, setQ] = useState("");
   const [offset, setOffset] = useState(0);
   const [open, setOpen] = useState<number | null>(null);
   const [faceBoxes, setFaceBoxes] = useState<{ id: string; faces: PhotoDetailOut["faces"] } | null>(null);
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
+  const [isSelecting, setIsSelecting] = useState(false);
+  const [confirmBatchDelete, setConfirmBatchDelete] = useState(false);
+  const [busyBatchDelete, setBusyBatchDelete] = useState(false);
   const dq = useDebounced(q.trim(), 300);
 
   const photos = useQuery(
@@ -47,6 +52,48 @@ export function EventPhotos({ eventId, refreshKey, pollWhileProcessing, onChange
   }));
 
   const resetPage = <T,>(set: (v: T) => void) => (v: T) => { set(v); setOffset(0); };
+
+  const toggleSelect = (id: string) => {
+    setSelectedIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  };
+
+  const selectAllOnPage = () => {
+    if (!data?.items) return;
+    const pageIds = data.items.map((p) => p.id);
+    const allSelected = pageIds.every((id) => selectedIds.has(id));
+    if (allSelected) {
+      setSelectedIds((prev) => {
+        const next = new Set(prev);
+        pageIds.forEach((id) => next.delete(id));
+        return next;
+      });
+    } else {
+      setSelectedIds((prev) => new Set([...prev, ...pageIds]));
+    }
+  };
+
+  const handleBatchDelete = async () => {
+    if (selectedIds.size === 0) return;
+    setBusyBatchDelete(true);
+    try {
+      const res = await adminApi.batchDeletePhotos(eventId, Array.from(selectedIds));
+      toast.success(`${res.deleted} photo${res.deleted === 1 ? "" : "s"} deleted permanently`);
+      setSelectedIds(new Set());
+      setIsSelecting(false);
+      setConfirmBatchDelete(false);
+      photos.reload();
+      onChanged();
+    } catch (err) {
+      toast.error("Could not delete selected photos", errorMessage(err));
+    } finally {
+      setBusyBatchDelete(false);
+    }
+  };
 
   return (
     <div className="space-y-4">
@@ -66,9 +113,68 @@ export function EventPhotos({ eventId, refreshKey, pollWhileProcessing, onChange
             <option value="yes">With faces</option>
             <option value="no">No faces</option>
           </Select>
+          <Button
+            type="button"
+            variant={isSelecting ? "secondary" : "outline"}
+            size="md"
+            onClick={() => {
+              setIsSelecting(!isSelecting);
+              if (isSelecting) setSelectedIds(new Set());
+            }}
+            icon={<CheckSquare className="h-4 w-4" />}
+          >
+            {isSelecting ? "Cancel selection" : "Select photos"}
+          </Button>
         </div>
         {data && <p className="text-sm text-muted sm:ml-auto">{formatNumber(data.total)} photo{data.total === 1 ? "" : "s"}</p>}
       </div>
+
+      {isSelecting && data && data.items.length > 0 && (
+        <div className="flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-brand-200 bg-brand-50/70 p-3 sm:px-5">
+          <div className="flex items-center gap-3">
+            <span className="inline-flex h-7 items-center rounded-full bg-brand-600 px-3 text-xs font-semibold text-white">
+              {selectedIds.size} selected
+            </span>
+            <button
+              type="button"
+              onClick={selectAllOnPage}
+              className="text-xs font-medium text-brand-700 underline hover:text-brand-800"
+            >
+              {data.items.every((p) => selectedIds.has(p.id)) ? "Deselect page" : "Select all on page"}
+            </button>
+            {selectedIds.size > 0 && (
+              <button
+                type="button"
+                onClick={() => setSelectedIds(new Set())}
+                className="text-xs font-medium text-muted hover:text-ink"
+              >
+                Clear
+              </button>
+            )}
+          </div>
+          <div className="flex items-center gap-2">
+            <Button
+              size="sm"
+              variant="ghost"
+              onClick={() => {
+                setIsSelecting(false);
+                setSelectedIds(new Set());
+              }}
+            >
+              Done
+            </Button>
+            <Button
+              size="sm"
+              variant="danger"
+              disabled={selectedIds.size === 0}
+              onClick={() => setConfirmBatchDelete(true)}
+              icon={<Trash2 className="h-4 w-4" />}
+            >
+              Delete selected ({selectedIds.size})
+            </Button>
+          </div>
+        </div>
+      )}
 
       {photos.error && !data ? (
         <Card><ErrorState error={photos.error} onRetry={photos.reload} /></Card>
@@ -88,14 +194,48 @@ export function EventPhotos({ eventId, refreshKey, pollWhileProcessing, onChange
         <div className={cn("space-y-4 transition-opacity", photos.loading && "opacity-70")}>
           <PhotoGrid>
             {data.items.map((p, i) => (
-              <PhotoTile key={p.id} src={p.thumbnail_url} alt={p.original_filename} onClick={() => setOpen(i)}
+              <PhotoTile
+                key={p.id}
+                src={p.thumbnail_url}
+                alt={p.original_filename}
+                selected={selectedIds.has(p.id)}
+                onClick={() => {
+                  if (isSelecting) {
+                    toggleSelect(p.id);
+                  } else {
+                    setOpen(i);
+                  }
+                }}
                 placeholder={<TilePlaceholder photo={p} />}
-                overlay={<TileOverlay photo={p} />} />
+                overlay={
+                  <TileOverlay
+                    photo={p}
+                    selected={selectedIds.has(p.id)}
+                    isSelecting={isSelecting}
+                    onToggleSelect={(e) => {
+                      e.stopPropagation();
+                      if (!isSelecting) setIsSelecting(true);
+                      toggleSelect(p.id);
+                    }}
+                  />
+                }
+              />
             ))}
           </PhotoGrid>
           <Pagination total={data.total} limit={LIMIT} offset={offset} onChange={(o) => { setOffset(o); window.scrollTo({ top: 0, behavior: "smooth" }); }} noun="photos" />
         </div>
       )}
+
+      <ConfirmDialog
+        open={confirmBatchDelete}
+        onClose={() => setConfirmBatchDelete(false)}
+        onConfirm={handleBatchDelete}
+        loading={busyBatchDelete}
+        danger
+        title={`Permanently delete ${selectedIds.size} photo${selectedIds.size === 1 ? "" : "s"}?`}
+        confirmLabel={`Delete ${selectedIds.size} photo${selectedIds.size === 1 ? "" : "s"}`}
+        description="The original files, previews and face data for these photos will be permanently deleted. This action cannot be undone."
+      />
 
       <Lightbox
         items={items}
@@ -123,9 +263,34 @@ function TilePlaceholder({ photo }: { photo: PhotoOut }) {
   );
 }
 
-function TileOverlay({ photo }: { photo: PhotoOut }) {
+function TileOverlay({
+  photo,
+  selected,
+  isSelecting,
+  onToggleSelect,
+}: {
+  photo: PhotoOut;
+  selected?: boolean;
+  isSelecting?: boolean;
+  onToggleSelect?: (e: React.MouseEvent) => void;
+}) {
   return (
     <>
+      <button
+        type="button"
+        onClick={onToggleSelect}
+        aria-label={selected ? "Deselect photo" : "Select photo"}
+        className={cn(
+          "absolute right-2 top-2 z-10 flex h-6 w-6 items-center justify-center rounded-md border shadow-sm transition-all",
+          selected
+            ? "border-brand-600 bg-brand-600 text-white shadow-brand-600/30"
+            : isSelecting
+              ? "border-white/90 bg-black/45 text-transparent hover:border-white hover:bg-black/65"
+              : "opacity-0 group-hover:opacity-100 border-white/80 bg-black/40 text-transparent hover:bg-black/60",
+        )}
+      >
+        <Check className={cn("h-3.5 w-3.5 stroke-[3]", selected ? "opacity-100" : "opacity-0")} />
+      </button>
       {photo.status !== "indexed" && (
         <span className="absolute left-2 top-2"><PhotoStatusBadge status={photo.status} /></span>
       )}
