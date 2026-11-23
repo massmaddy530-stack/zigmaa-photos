@@ -36,6 +36,7 @@ export function EventPhotos({ eventId, refreshKey, pollWhileProcessing, onChange
   const [isSelecting, setIsSelecting] = useState(false);
   const [confirmBatchDelete, setConfirmBatchDelete] = useState(false);
   const [busyBatchDelete, setBusyBatchDelete] = useState(false);
+  const [busyBatchRetry, setBusyBatchRetry] = useState(false);
   const dq = useDebounced(q.trim(), 300);
 
   const photos = useQuery(
@@ -43,7 +44,7 @@ export function EventPhotos({ eventId, refreshKey, pollWhileProcessing, onChange
       status, q: dq, has_faces: faces === "" ? null : faces === "yes", limit: LIMIT, offset,
     }),
     [eventId, status, dq, faces, offset, refreshKey],
-    { pollMs: pollWhileProcessing ? 5000 : false },
+    { pollMs: pollWhileProcessing ? 2000 : false },
   );
   const data = photos.data;
   const filtered = Boolean(status || dq || faces);
@@ -74,6 +75,23 @@ export function EventPhotos({ eventId, refreshKey, pollWhileProcessing, onChange
       });
     } else {
       setSelectedIds((prev) => new Set([...prev, ...pageIds]));
+    }
+  };
+
+  const handleBatchRetry = async () => {
+    if (selectedIds.size === 0) return;
+    setBusyBatchRetry(true);
+    try {
+      const res = await adminApi.batchRetryPhotos(eventId, Array.from(selectedIds));
+      toast.success(res.queued ? `Re-queued ${res.queued} photo${res.queued === 1 ? "" : "s"} for processing` : "No photos needed retry");
+      setSelectedIds(new Set());
+      setIsSelecting(false);
+      photos.reload();
+      onChanged();
+    } catch (err) {
+      toast.error("Could not retry selected photos", errorMessage(err));
+    } finally {
+      setBusyBatchRetry(false);
     }
   };
 
@@ -155,13 +173,13 @@ export function EventPhotos({ eventId, refreshKey, pollWhileProcessing, onChange
           <div className="flex items-center gap-2">
             <Button
               size="sm"
-              variant="ghost"
-              onClick={() => {
-                setIsSelecting(false);
-                setSelectedIds(new Set());
-              }}
+              variant="outline"
+              disabled={selectedIds.size === 0 || busyBatchRetry}
+              loading={busyBatchRetry}
+              onClick={handleBatchRetry}
+              icon={<RotateCcw className="h-4 w-4" />}
             >
-              Done
+              Retry selected ({selectedIds.size})
             </Button>
             <Button
               size="sm"
@@ -171,6 +189,16 @@ export function EventPhotos({ eventId, refreshKey, pollWhileProcessing, onChange
               icon={<Trash2 className="h-4 w-4" />}
             >
               Delete selected ({selectedIds.size})
+            </Button>
+            <Button
+              size="sm"
+              variant="ghost"
+              onClick={() => {
+                setIsSelecting(false);
+                setSelectedIds(new Set());
+              }}
+            >
+              Done
             </Button>
           </div>
         </div>

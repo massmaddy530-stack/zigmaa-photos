@@ -35,7 +35,7 @@ export function ProcessingPanel({ eventId, status, error, onReload, onChanged }:
   async function retryAll() {
     setRetrying(true);
     try {
-      const r = await adminApi.retryFailed(eventId);
+      const r = await adminApi.retryFailed(eventId, true);
       toast.success(r.queued ? `Re-queued ${r.queued} photo${r.queued === 1 ? "" : "s"}` : "Nothing to retry");
       onChanged();
     } catch (err) {
@@ -65,9 +65,9 @@ export function ProcessingPanel({ eventId, status, error, onReload, onChanged }:
             </p>
           </div>
         </div>
-        {c.failed > 0 && (
+        {(c.failed > 0 || inFlight > 0) && (
           <Button size="sm" variant="outline" onClick={retryAll} loading={retrying} icon={<RotateCcw className="h-4 w-4" />}>
-            Retry failed
+            {c.failed > 0 ? "Retry failed" : "Re-queue all"}
           </Button>
         )}
       </div>

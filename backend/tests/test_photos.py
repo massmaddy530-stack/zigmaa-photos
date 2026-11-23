@@ -390,3 +390,27 @@ async def test_batch_delete_photos(client, storage):
     assert res.status_code == 200
     assert res.json()["deleted"] == 2
     assert (await client.get(f"/api/v1/events/{ev['id']}/photos", headers=ADMIN)).json()["total"] == 0
+
+
+async def test_batch_retry_photos(client, storage, monkeypatch, settings):
+    settings.task_max_retries = 1
+    real = storage.download_to
+    monkeypatch.setattr(storage, "download_to", lambda k, d: (_ for _ in ()).throw(StorageError("down")))
+    ev = await create_event(client)
+    r1 = await upload(client, ev["id"], ("a.png", make_image(["alice"], seed=10), "image/png"))
+    p1 = r1.json()["items"][0]["photo_id"]
+
+    photo = (await client.get(f"/api/v1/events/{ev['id']}/photos/{p1}", headers=ADMIN)).json()
+    assert photo["status"] == "failed"
+
+    # Batch retry
+    monkeypatch.setattr(storage, "download_to", real)
+    res = await client.post(
+        f"/api/v1/events/{ev['id']}/photos/batch-retry",
+        json={"photo_ids": [p1]},
+        headers=ADMIN,
+    )
+    assert res.status_code == 202
+    assert res.json()["queued"] == 1
+    photo = (await client.get(f"/api/v1/events/{ev['id']}/photos/{p1}", headers=ADMIN)).json()
+    assert photo["status"] == "indexed"

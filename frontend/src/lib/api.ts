@@ -178,9 +178,14 @@ export const adminApi = {
       method: "POST",
       json: { photo_ids: photoIds },
     }),
+  batchRetryPhotos: (eventId: string, photoIds: string[]) =>
+    admin<RetryResponse>(`events/${eventId}/photos/batch-retry`, {
+      method: "POST",
+      json: { photo_ids: photoIds },
+    }),
   retryPhoto: (eventId: string, photoId: string) =>
     admin<RetryResponse>(`events/${eventId}/photos/${photoId}/retry`, { method: "POST" }),
-  retryFailed: (eventId: string, includePending = false) =>
+  retryFailed: (eventId: string, includePending = true) =>
     admin<RetryResponse>(`events/${eventId}/photos/retry-failed`, {
       method: "POST",
       query: { include_pending: includePending },

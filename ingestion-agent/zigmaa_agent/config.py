@@ -72,7 +72,7 @@ class AgentConfig:
     spool_dir: Path = AGENT_DIR / "spool"
     keep_uploaded: bool = True
     upload_batch_size: int = 10
-    upload_interval_s: float = 2.0
+    upload_interval_s: float = 1.0
     request_timeout_s: float = 60.0
     reconnect_min_s: float = 1.0
     reconnect_max_s: float = 60.0
@@ -81,8 +81,8 @@ class AgentConfig:
     mock_drop_every_n_reads: int = 0
     watch_folder: Path | None = None
     folder_recursive: bool = False
-    folder_poll_interval_s: float = 2.0
-    file_stable_seconds: float = 3.0
+    folder_poll_interval_s: float = 1.0
+    file_stable_seconds: float = 1.5
     folder_include_png: bool = True
     folder_include_existing: bool = False
 

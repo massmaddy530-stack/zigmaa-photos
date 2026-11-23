@@ -208,6 +208,25 @@ async def lifespan(app: FastAPI):
                 settings.face_model_dir,
             )
 
+    # Auto-recover photos stuck in pending / processing state from previous server runs
+    try:
+        from app.models import Photo, PhotoStatus
+        from app.services.dispatch import enqueue_index
+        from app.services.indexing import reset_for_retry
+        from sqlalchemy import select
+
+        async with get_sessionmaker()() as session:
+            stuck_ids = list((await session.execute(
+                select(Photo.id).where(Photo.status.in_([PhotoStatus.pending, PhotoStatus.processing]))
+            )).scalars())
+            if stuck_ids:
+                logger.info("Found %d pending/processing photos at startup, re-enqueuing for indexing...", len(stuck_ids))
+                reset_ids = await reset_for_retry(session, stuck_ids)
+                await enqueue_index(reset_ids)
+                logger.info("Successfully re-enqueued %d photos for indexing", len(reset_ids))
+    except Exception as exc:
+        logger.warning("Could not auto-recover pending/processing photos at startup: %s", exc)
+
     yield
 
     await dispose_engine()

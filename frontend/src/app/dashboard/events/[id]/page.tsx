@@ -50,9 +50,9 @@ function EventDetailInner() {
   const tab: TabId = TABS.some((t) => t.id === tabParam) ? (tabParam as TabId) : "photos";
 
   const event = useQuery(() => adminApi.getEvent(id), [id]);
-  // Poll every 3 s while photos are queued/processing; slowly otherwise (e.g. to catch camera-agent uploads).
+  // Poll fast (1.5s) while photos are queued/processing; 8s otherwise (e.g. to catch camera-agent uploads).
   const [fastPoll, setFastPoll] = useState(true);
-  const status = useQuery(() => adminApi.eventStatus(id), [id], { pollMs: fastPoll ? 3000 : 15000 });
+  const status = useQuery(() => adminApi.eventStatus(id), [id], { pollMs: fastPoll ? 1500 : 8000 });
   const processing = status.data ? !status.data.is_complete : false;
   useEffect(() => setFastPoll(processing), [processing]);
   const c = status.data?.counts;

@@ -79,7 +79,7 @@ class Settings(BaseSettings):
     task_mode: Literal["celery", "thread", "sync"] = "celery"
     task_max_retries: int = 3
     task_retry_backoff_s: float = 10.0
-    thread_workers: int = 1
+    thread_workers: int = 4
     task_soft_time_limit_s: int = 240
     task_time_limit_s: int = 300
 

@@ -231,12 +231,39 @@ async def retry_photo(event_id: uuid.UUID, photo_id: uuid.UUID, session: Session
              dependencies=[Depends(require_admin)],
              summary="Re-queue all failed (and stuck pending) photos of the event")
 async def retry_failed(event_id: uuid.UUID, session: SessionDep,
-                       include_pending: Annotated[bool, Query()] = False) -> RetryResponse:
+                       include_pending: Annotated[bool, Query()] = True) -> RetryResponse:
     await get_event_or_404(session, event_id)
     statuses = [PhotoStatus.failed] + ([PhotoStatus.pending, PhotoStatus.processing] if include_pending else [])
     ids = list((await session.execute(
         select(Photo.id).where(Photo.event_id == event_id, Photo.status.in_(statuses)))).scalars())
     ids = await reset_for_retry(session, ids)
+    await _enqueue_or_503(ids)
+    return RetryResponse(queued=len(ids), photo_ids=ids)
+
+
+class BatchRetryPhotosRequest(BaseModel):
+    photo_ids: list[uuid.UUID]
+
+
+@router.post("/batch-retry", response_model=RetryResponse, status_code=status.HTTP_202_ACCEPTED,
+             dependencies=[Depends(require_admin)],
+             summary="Re-queue selected photos for indexing by their IDs")
+async def batch_retry_photos(
+    event_id: uuid.UUID,
+    body: BatchRetryPhotosRequest,
+    session: SessionDep,
+) -> RetryResponse:
+    await get_event_or_404(session, event_id)
+    if not body.photo_ids:
+        return RetryResponse(queued=0, photo_ids=[])
+
+    valid_ids = list((await session.execute(
+        select(Photo.id).where(Photo.event_id == event_id, Photo.id.in_(body.photo_ids))
+    )).scalars())
+    if not valid_ids:
+        return RetryResponse(queued=0, photo_ids=[])
+
+    ids = await reset_for_retry(session, valid_ids)
     await _enqueue_or_503(ids)
     return RetryResponse(queued=len(ids), photo_ids=ids)
 
