@@ -44,7 +44,7 @@ export function EventPhotos({ eventId, refreshKey, pollWhileProcessing, onChange
       status, q: dq, has_faces: faces === "" ? null : faces === "yes", limit: LIMIT, offset,
     }),
     [eventId, status, dq, faces, offset, refreshKey],
-    { pollMs: pollWhileProcessing ? 2000 : false },
+    { pollMs: pollWhileProcessing ? 4000 : false },
   );
   const data = photos.data;
   const filtered = Boolean(status || dq || faces);
@@ -270,13 +270,35 @@ export function EventPhotos({ eventId, refreshKey, pollWhileProcessing, onChange
         index={open}
         onIndexChange={setOpen}
         onClose={() => setOpen(null)}
+        toolbar={(item) => {
+          const currentPhoto = data?.items.find((p) => p.id === item.id);
+          const dlUrl = currentPhoto?.preview_url ?? item.previewUrl ?? item.thumbnailUrl;
+          if (!dlUrl) return null;
+          return (
+            <Button
+              size="sm"
+              variant="outline"
+              className="border-white/20 bg-black/40 text-white hover:bg-black/60"
+              onClick={() => {
+                downloadImage(dlUrl, currentPhoto?.original_filename || item.alt || "photo.jpg", getSavedWatermarkConfig(eventId));
+              }}
+              icon={<Download className="h-4 w-4" />}
+            >
+              Download
+            </Button>
+          );
+        }}
         imageOverlay={(item) => (faceBoxes?.id === item.id ? <FaceBoxes faces={faceBoxes.faces} /> : null)}
-        side={(item) => (
-          <PhotoDetailPanel key={item.id} eventId={eventId} photoId={item.id}
-            onLoaded={(d) => setFaceBoxes({ id: d.id, faces: d.faces })}
-            onDeleted={() => { setOpen(null); photos.reload(); onChanged(); }}
-            onRetried={() => { photos.reload(); onChanged(); }} />
-        )}
+        side={(item) => {
+          const currentPhoto = data?.items.find((p) => p.id === item.id);
+          return (
+            <PhotoDetailPanel key={item.id} eventId={eventId} photoId={item.id}
+              initialPhoto={currentPhoto}
+              onLoaded={(d) => setFaceBoxes({ id: d.id, faces: d.faces })}
+              onDeleted={() => { setOpen(null); photos.reload(); onChanged(); }}
+              onRetried={() => { photos.reload(); onChanged(); }} />
+          );
+        }}
       />
     </div>
   );
@@ -331,9 +353,10 @@ function TileOverlay({
   );
 }
 
-function PhotoDetailPanel({ eventId, photoId, onLoaded, onDeleted, onRetried }: {
+function PhotoDetailPanel({ eventId, photoId, initialPhoto, onLoaded, onDeleted, onRetried }: {
   eventId: string;
   photoId: string;
+  initialPhoto?: PhotoOut;
   onLoaded: (detail: PhotoDetailOut) => void;
   onDeleted: () => void;
   onRetried: () => void;
@@ -342,11 +365,12 @@ function PhotoDetailPanel({ eventId, photoId, onLoaded, onDeleted, onRetried }: 
   const detail = useQuery(() => adminApi.getPhoto(eventId, photoId), [eventId, photoId]);
   const [confirm, setConfirm] = useState(false);
   const [busy, setBusy] = useState<"delete" | "retry" | null>(null);
-  const p = detail.data;
+  const detailData = detail.data;
+  const p = detailData ?? initialPhoto;
   useEffect(() => {
-    if (p) onLoaded(p);
+    if (detailData) onLoaded(detailData);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [p]);
+  }, [detailData]);
 
   const retry = useCallback(async () => {
     setBusy("retry");
@@ -375,8 +399,12 @@ function PhotoDetailPanel({ eventId, photoId, onLoaded, onDeleted, onRetried }: 
     }
   }
 
-  if (detail.error && !p) return <ErrorState compact error={detail.error} onRetry={detail.reload} className="m-4" />;
-  if (!p) return <div className="space-y-3 p-5"><Skeleton className="h-5 w-3/4" /><Skeleton className="h-4 w-1/2" /><Skeleton className="h-20 w-full" /></div>;
+  if (!p) {
+    if (detail.error) return <ErrorState compact error={detail.error} onRetry={detail.reload} className="m-4" />;
+    return <div className="space-y-3 p-5"><Skeleton className="h-5 w-3/4" /><Skeleton className="h-4 w-1/2" /><Skeleton className="h-20 w-full" /></div>;
+  }
+
+  const downloadUrl = detailData?.original_url || p.preview_url || p.thumbnail_url;
 
   return (
     <div className="space-y-5 p-5 text-sm">
@@ -387,6 +415,12 @@ function PhotoDetailPanel({ eventId, photoId, onLoaded, onDeleted, onRetried }: 
           {p.status === "indexed" && <Badge tone="brand"><ScanFace className="h-3 w-3" />{p.face_count} face{p.face_count === 1 ? "" : "s"}</Badge>}
         </div>
       </div>
+      {Boolean(detail.error) && (
+        <div className="flex items-center justify-between rounded-xl bg-amber-50 px-3 py-2 text-xs text-amber-800">
+          <span>Server busy. Full face details will refresh automatically.</span>
+          <button type="button" onClick={() => detail.reload()} className="font-semibold underline ml-2">Retry</button>
+        </div>
+      )}
       {p.error_message && <p className="rounded-xl bg-red-50 px-3 py-2 text-xs text-red-700">{p.error_message}</p>}
       <dl className="grid grid-cols-2 gap-x-4 gap-y-3 text-xs">
         <Meta label="Dimensions" value={p.width && p.height ? `${p.width} × ${p.height}` : "—"} />
@@ -396,11 +430,11 @@ function PhotoDetailPanel({ eventId, photoId, onLoaded, onDeleted, onRetried }: 
         <Meta label="Source" value={p.source} />
         <Meta label="Attempts" value={String(p.attempts)} />
       </dl>
-      {p.faces.length > 0 && (
+      {detailData && detailData.faces.length > 0 && (
         <div>
           <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-muted">Detected faces</p>
           <ul className="space-y-1 text-xs">
-            {p.faces.map((f) => (
+            {detailData.faces.map((f) => (
               <li key={f.face_index} className="flex justify-between">
                 <span>Face {f.face_index + 1}</span>
                 <span className="tabular-nums text-muted">detector score {f.det_score.toFixed(2)}</span>
@@ -409,11 +443,11 @@ function PhotoDetailPanel({ eventId, photoId, onLoaded, onDeleted, onRetried }: 
           </ul>
         </div>
       )}
-      {p.jobs.length > 0 && (
+      {detailData && detailData.jobs.length > 0 && (
         <div>
           <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-muted">Processing history</p>
           <ol className="space-y-2 text-xs">
-            {p.jobs.map((j) => (
+            {detailData.jobs.map((j) => (
               <li key={j.id} className="rounded-lg border border-line px-3 py-2">
                 <div className="flex justify-between gap-2">
                   <span className={cn("font-medium", j.status === "failed" ? "text-red-700" : j.status === "succeeded" ? "text-emerald-700" : "text-ink")}>
@@ -432,15 +466,17 @@ function PhotoDetailPanel({ eventId, photoId, onLoaded, onDeleted, onRetried }: 
         {p.status !== "indexed" && (
           <Button size="sm" variant="outline" onClick={retry} loading={busy === "retry"} icon={<RotateCcw className="h-4 w-4" />}>Retry</Button>
         )}
-        {p.original_url && (
+        {downloadUrl && (
           <>
-            <Button size="sm" variant="outline" onClick={() => downloadImage(p.original_url!, p.original_filename || "photo.jpg", getSavedWatermarkConfig(eventId))} icon={<Download className="h-4 w-4" />}>
+            <Button size="sm" variant="outline" onClick={() => downloadImage(downloadUrl, p.original_filename || "photo.jpg", getSavedWatermarkConfig(eventId))} icon={<Download className="h-4 w-4" />}>
               Download
             </Button>
-            <a href={p.original_url} target="_blank" rel="noopener noreferrer"
-               className="inline-flex h-8 items-center gap-2 rounded-xl border border-line px-3 text-sm font-medium hover:bg-canvas">
-              <ExternalLink className="h-4 w-4" />Original
-            </a>
+            {detailData?.original_url && (
+              <a href={detailData.original_url} target="_blank" rel="noopener noreferrer"
+                 className="inline-flex h-8 items-center gap-2 rounded-xl border border-line px-3 text-sm font-medium hover:bg-canvas">
+                <ExternalLink className="h-4 w-4" />Original
+              </a>
+            )}
           </>
         )}
         <Button size="sm" variant="ghost" className="text-red-600 hover:bg-red-50 hover:text-red-700" onClick={() => setConfirm(true)}

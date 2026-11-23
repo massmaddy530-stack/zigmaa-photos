@@ -25,16 +25,22 @@ export function useQuery<T>(
   const [error, setError] = useState<unknown>(null);
   const [loading, setLoading] = useState(opts.enabled !== false);
   const seq = useRef(0);
+  const inFlightRef = useRef(false);
+  const errorBackoffUntilRef = useRef<number>(0);
   const fetcherRef = useRef(fetcher);
   fetcherRef.current = fetcher;
 
   const run = useCallback(async () => {
+    if (inFlightRef.current) return;
+    if (Date.now() < errorBackoffUntilRef.current) return;
     const id = ++seq.current;
+    inFlightRef.current = true;
     try {
       const result = await fetcherRef.current();
       if (id === seq.current) {
         setDataState(result);
         setError(null);
+        errorBackoffUntilRef.current = 0;
       }
     } catch (err) {
       if (id !== seq.current) return;
@@ -43,8 +49,16 @@ export function useQuery<T>(
         window.location.href = `/login?next=${encodeURIComponent(window.location.pathname + window.location.search)}`;
         return;
       }
+      if (err instanceof ApiError && err.status === 429) {
+        // Back off polling for 12s if rate-limited so the server/gateway can recover
+        errorBackoffUntilRef.current = Date.now() + 12000;
+      } else {
+        // General error backoff 5s
+        errorBackoffUntilRef.current = Date.now() + 5000;
+      }
       setError(err);
     } finally {
+      inFlightRef.current = false;
       if (id === seq.current) setLoading(false);
     }
   }, []);

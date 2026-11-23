@@ -162,7 +162,7 @@ async def check_hashes(event_id: uuid.UUID, body: HashCheckRequest, session: Ses
 @router.get("", response_model=Page[PhotoOut], dependencies=[Depends(require_admin)])
 async def list_photos(
     event_id: uuid.UUID, session: SessionDep, storage: StorageDep,
-    status_filter: Annotated[PhotoStatus | None, Query(alias="status")] = None,
+    status_filter: Annotated[str | None, Query(alias="status")] = None,
     q: Annotated[str | None, Query(max_length=100, description="Filter by filename")] = None,
     has_faces: Annotated[bool | None, Query()] = None,
     limit: Annotated[int, Query(ge=1, le=200)] = 48,
@@ -170,12 +170,18 @@ async def list_photos(
 ) -> Page[PhotoOut]:
     await get_event_or_404(session, event_id)
     stmt = select(Photo).where(Photo.event_id == event_id)
-    if status_filter:
-        stmt = stmt.where(Photo.status == status_filter)
-    if q:
+    if status_filter and status_filter.strip():
+        try:
+            parsed_status = PhotoStatus(status_filter.strip())
+            stmt = stmt.where(Photo.status == parsed_status)
+        except ValueError:
+            pass
+    if q and q.strip():
         stmt = stmt.where(func.lower(Photo.original_filename).like(f"%{q.strip().lower()}%"))
-    if has_faces is not None:
-        stmt = stmt.where(Photo.face_count > 0 if has_faces else Photo.face_count == 0)
+    if has_faces is True:
+        stmt = stmt.where(Photo.face_count > 0)
+    elif has_faces is False:
+        stmt = stmt.where(Photo.face_count == 0)
     total = (await session.execute(select(func.count()).select_from(stmt.subquery()))).scalar_one()
     photos = (await session.execute(
         stmt.order_by(Photo.created_at.desc(), Photo.id).limit(limit).offset(offset))).scalars().all()
