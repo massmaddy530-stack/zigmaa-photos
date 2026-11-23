@@ -29,6 +29,7 @@ export function EventSettings({ event, onSaved }: { event: EventOut; onSaved: (e
   const [confirmName, setConfirmName] = useState("");
   const [draggingId, setDraggingId] = useState<string | null>(null);
   const [showDesigner, setShowDesigner] = useState(false);
+  const saveTimeoutRef = useRef<NodeJS.Timeout | null>(null);
 
   // Load existing watermark configuration or defaults
   const [wm, setWm] = useState<WatermarkConfig>(() => {
@@ -58,6 +59,17 @@ export function EventSettings({ event, onSaved }: { event: EventOut; onSaved: (e
       })
       .catch(() => undefined);
   }, [event.id, event.slug]);
+
+  // Debounced auto-save: ensures every slider, drag, and position change is persisted automatically
+  useEffect(() => {
+    if (saveTimeoutRef.current) clearTimeout(saveTimeoutRef.current);
+    saveTimeoutRef.current = setTimeout(() => {
+      saveEventWatermarkConfig(event.id, event.slug, wm);
+    }, 400);
+    return () => {
+      if (saveTimeoutRef.current) clearTimeout(saveTimeoutRef.current);
+    };
+  }, [wm, event.id, event.slug]);
 
   async function changeCover(f: File | undefined) {
     if (!f) return;
@@ -125,59 +137,76 @@ export function EventSettings({ event, onSaved }: { event: EventOut; onSaved: (e
         const existing = (prev.templates || []).map((t) => ({ ...t, enabled: false }));
         const updated = [...existing, ...newItems];
         const active = updated[updated.length - 1]; // select the newest uploaded template
-        return {
+        const next: WatermarkConfig = {
           ...prev,
           templates: updated,
           activeTemplateId: active.id,
           imageUrl: active.dataUrl,
-          sizePercent: active.sizePercent ?? 14,
-          opacity: active.opacity ?? 0.40,
+          sizePercent: active.sizePercent ?? 18,
+          opacity: active.opacity ?? 0.60,
           xPercent: active.xPercent ?? 88,
           yPercent: active.yPercent ?? 88,
         };
+        saveEventWatermarkConfig(event.id, event.slug, next);
+        return next;
       });
       toast.success(
-        newItems.length > 1 ? `${newItems.length} templates uploaded` : "Template uploaded",
-        "Click 'Save watermark settings' to apply."
+        newItems.length > 1 ? `${newItems.length} templates uploaded` : "Watermark uploaded & applied!",
+        "Saved and applied to photo downloads."
       );
     }
   }
 
   function selectTemplate(item: WatermarkTemplateItem) {
-    setWm((prev) => ({
-      ...prev,
-      activeTemplateId: item.id,
-      imageUrl: item.dataUrl,
-      sizePercent: item.sizePercent ?? prev.sizePercent ?? 14,
-      opacity: item.opacity ?? prev.opacity ?? 0.40,
-    }));
+    setWm((prev) => {
+      // When clicking a template, make it the sole active enabled template
+      const updatedTemplates = (prev.templates || []).map((t) => ({
+        ...t,
+        enabled: t.id === item.id,
+      }));
+      const next: WatermarkConfig = {
+        ...prev,
+        templates: updatedTemplates,
+        activeTemplateId: item.id,
+        imageUrl: item.dataUrl,
+        sizePercent: item.sizePercent ?? prev.sizePercent ?? 14,
+        opacity: item.opacity ?? prev.opacity ?? 0.40,
+        xPercent: item.xPercent ?? prev.xPercent ?? 88,
+        yPercent: item.yPercent ?? prev.yPercent ?? 88,
+      };
+      saveEventWatermarkConfig(event.id, event.slug, next);
+      return next;
+    });
   }
 
   function toggleTemplateEnabled(id: string) {
-    setWm((prev) => ({
-      ...prev,
-      templates: (prev.templates || []).map((t) =>
+    setWm((prev) => {
+      const updated = (prev.templates || []).map((t) =>
         t.id === id ? { ...t, enabled: t.enabled === false ? true : false } : t
-      ),
-    }));
+      );
+      const next: WatermarkConfig = { ...prev, templates: updated };
+      saveEventWatermarkConfig(event.id, event.slug, next);
+      return next;
+    });
   }
 
   function removeTemplateItem(id: string) {
     setWm((prev) => {
       const updated = (prev.templates || []).filter((t) => t.id !== id);
       const nextActive = updated[0];
-      return {
+      const next: WatermarkConfig = {
         ...prev,
         templates: updated,
         activeTemplateId: nextActive?.id || null,
         imageUrl: nextActive?.dataUrl || null,
       };
+      saveEventWatermarkConfig(event.id, event.slug, next);
+      return next;
     });
   }
 
   function resetTemplates() {
-    setWm((prev) => ({
-      ...prev,
+    const next: WatermarkConfig = {
       imageUrl: null,
       templates: [],
       activeTemplateId: null,
@@ -185,7 +214,10 @@ export function EventSettings({ event, onSaved }: { event: EventOut; onSaved: (e
       yPercent: 88,
       sizePercent: 14,
       opacity: 0.40,
-    }));
+      color: "original",
+    };
+    setWm(next);
+    saveEventWatermarkConfig(event.id, event.slug, next);
     toast.success("Reset to default Zigmaa logo");
   }
 
@@ -202,18 +234,23 @@ export function EventSettings({ event, onSaved }: { event: EventOut; onSaved: (e
       enabled: true,
       color: "original",
     };
-    const updated = [...(wm.templates || []), newItem];
-    setWm((prev) => ({
-      ...prev,
-      templates: updated,
-      activeTemplateId: newItem.id,
-      imageUrl: newItem.dataUrl,
-      sizePercent: newItem.sizePercent,
-      opacity: newItem.opacity,
-      xPercent: newItem.xPercent,
-      yPercent: newItem.yPercent,
-    }));
-    toast.success("AI Template added", "Click 'Save watermark settings' to apply to downloads.");
+    setWm((prev) => {
+      const existing = (prev.templates || []).map((t) => ({ ...t, enabled: false }));
+      const updated = [...existing, newItem];
+      const next: WatermarkConfig = {
+        ...prev,
+        templates: updated,
+        activeTemplateId: newItem.id,
+        imageUrl: newItem.dataUrl,
+        sizePercent: newItem.sizePercent,
+        opacity: newItem.opacity,
+        xPercent: newItem.xPercent,
+        yPercent: newItem.yPercent,
+      };
+      saveEventWatermarkConfig(event.id, event.slug, next);
+      return next;
+    });
+    toast.success("AI Template applied & saved!", "Applied to all photo downloads.");
   }
 
   function setPosition(xPercent: number, yPercent: number) {
@@ -338,88 +375,92 @@ export function EventSettings({ event, onSaved }: { event: EventOut; onSaved: (e
             description="Custom watermark applied to all photo downloads for this event"
           />
           <div className="space-y-4 p-5">
-            {/* Live Watermark Preview on Event Cover - ALL Enabled Templates Visible at the Same Time! */}
+            {/* Live Watermark Preview on Event Cover - Tightly wrapped around photo so coordinates match 100% */}
             <div
-              ref={previewRef}
-              onClick={handlePreviewClick}
-              className="relative mx-auto min-h-[260px] max-h-[460px] w-full overflow-hidden rounded-xl border border-line bg-canvas flex items-center justify-center cursor-crosshair group select-none shadow-sm"
+              className="relative mx-auto min-h-[260px] max-h-[460px] w-full overflow-hidden rounded-xl border border-line bg-canvas flex items-center justify-center select-none shadow-sm p-2"
             >
-              <img
-                src={event.cover_url || "/default-cover.jpg"}
-                alt="Cover Preview"
-                className="max-h-[440px] w-auto max-w-full object-contain block mx-auto"
-              />
-              {/* All Enabled Watermarks Rendered Simultaneously */}
-              {wm.templates && wm.templates.length > 0 ? (
-                wm.templates.map((t) => {
-                  if (t.enabled === false) return null;
-                  const isEditing = t.id === (wm.activeTemplateId || wm.templates![0]?.id);
-                  const xPct = t.xPercent ?? wm.xPercent ?? 88;
-                  const yPct = t.yPercent ?? wm.yPercent ?? 88;
-                  const sizePct = t.sizePercent ?? wm.sizePercent ?? 14;
-                  const opVal = t.opacity ?? wm.opacity ?? 0.40;
+              <div
+                ref={previewRef}
+                onClick={handlePreviewClick}
+                className="relative inline-block max-h-[440px] max-w-full cursor-crosshair"
+              >
+                <img
+                  src={event.cover_url || "/default-cover.jpg"}
+                  alt="Cover Preview"
+                  className="max-h-[440px] w-auto max-w-full object-contain block mx-auto pointer-events-none select-none rounded"
+                />
+                {/* All Enabled Watermarks Rendered Simultaneously on the exact photo bounds */}
+                {wm.templates && wm.templates.length > 0 ? (
+                  wm.templates.map((t) => {
+                    if (t.enabled === false) return null;
+                    const isEditing = t.id === (wm.activeTemplateId || wm.templates![0]?.id);
+                    const xPct = isEditing ? (wm.xPercent ?? t.xPercent ?? 88) : (t.xPercent ?? 88);
+                    const yPct = isEditing ? (wm.yPercent ?? t.yPercent ?? 88) : (t.yPercent ?? 88);
+                    const sizePct = isEditing ? (wm.sizePercent ?? t.sizePercent ?? 14) : (t.sizePercent ?? 14);
+                    const opVal = isEditing ? (wm.opacity ?? t.opacity ?? 0.40) : (t.opacity ?? 0.40);
 
-                  return (
-                    <div
-                      key={t.id}
-                      onPointerDown={(e) => startDrag(e, t.id)}
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        selectTemplate(t);
-                      }}
-                      style={{
-                        position: "absolute",
-                        left: `${xPct}%`,
-                        top: `${yPct}%`,
-                        transform: `translate(-${xPct}%, -${yPct}%)`,
-                        width: `${sizePct}%`,
-                        opacity: opVal,
-                        cursor: draggingId === t.id ? "grabbing" : "grab",
-                        touchAction: "none",
-                        userSelect: "none",
-                      }}
-                      className={`transition-opacity duration-150 select-none ${
-                        isEditing ? "ring-1 ring-white/50 rounded" : ""
-                      }`}
-                      title={`Drag to reposition "${t.name}" or select to edit`}
-                    >
-                      <img
-                        src={t.dataUrl}
-                        alt={t.name}
-                        draggable={false}
-                        style={{
-                          width: "100%",
-                          height: "auto",
-                          display: "block",
-                          pointerEvents: "none",
+                    return (
+                      <div
+                        key={t.id}
+                        onPointerDown={(e) => startDrag(e, t.id)}
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          selectTemplate(t);
                         }}
-                      />
-                    </div>
-                  );
-                })
-              ) : (
-                <div
-                  style={{
-                    position: "absolute",
-                    left: `${wm.xPercent}%`,
-                    top: `${wm.yPercent}%`,
-                    transform: `translate(-${wm.xPercent}%, -${wm.yPercent}%)`,
-                    width: `${wm.sizePercent}%`,
-                    opacity: wm.opacity,
-                    pointerEvents: "none",
-                  }}
-                >
-                  <img
-                    src={wm.imageUrl || "/watermark.png"}
-                    alt="Watermark"
+                        style={{
+                          position: "absolute",
+                          left: `${xPct}%`,
+                          top: `${yPct}%`,
+                          transform: `translate(-${xPct}%, -${yPct}%)`,
+                          width: `${sizePct}%`,
+                          opacity: opVal,
+                          cursor: draggingId === t.id ? "grabbing" : "grab",
+                          touchAction: "none",
+                          userSelect: "none",
+                        }}
+                        className={`transition-opacity duration-150 select-none ${
+                          isEditing ? "ring-2 ring-brand-500 rounded shadow-md" : ""
+                        }`}
+                        title={`Drag to reposition "${t.name}" or click to select`}
+                      >
+                        <img
+                          src={t.dataUrl}
+                          alt={t.name}
+                          draggable={false}
+                          style={{
+                            width: "100%",
+                            height: "auto",
+                            display: "block",
+                            pointerEvents: "none",
+                          }}
+                        />
+                      </div>
+                    );
+                  })
+                ) : (
+                  <div
                     style={{
-                      width: "100%",
-                      height: "auto",
-                      display: "block",
+                      position: "absolute",
+                      left: `${wm.xPercent}%`,
+                      top: `${wm.yPercent}%`,
+                      transform: `translate(-${wm.xPercent}%, -${wm.yPercent}%)`,
+                      width: `${wm.sizePercent}%`,
+                      opacity: wm.opacity,
+                      pointerEvents: "none",
                     }}
-                  />
-                </div>
-              )}
+                  >
+                    <img
+                      src={wm.imageUrl || "/watermark.png"}
+                      alt="Watermark"
+                      style={{
+                        width: "100%",
+                        height: "auto",
+                        display: "block",
+                      }}
+                    />
+                  </div>
+                )}
+              </div>
             </div>
 
             {/* Template / Watermark Upload Section */}

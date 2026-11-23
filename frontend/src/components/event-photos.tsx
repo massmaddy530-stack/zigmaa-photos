@@ -3,7 +3,7 @@
 import { Check, CheckSquare, Download, ExternalLink, ImageIcon, RotateCcw, ScanFace, Search, Trash2, UploadCloud } from "lucide-react";
 import { useCallback, useEffect, useState } from "react";
 import { adminApi, errorMessage } from "@/lib/api";
-import { downloadImage, downloadImagesInBatch, getSavedWatermarkConfig, fetchEventWatermarkConfig } from "@/lib/image";
+import { downloadImage, downloadImagesInBatch, getSavedWatermarkConfig, fetchEventWatermarkConfig, type WatermarkConfig } from "@/lib/image";
 import { cn, formatBytes, formatDateTime, formatNumber } from "@/lib/format";
 import { useDebounced, useQuery } from "@/lib/hooks";
 import type { PhotoDetailOut, PhotoOut, PhotoStatus } from "@/lib/types";
@@ -39,7 +39,14 @@ export function EventPhotos({ eventId, refreshKey, pollWhileProcessing, onChange
   const [busyBatchRetry, setBusyBatchRetry] = useState(false);
   const [busyBatchDownload, setBusyBatchDownload] = useState(false);
   const [downloadProgress, setDownloadProgress] = useState<{ done: number; total: number } | null>(null);
+  const [eventWatermark, setEventWatermark] = useState<WatermarkConfig | undefined>(() => getSavedWatermarkConfig(eventId));
   const dq = useDebounced(q.trim(), 300);
+
+  useEffect(() => {
+    void fetchEventWatermarkConfig(eventId).then((cfg) => {
+      if (cfg) setEventWatermark(cfg);
+    });
+  }, [eventId, refreshKey]);
 
   const photos = useQuery(
     () => adminApi.listPhotos(eventId, {
@@ -120,9 +127,10 @@ export function EventPhotos({ eventId, refreshKey, pollWhileProcessing, onChange
     setBusyBatchDownload(true);
     setDownloadProgress({ done: 0, total: selectedIds.size });
     try {
-      let wmConfig = getSavedWatermarkConfig(eventId);
+      let wmConfig = eventWatermark || getSavedWatermarkConfig(eventId);
       if (!wmConfig) {
         wmConfig = await fetchEventWatermarkConfig(eventId);
+        if (wmConfig) setEventWatermark(wmConfig);
       }
       const selectedPhotos = data.items.filter((p) => selectedIds.has(p.id));
       const targets = selectedPhotos.map((p) => ({
@@ -147,9 +155,10 @@ export function EventPhotos({ eventId, refreshKey, pollWhileProcessing, onChange
     setBusyBatchDownload(true);
     setDownloadProgress({ done: 0, total: data.total });
     try {
-      let wmConfig = getSavedWatermarkConfig(eventId);
+      let wmConfig = eventWatermark || getSavedWatermarkConfig(eventId);
       if (!wmConfig) {
         wmConfig = await fetchEventWatermarkConfig(eventId);
+        if (wmConfig) setEventWatermark(wmConfig);
       }
 
       // Fetch all photos across all pages for this event
@@ -387,7 +396,7 @@ export function EventPhotos({ eventId, refreshKey, pollWhileProcessing, onChange
               variant="outline"
               className="border-white/20 bg-black/40 text-white hover:bg-black/60"
               onClick={() => {
-                downloadImage(dlUrl, currentPhoto?.original_filename || item.alt || "photo.jpg", getSavedWatermarkConfig(eventId));
+                downloadImage(dlUrl, currentPhoto?.original_filename || item.alt || "photo.jpg", eventWatermark || getSavedWatermarkConfig(eventId));
               }}
               icon={<Download className="h-4 w-4" />}
             >

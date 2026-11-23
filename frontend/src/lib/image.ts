@@ -298,16 +298,42 @@ export async function applyWatermark(blob: Blob, customConfig?: WatermarkConfig)
         }> = [];
 
         if (Array.isArray(config?.templates) && config.templates.length > 0) {
-          for (const t of config.templates) {
-            if (t.enabled !== false && t.dataUrl) {
-              layersToDraw.push({
-                src: t.dataUrl,
-                xPercent: t.xPercent ?? config?.xPercent ?? 88,
-                yPercent: t.yPercent ?? config?.yPercent ?? 88,
-                sizePercent: t.sizePercent ?? config?.sizePercent ?? 14,
-                opacity: t.opacity ?? config?.opacity ?? 0.40,
-                color: t.color ?? config?.color ?? "original",
-              });
+          const activeTemplate = config.templates.find((t) => t.id === config.activeTemplateId);
+          if (activeTemplate && activeTemplate.dataUrl && activeTemplate.enabled !== false) {
+            // Prioritize the active template with latest top-level slider & position adjustments
+            layersToDraw.push({
+              src: activeTemplate.dataUrl,
+              xPercent: config.xPercent ?? activeTemplate.xPercent ?? 88,
+              yPercent: config.yPercent ?? activeTemplate.yPercent ?? 88,
+              sizePercent: config.sizePercent ?? activeTemplate.sizePercent ?? 14,
+              opacity: config.opacity ?? activeTemplate.opacity ?? 0.40,
+              color: activeTemplate.color ?? config.color ?? "original",
+            });
+            // Also draw other explicitly enabled secondary templates if any
+            for (const t of config.templates) {
+              if (t.id !== activeTemplate.id && t.enabled === true && t.dataUrl) {
+                layersToDraw.push({
+                  src: t.dataUrl,
+                  xPercent: t.xPercent ?? 88,
+                  yPercent: t.yPercent ?? 88,
+                  sizePercent: t.sizePercent ?? 14,
+                  opacity: t.opacity ?? 0.40,
+                  color: t.color ?? "original",
+                });
+              }
+            }
+          } else {
+            for (const t of config.templates) {
+              if (t.enabled !== false && t.dataUrl) {
+                layersToDraw.push({
+                  src: t.dataUrl,
+                  xPercent: t.xPercent ?? config?.xPercent ?? 88,
+                  yPercent: t.yPercent ?? config?.yPercent ?? 88,
+                  sizePercent: t.sizePercent ?? config?.sizePercent ?? 14,
+                  opacity: t.opacity ?? config?.opacity ?? 0.40,
+                  color: t.color ?? config?.color ?? "original",
+                });
+              }
             }
           }
         }
