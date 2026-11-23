@@ -30,9 +30,14 @@ export function useQuery<T>(
   const fetcherRef = useRef(fetcher);
   fetcherRef.current = fetcher;
 
-  const run = useCallback(async () => {
-    if (inFlightRef.current) return;
-    if (Date.now() < errorBackoffUntilRef.current) return;
+  const execute = useCallback(async (isPolling = false) => {
+    if (isPolling) {
+      if (inFlightRef.current) return;
+      if (Date.now() < errorBackoffUntilRef.current) return;
+    } else {
+      // User action or filter/dependency change: always run immediately and reset backoff
+      errorBackoffUntilRef.current = 0;
+    }
     const id = ++seq.current;
     inFlightRef.current = true;
     try {
@@ -50,11 +55,11 @@ export function useQuery<T>(
         return;
       }
       if (err instanceof ApiError && err.status === 429) {
-        // Back off polling for 12s if rate-limited so the server/gateway can recover
-        errorBackoffUntilRef.current = Date.now() + 12000;
+        // Back off background polling for 10s so server/gateway can recover
+        errorBackoffUntilRef.current = Date.now() + 10000;
       } else {
-        // General error backoff 5s
-        errorBackoffUntilRef.current = Date.now() + 5000;
+        // General background error backoff 4s
+        errorBackoffUntilRef.current = Date.now() + 4000;
       }
       setError(err);
     } finally {
@@ -66,23 +71,25 @@ export function useQuery<T>(
   useEffect(() => {
     if (opts.enabled === false) return;
     setLoading(true);
-    void run();
+    void execute(false);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [...deps, opts.enabled]);
 
   useEffect(() => {
     if (!opts.pollMs || opts.enabled === false) return;
     const t = setInterval(() => {
-      if (document.visibilityState === "visible") void run();
+      if (document.visibilityState === "visible") void execute(true);
     }, opts.pollMs);
     return () => clearInterval(t);
-  }, [opts.pollMs, opts.enabled, run]);
+  }, [opts.pollMs, opts.enabled, execute]);
+
+  const reload = useCallback(() => execute(false), [execute]);
 
   const setData = useCallback((updater: T | ((prev: T | undefined) => T)) => {
     setDataState((prev) => (typeof updater === "function" ? (updater as (p: T | undefined) => T)(prev) : updater));
   }, []);
 
-  return { data, error, loading, reload: run, setData };
+  return { data, error, loading, reload, setData };
 }
 
 export function useDebounced<T>(value: T, ms = 300): T {

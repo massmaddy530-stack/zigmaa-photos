@@ -56,7 +56,11 @@ async function proxy(req: NextRequest, ctx: { params: Promise<{ path: string[] }
   const fwd = req.headers.get("x-forwarded-for");
   if (fwd) headers.set("x-forwarded-for", fwd);
 
-  const hasBody = !["GET", "HEAD"].includes(req.method);
+  const contentLength = req.headers.get("content-length");
+  const isChunked = req.headers.get("transfer-encoding") === "chunked";
+  const hasBody = !["GET", "HEAD"].includes(req.method) && Boolean(
+    (contentLength && contentLength !== "0") || isChunked || (contentType && !contentType.includes("json"))
+  );
   let upstream: Response;
   try {
     upstream = await fetch(target, {

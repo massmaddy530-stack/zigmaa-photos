@@ -171,11 +171,12 @@ async def list_photos(
     await get_event_or_404(session, event_id)
     stmt = select(Photo).where(Photo.event_id == event_id)
     if status_filter and status_filter.strip():
+        val = status_filter.strip().lower()
         try:
-            parsed_status = PhotoStatus(status_filter.strip())
+            parsed_status = PhotoStatus(val)
             stmt = stmt.where(Photo.status == parsed_status)
         except ValueError:
-            pass
+            stmt = stmt.where(Photo.status == val)
     if q and q.strip():
         stmt = stmt.where(func.lower(Photo.original_filename).like(f"%{q.strip().lower()}%"))
     if has_faces is True:
