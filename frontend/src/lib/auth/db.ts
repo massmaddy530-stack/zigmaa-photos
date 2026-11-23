@@ -22,7 +22,7 @@ function getDbUrl(): string | null {
   return clean.startsWith("postgres://") || clean.startsWith("postgresql://") ? clean : null;
 }
 
-function getPool(): Pool | null {
+export function getPool(): Pool | null {
   if (poolInstance) return poolInstance;
   const connectionString = getDbUrl();
   if (!connectionString) return null;

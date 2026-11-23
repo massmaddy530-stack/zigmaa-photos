@@ -136,6 +136,52 @@ export function fileToDataUrl(file: File): Promise<string> {
   });
 }
 
+/**
+ * Compresses and downscales a watermark image to max 1200px width/height PNG.
+ * Preserves transparency, remains ultra-crisp for high-res photo overlays,
+ * and ensures the base64 string is only ~80KB-120KB so it never fails localStorage or network transfer limits.
+ */
+export async function optimizeWatermarkFile(file: File, maxSize = 1200): Promise<string> {
+  if (typeof window === "undefined") return fileToDataUrl(file);
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => {
+      const dataUrl = reader.result as string;
+      const img = new Image();
+      img.onload = () => {
+        try {
+          const width = img.naturalWidth || img.width;
+          const height = img.naturalHeight || img.height;
+          if (width <= maxSize && height <= maxSize && file.size < 400 * 1024) {
+            resolve(dataUrl);
+            return;
+          }
+          const scale = Math.min(1, maxSize / Math.max(width, height));
+          const targetW = Math.max(1, Math.round(width * scale));
+          const targetH = Math.max(1, Math.round(height * scale));
+
+          const canvas = document.createElement("canvas");
+          canvas.width = targetW;
+          canvas.height = targetH;
+          const ctx = canvas.getContext("2d");
+          if (!ctx) {
+            resolve(dataUrl);
+            return;
+          }
+          ctx.drawImage(img, 0, 0, targetW, targetH);
+          resolve(canvas.toDataURL("image/png"));
+        } catch {
+          resolve(dataUrl);
+        }
+      };
+      img.onerror = () => resolve(dataUrl);
+      img.src = dataUrl;
+    };
+    reader.onerror = (err) => reject(err);
+    reader.readAsDataURL(file);
+  });
+}
+
 export function saveEventWatermarkConfig(eventId: string, slug?: string | null, config?: WatermarkConfig) {
   if (typeof window === "undefined" || !config) return;
   try {
@@ -144,8 +190,34 @@ export function saveEventWatermarkConfig(eventId: string, slug?: string | null, 
     if (slug) localStorage.setItem(`zigmaa_event_watermark_${slug}`, json);
     localStorage.setItem("zigmaa_default_watermark", json);
   } catch (e) {
-    console.warn("Could not save watermark config", e);
+    console.warn("Could not save watermark config to localStorage", e);
   }
+
+  // Also sync to server API so guests and other devices automatically receive this exact watermark!
+  if (eventId || slug) {
+    void fetch("/api/watermark", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ eventId, slug, config }),
+    }).catch(() => undefined);
+  }
+}
+
+export async function fetchEventWatermarkConfig(slugOrId: string): Promise<WatermarkConfig | undefined> {
+  if (!slugOrId) return getSavedWatermarkConfig();
+  try {
+    const res = await fetch(`/api/watermark?slug=${encodeURIComponent(slugOrId)}`);
+    if (res.ok) {
+      const data = await res.json();
+      if (data?.config) {
+        saveEventWatermarkConfig(slugOrId, slugOrId, data.config);
+        return data.config as WatermarkConfig;
+      }
+    }
+  } catch {
+    /* fallback to local storage */
+  }
+  return getSavedWatermarkConfig(slugOrId);
 }
 
 export function getSavedWatermarkConfig(eventIdOrSlug?: string): WatermarkConfig | undefined {

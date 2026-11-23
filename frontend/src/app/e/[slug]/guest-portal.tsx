@@ -31,7 +31,7 @@ import { Alert, EmptyState, ErrorState } from "@/components/ui/states";
 import { ApiError, errorMessage, publicApi } from "@/lib/api";
 import { cn, formatDate, formatNumber } from "@/lib/format";
 import { useDebounced, useQuery } from "@/lib/hooks";
-import { downloadImage, downloadImagesInBatch } from "@/lib/image";
+import { downloadImage, downloadImagesInBatch, getSavedWatermarkConfig, saveEventWatermarkConfig, type WatermarkConfig } from "@/lib/image";
 import type { MatchResponse, PublicEventOut, PublicPhotoItem } from "@/lib/types";
 
 type Stage = "start" | "searching" | "results";
@@ -139,6 +139,19 @@ function Portal({ event, slug }: { event: PublicEventOut; slug: string }) {
   const abortRef = useRef<AbortController | null>(null);
   const lastSelfie = useRef<Blob | null>(null); // kept in memory only, so a failed upload can be retried
   const resultsRef = useRef<HTMLDivElement>(null);
+  const [watermarkConfig, setWatermarkConfig] = useState<WatermarkConfig | undefined>(() => getSavedWatermarkConfig(slug));
+
+  useEffect(() => {
+    void fetch(`/api/watermark?slug=${encodeURIComponent(slug)}`)
+      .then((r) => (r.ok ? r.json() : null))
+      .then((data) => {
+        if (data?.config && typeof data.config === "object") {
+          setWatermarkConfig(data.config);
+          saveEventWatermarkConfig("", slug, data.config);
+        }
+      })
+      .catch(() => undefined);
+  }, [slug]);
 
   useEffect(() => () => { abortRef.current?.abort(); }, []);
   useEffect(() => {
@@ -214,37 +227,37 @@ function Portal({ event, slug }: { event: PublicEventOut; slug: string }) {
         {event.description && <p className="mt-6 whitespace-pre-line text-[15px] leading-relaxed text-ink/80">{event.description}</p>}
 
         {/* Tab Switcher: Find My Face (Selfie) vs Browse All Photos */}
-        <div className="mt-6 flex rounded-2xl bg-zinc-100 p-1.5 shadow-inner dark:bg-zinc-800">
+        <div className="mt-6 flex rounded-2xl border border-zinc-200/90 bg-zinc-100 p-1.5 shadow-sm">
           <button
             type="button"
             onClick={() => setActiveTab("face")}
             className={cn(
-              "flex flex-1 items-center justify-center gap-2 rounded-xl py-2.5 text-xs font-semibold sm:text-sm transition-all",
+              "flex flex-1 items-center justify-center gap-2 rounded-xl py-2.5 text-xs font-bold sm:text-sm transition-all select-none",
               activeTab === "face"
-                ? "bg-white text-ink shadow-sm dark:bg-zinc-900"
-                : "text-muted hover:text-ink",
+                ? "bg-white text-zinc-900 shadow-sm ring-1 ring-zinc-900/10"
+                : "text-zinc-600 hover:text-zinc-900 hover:bg-white/60",
             )}
           >
-            <ScanFace className="h-4 w-4 text-brand-600" />
-            <span>Find My Face (Selfie)</span>
+            <ScanFace className={cn("h-4 w-4", activeTab === "face" ? "text-brand-600" : "text-zinc-500")} />
+            <span className={activeTab === "face" ? "text-zinc-900 font-bold" : "text-zinc-600 font-medium"}>Find My Face (Selfie)</span>
           </button>
           <button
             type="button"
             onClick={() => setActiveTab("all")}
             className={cn(
-              "flex flex-1 items-center justify-center gap-2 rounded-xl py-2.5 text-xs font-semibold sm:text-sm transition-all",
+              "flex flex-1 items-center justify-center gap-2 rounded-xl py-2.5 text-xs font-bold sm:text-sm transition-all select-none",
               activeTab === "all"
-                ? "bg-white text-ink shadow-sm dark:bg-zinc-900"
-                : "text-muted hover:text-ink",
+                ? "bg-white text-zinc-900 shadow-sm ring-1 ring-zinc-900/10"
+                : "text-zinc-600 hover:text-zinc-900 hover:bg-white/60",
             )}
           >
-            <ImageIcon className="h-4 w-4 text-brand-600" />
-            <span>Browse All Photos ({formatNumber(event.photo_count)})</span>
+            <ImageIcon className={cn("h-4 w-4", activeTab === "all" ? "text-brand-600" : "text-zinc-500")} />
+            <span className={activeTab === "all" ? "text-zinc-900 font-bold" : "text-zinc-600 font-medium"}>Browse All Photos ({formatNumber(event.photo_count)})</span>
           </button>
         </div>
 
         {activeTab === "all" ? (
-          <AllPhotosView slug={slug} event={event} />
+          <AllPhotosView slug={slug} event={event} watermarkConfig={watermarkConfig} />
         ) : (
           <>
             {!online && (
@@ -358,7 +371,8 @@ function Portal({ event, slug }: { event: PublicEventOut; slug: string }) {
                   downloadPrefix={event.name.replace(/[^\w-]+/g, "-").toLowerCase()}
                   emptyTitle="We didn't find you in these photos yet"
                   emptyDescription="More photos may still be uploading. You can also try a clearer, front-facing selfie in good light."
-                  onExpired={startOver} />
+                  onExpired={startOver}
+                  watermarkConfig={watermarkConfig} />
                 {result.total === 0 && (
                   <div className="mt-2 flex justify-center">
                     <Button onClick={startOver} icon={<SearchX className="h-4 w-4" />} variant="secondary">Try another selfie</Button>
@@ -373,7 +387,7 @@ function Portal({ event, slug }: { event: PublicEventOut; slug: string }) {
   );
 }
 
-function AllPhotosView({ slug }: { slug: string; event: PublicEventOut }) {
+function AllPhotosView({ slug, event: _event, watermarkConfig }: { slug: string; event: PublicEventOut; watermarkConfig?: WatermarkConfig }) {
   const [photos, setPhotos] = useState<PublicPhotoItem[]>([]);
   const [folders, setFolders] = useState<string[]>([]);
   const [selectedFolder, setSelectedFolder] = useState<string>("all");
@@ -469,7 +483,7 @@ function AllPhotosView({ slug }: { slug: string; event: PublicEventOut }) {
       .filter((x): x is { url: string; filename: string } => x !== null);
 
     try {
-      await downloadImagesInBatch(downloadList, undefined, (done, total) => {
+      await downloadImagesInBatch(downloadList, watermarkConfig, (done, total) => {
         setBatchProgress({ done, total });
       });
     } catch (err) {
@@ -538,7 +552,7 @@ function AllPhotosView({ slug }: { slug: string; event: PublicEventOut }) {
 
       {/* Selection & Download Actions */}
       {photos.length > 0 && (
-        <div className="flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-line bg-surface p-3.5 shadow-sm sm:px-4">
+        <div className="sticky top-2 z-30 flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-line bg-surface/95 p-3.5 shadow-md backdrop-blur-md sm:px-4">
           <div className="flex items-center gap-3">
             <label className="flex cursor-pointer items-center gap-2 text-xs font-semibold text-ink select-none">
               <input
@@ -643,6 +657,38 @@ function AllPhotosView({ slug }: { slug: string; event: PublicEventOut }) {
         </div>
       )}
 
+      {/* Floating Bottom Bar for Mobile when photos are selected */}
+      {selectedIds.size > 0 && (
+        <div className="fixed bottom-4 left-3 right-3 z-50 flex items-center justify-between gap-3 rounded-2xl border border-brand-200 bg-white/95 p-3 shadow-2xl backdrop-blur-lg sm:hidden">
+          <div className="flex items-center gap-2 min-w-0">
+            <span className="inline-flex h-6 items-center justify-center rounded-full bg-brand-600 px-2.5 text-xs font-bold text-white shadow-sm">
+              {selectedIds.size}
+            </span>
+            <span className="truncate text-xs font-bold text-zinc-900">
+              Selected
+            </span>
+            <button
+              type="button"
+              onClick={() => setSelectedIds(new Set())}
+              className="text-xs font-semibold text-zinc-500 underline hover:text-zinc-900 ml-1"
+            >
+              Clear
+            </button>
+          </div>
+          <Button
+            size="sm"
+            onClick={() => void downloadBatch(photos.filter((p) => selectedIds.has(p.photo_id)))}
+            disabled={batchDownloading}
+            className="bg-brand-600 text-white font-bold shadow-md active:scale-95 transition-transform"
+            icon={batchDownloading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Download className="h-4 w-4" />}
+          >
+            {batchDownloading && batchProgress
+              ? `${batchProgress.done}/${batchProgress.total}…`
+              : `Download (${selectedIds.size})`}
+          </Button>
+        </div>
+      )}
+
       <Lightbox
         items={gallery}
         index={openIndex}
@@ -655,7 +701,7 @@ function AllPhotosView({ slug }: { slug: string; event: PublicEventOut }) {
           if (!url) return null;
           return (
             <button
-              onClick={() => void downloadImage(url, p.original_filename || "photo.jpg")}
+              onClick={() => void downloadImage(url, p.original_filename || "photo.jpg", watermarkConfig)}
               className="inline-flex h-10 items-center gap-2 rounded-full bg-white/15 px-4 text-sm font-medium text-white hover:bg-white/25"
             >
               <Download className="h-4 w-4" />

@@ -2,11 +2,11 @@
 
 import { useRouter } from "next/navigation";
 import { Eye, EyeOff, ImagePlus, Move, Palette, ScanFace, Sliders, Sparkles, Trash2, Upload, X } from "lucide-react";
-import { useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { adminApi, errorMessage } from "@/lib/api";
 import { ACCEPTED_IMAGE_TYPES, MAX_UPLOAD_MB } from "@/lib/config";
 import { formatNumber } from "@/lib/format";
-import { fileToDataUrl, getSavedWatermarkConfig, saveEventWatermarkConfig, type WatermarkConfig, type WatermarkTemplateItem } from "@/lib/image";
+import { getSavedWatermarkConfig, optimizeWatermarkFile, saveEventWatermarkConfig, type WatermarkConfig, type WatermarkTemplateItem } from "@/lib/image";
 import type { EventOut } from "@/lib/types";
 import { CoverImage } from "./event-card";
 import { EventForm } from "./event-form";
@@ -45,6 +45,19 @@ export function EventSettings({ event, onSaved }: { event: EventOut; onSaved: (e
       }
     );
   });
+
+  // Fetch persisted watermark configuration from the server
+  useEffect(() => {
+    void fetch(`/api/watermark?eventId=${encodeURIComponent(event.id)}&slug=${encodeURIComponent(event.slug)}`)
+      .then((r) => (r.ok ? r.json() : null))
+      .then((data) => {
+        if (data?.config && typeof data.config === "object") {
+          setWm(data.config);
+          saveEventWatermarkConfig(event.id, event.slug, data.config);
+        }
+      })
+      .catch(() => undefined);
+  }, [event.id, event.slug]);
 
   async function changeCover(f: File | undefined) {
     if (!f) return;
@@ -87,7 +100,7 @@ export function EventSettings({ event, onSaved }: { event: EventOut; onSaved: (e
         continue;
       }
       try {
-        const dataUrl = await fileToDataUrl(f);
+        const dataUrl = await optimizeWatermarkFile(f);
         const existingCount = (wm.templates || []).length + newItems.length;
         const corner = defaultCorners[existingCount % defaultCorners.length];
         newItems.push({
@@ -108,7 +121,8 @@ export function EventSettings({ event, onSaved }: { event: EventOut; onSaved: (e
 
     if (newItems.length > 0) {
       setWm((prev) => {
-        const existing = prev.templates || [];
+        // Disable previous templates so the newly uploaded watermark takes precedence cleanly
+        const existing = (prev.templates || []).map((t) => ({ ...t, enabled: false }));
         const updated = [...existing, ...newItems];
         const active = updated[updated.length - 1]; // select the newest uploaded template
         return {
@@ -274,9 +288,18 @@ export function EventSettings({ event, onSaved }: { event: EventOut; onSaved: (e
     window.addEventListener("pointerup", onPointerUp);
   }
 
-  function saveWatermark() {
+  async function saveWatermark() {
     saveEventWatermarkConfig(event.id, event.slug, wm);
-    toast.success("Watermark template saved", "Applied to all photo downloads for this event.");
+    try {
+      await fetch("/api/watermark", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ eventId: event.id, slug: event.slug, config: wm }),
+      });
+    } catch (e) {
+      console.warn("Could not sync watermark to server", e);
+    }
+    toast.success("Watermark template saved", "Applied to all photo downloads for this event across all devices.");
   }
 
   async function purgeFaces() {

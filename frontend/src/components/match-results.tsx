@@ -3,14 +3,14 @@
 import { Check, Download, ImageOff, Loader2 } from "lucide-react";
 import { useState } from "react";
 import { ApiError, errorMessage } from "@/lib/api";
-import { DownloadError, downloadImage, downloadImagesInBatch, urlExtension } from "@/lib/image";
+import { DownloadError, downloadImage, downloadImagesInBatch, urlExtension, type WatermarkConfig } from "@/lib/image";
 import { cn } from "@/lib/format";
 import type { MatchItem, MatchPage, MatchResponse } from "@/lib/types";
 import { Lightbox, PhotoGrid, PhotoTile, type GalleryItem } from "./gallery";
 import { Button } from "./ui/button";
 import { Alert, EmptyState } from "./ui/states";
 
-export function MatchResults({ initial, loadPage, showSimilarity, emptyTitle, emptyDescription, downloadPrefix = "photo", onExpired }: {
+export function MatchResults({ initial, loadPage, showSimilarity, emptyTitle, emptyDescription, downloadPrefix = "photo", onExpired, watermarkConfig }: {
   initial: MatchResponse;
   loadPage: (token: string, cursor: number) => Promise<MatchPage>;
   showSimilarity?: boolean;
@@ -18,6 +18,7 @@ export function MatchResults({ initial, loadPage, showSimilarity, emptyTitle, em
   emptyDescription?: string;
   downloadPrefix?: string;
   onExpired?: () => void;
+  watermarkConfig?: WatermarkConfig;
 }) {
   const [items, setItems] = useState<MatchItem[]>(initial.items);
   const [cursor, setCursor] = useState<number | null>(initial.next_cursor);
@@ -63,7 +64,7 @@ export function MatchResults({ initial, loadPage, showSimilarity, emptyTitle, em
       .filter((x): x is { url: string; filename: string } => x !== null);
 
     try {
-      await downloadImagesInBatch(downloadList, undefined, (done, total) => {
+      await downloadImagesInBatch(downloadList, watermarkConfig, (done, total) => {
         setBatchProgress({ done, total });
       });
     } catch (err) {
@@ -80,7 +81,7 @@ export function MatchResults({ initial, loadPage, showSimilarity, emptyTitle, em
     setDownloading(m.photo_id);
     setDownloadError(null);
     try {
-      await downloadImage(url, `${downloadPrefix}-${m.photo_id.slice(0, 8)}${urlExtension(url, m.download_url ? ".jpg" : ".webp")}`);
+      await downloadImage(url, `${downloadPrefix}-${m.photo_id.slice(0, 8)}${urlExtension(url, m.download_url ? ".jpg" : ".webp")}`, watermarkConfig);
     } catch (err) {
       setDownloadError(err instanceof DownloadError ? err : new DownloadError("Download failed. Please try again."));
     } finally {
@@ -119,7 +120,7 @@ export function MatchResults({ initial, loadPage, showSimilarity, emptyTitle, em
   return (
     <div className="space-y-4">
       {/* Action / Selection Bar */}
-      <div className="flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-line bg-surface p-3.5 shadow-sm sm:px-4">
+      <div className="sticky top-2 z-30 flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-line bg-surface/95 p-3.5 shadow-md backdrop-blur-md sm:px-4">
         <div className="flex items-center gap-3">
           <label className="flex cursor-pointer items-center gap-2 text-xs font-semibold text-ink select-none">
             <input
@@ -216,6 +217,38 @@ export function MatchResults({ initial, loadPage, showSimilarity, emptyTitle, em
         <div className="flex justify-center">
           <Button variant="outline" onClick={more} loading={loading}>
             {loading ? "Loading…" : `Show more (${initial.total - items.length} left)`}
+          </Button>
+        </div>
+      )}
+
+      {/* Floating Bottom Bar for Mobile when photos are selected */}
+      {selectedIds.size > 0 && (
+        <div className="fixed bottom-4 left-3 right-3 z-50 flex items-center justify-between gap-3 rounded-2xl border border-brand-200 bg-white/95 p-3 shadow-2xl backdrop-blur-lg sm:hidden">
+          <div className="flex items-center gap-2 min-w-0">
+            <span className="inline-flex h-6 items-center justify-center rounded-full bg-brand-600 px-2.5 text-xs font-bold text-white shadow-sm">
+              {selectedIds.size}
+            </span>
+            <span className="truncate text-xs font-bold text-zinc-900">
+              Selected
+            </span>
+            <button
+              type="button"
+              onClick={() => setSelectedIds(new Set())}
+              className="text-xs font-semibold text-zinc-500 underline hover:text-zinc-900 ml-1"
+            >
+              Clear
+            </button>
+          </div>
+          <Button
+            size="sm"
+            onClick={() => void downloadBatch(items.filter((m) => selectedIds.has(m.photo_id)))}
+            disabled={batchDownloading}
+            className="bg-brand-600 text-white font-bold shadow-md active:scale-95 transition-transform"
+            icon={batchDownloading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Download className="h-4 w-4" />}
+          >
+            {batchDownloading && batchProgress
+              ? `${batchProgress.done}/${batchProgress.total}…`
+              : `Download (${selectedIds.size})`}
           </Button>
         </div>
       )}
