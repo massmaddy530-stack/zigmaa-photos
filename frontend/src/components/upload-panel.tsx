@@ -34,6 +34,19 @@ const STATUS_TEXT: Record<ItemStatus, string> = {
 
 let nextId = 1;
 
+async function poolMap<T, R>(items: T[], fn: (item: T) => Promise<R>, limit = 4): Promise<R[]> {
+  const results: R[] = new Array(items.length);
+  let idx = 0;
+  const workers = Array.from({ length: Math.min(limit, items.length) }, async () => {
+    while (idx < items.length) {
+      const current = idx++;
+      results[current] = await fn(items[current]);
+    }
+  });
+  await Promise.all(workers);
+  return results;
+}
+
 function preValidate(f: File): string | null {
   if (f.type && !ACCEPTED_IMAGE_TYPES.includes(f.type)) return "Unsupported file type (use JPEG, PNG or WebP)";
   if (!f.type && !ACCEPTED_IMAGE_EXTENSIONS.some((ext) => f.name.toLowerCase().endsWith(ext))) return "Unsupported file type (use JPEG, PNG or WebP)";
@@ -123,6 +136,10 @@ export function UploadPanel({ eventId, disabled, onUploaded }: {
             });
             created += body.created;
             restored += body.items.filter((r) => r.restored).length;
+            // Trigger incremental reload so new photos appear in the gallery right away!
+            if (body.created > 0 || body.items.some((r) => r.restored)) {
+              try { onUploaded(); } catch { /* ignore */ }
+            }
           } catch (err) {
             const aborted = err instanceof ApiError && err.code === "aborted";
             patch(ids, { status: aborted ? "queued" : "error", progress: 0, message: aborted ? undefined : errorMessage(err) });
@@ -151,8 +168,8 @@ export function UploadPanel({ eventId, disabled, onUploaded }: {
   async function addFiles(list: FileList | File[] | null) {
     if (!list || disabled) return;
     const rawFiles = Array.from(list);
-    // Optimize photos larger than 3.5MB so they never exceed Vercel's 4.5MB payload limit
-    const optimizedFiles = await Promise.all(rawFiles.map((file) => optimizePhotoForUpload(file)));
+    // Optimize photos larger than 3.5MB using a worker pool to prevent browser memory spikes
+    const optimizedFiles = await poolMap(rawFiles, (file) => optimizePhotoForUpload(file), 4);
     const added: UploadItem[] = optimizedFiles.map((file) => {
       const problem = preValidate(file);
       return { id: nextId++, file, status: problem ? "rejected" : "queued", progress: 0, message: problem ?? undefined };

@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useParams, usePathname, useRouter, useSearchParams } from "next/navigation";
-import { CalendarDays, Camera, ChevronLeft, ExternalLink, Images, MapPin, Settings, Share2 } from "lucide-react";
+import { CalendarDays, Camera, ChevronLeft, ExternalLink, Images, MapPin, Settings, Share2, UploadCloud } from "lucide-react";
 import { Suspense, useCallback, useEffect, useState } from "react";
 import { PageHeader } from "@/components/app-shell";
 import { EventPhotos } from "@/components/event-photos";
@@ -10,8 +10,11 @@ import { EventSettings } from "@/components/event-settings";
 import { EventShare } from "@/components/event-share";
 import { ProcessingPanel } from "@/components/processing-panel";
 import { EventStatusBadge } from "@/components/status-badges";
+import { Button } from "@/components/ui/button";
+import { Modal } from "@/components/ui/modal";
 import { Card, Skeleton } from "@/components/ui/primitives";
 import { ErrorState, EmptyState } from "@/components/ui/states";
+import { UploadPanel } from "@/components/upload-panel";
 import { adminApi, ApiError } from "@/lib/api";
 import { cn, formatDate } from "@/lib/format";
 import { useQuery } from "@/lib/hooks";
@@ -52,6 +55,7 @@ function EventDetailInner() {
   const event = useQuery(() => adminApi.getEvent(id), [id]);
   // Poll every 4s while photos are queued/processing; 15s otherwise.
   const [fastPoll, setFastPoll] = useState(true);
+  const [showUploadModal, setShowUploadModal] = useState(false);
   const status = useQuery(() => adminApi.eventStatus(id), [id], { pollMs: fastPoll ? 4000 : 15000 });
   const processing = status.data ? !status.data.is_complete : false;
   useEffect(() => setFastPoll(processing), [processing]);
@@ -68,6 +72,11 @@ function EventDetailInner() {
     void status.reload();
     void event.reload();
   }, [status, event]);
+
+  const handleUploaded = useCallback(() => {
+    setFastPoll(true);
+    refreshAll();
+  }, [refreshAll]);
 
   if (event.error && !event.data) {
     const notFound = event.error instanceof ApiError && event.error.status === 404;
@@ -95,7 +104,16 @@ function EventDetailInner() {
           </span>
         }
         actions={
-          <div className="flex flex-wrap gap-2">
+          <div className="flex flex-wrap items-center gap-2">
+            <Button
+              type="button"
+              variant="primary"
+              size="md"
+              onClick={() => setShowUploadModal(true)}
+              icon={<UploadCloud className="h-4 w-4" />}
+            >
+              Bulk Upload
+            </Button>
             <Link href={`/dashboard/events/${id}/capture`}
                   className="inline-flex h-10 items-center gap-2 rounded-xl border border-line bg-surface px-4 text-sm font-medium shadow-sm hover:bg-canvas">
               <Camera className="h-4 w-4" />Camera
@@ -126,13 +144,32 @@ function EventDetailInner() {
 
       <div role="tabpanel">
         {tab === "photos" && (
-          <EventPhotos eventId={id} refreshKey={refreshKey} pollWhileProcessing={false}
-                       onChanged={refreshAll} />
+          <EventPhotos
+            eventId={id}
+            refreshKey={refreshKey}
+            pollWhileProcessing={false}
+            onChanged={refreshAll}
+            onGoUpload={() => setShowUploadModal(true)}
+          />
         )}
         {tab === "share" && <EventShare event={ev} onChanged={(e) => event.setData(e)} />}
         {tab === "settings" && <EventSettings event={ev} onSaved={(e) => { event.setData(e); void status.reload(); }} />}
       </div>
       {processing && <span className="sr-only" aria-live="polite">Photos are being processed</span>}
+
+      <Modal
+        open={showUploadModal}
+        onClose={() => setShowUploadModal(false)}
+        size="lg"
+        title="Bulk Upload Photos"
+        description={`Upload multiple photos or an entire folder to ${ev.name}. Photos are indexed automatically.`}
+      >
+        <UploadPanel
+          eventId={id}
+          disabled={ev.status !== "active"}
+          onUploaded={handleUploaded}
+        />
+      </Modal>
     </>
   );
 }

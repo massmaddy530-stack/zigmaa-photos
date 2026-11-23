@@ -143,6 +143,17 @@ export function EventPhotos({ eventId, refreshKey, pollWhileProcessing, onChange
           >
             {isSelecting ? "Cancel selection" : "Select photos"}
           </Button>
+          {onGoUpload && (
+            <Button
+              type="button"
+              variant="outline"
+              size="md"
+              onClick={onGoUpload}
+              icon={<UploadCloud className="h-4 w-4" />}
+            >
+              Upload
+            </Button>
+          )}
         </div>
         {data && <p className="text-sm text-muted sm:ml-auto">{formatNumber(data.total)} photo{data.total === 1 ? "" : "s"}</p>}
       </div>
