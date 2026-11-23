@@ -298,56 +298,43 @@ export async function applyWatermark(blob: Blob, customConfig?: WatermarkConfig)
         }> = [];
 
         if (Array.isArray(config?.templates) && config.templates.length > 0) {
-          const activeTemplate = config.templates.find((t) => t.id === config.activeTemplateId);
-          if (activeTemplate && activeTemplate.dataUrl && activeTemplate.enabled !== false) {
-            // Prioritize the active template with latest top-level slider & position adjustments
-            layersToDraw.push({
-              src: activeTemplate.dataUrl,
-              xPercent: config.xPercent ?? activeTemplate.xPercent ?? 88,
-              yPercent: config.yPercent ?? activeTemplate.yPercent ?? 88,
-              sizePercent: config.sizePercent ?? activeTemplate.sizePercent ?? 14,
-              opacity: config.opacity ?? activeTemplate.opacity ?? 0.40,
-              color: activeTemplate.color ?? config.color ?? "original",
-            });
-            // Also draw other explicitly enabled secondary templates if any
-            for (const t of config.templates) {
-              if (t.id !== activeTemplate.id && t.enabled === true && t.dataUrl) {
-                layersToDraw.push({
-                  src: t.dataUrl,
-                  xPercent: t.xPercent ?? 88,
-                  yPercent: t.yPercent ?? 88,
-                  sizePercent: t.sizePercent ?? 14,
-                  opacity: t.opacity ?? 0.40,
-                  color: t.color ?? "original",
-                });
-              }
-            }
-          } else {
-            for (const t of config.templates) {
-              if (t.enabled !== false && t.dataUrl) {
-                layersToDraw.push({
-                  src: t.dataUrl,
-                  xPercent: t.xPercent ?? config?.xPercent ?? 88,
-                  yPercent: t.yPercent ?? config?.yPercent ?? 88,
-                  sizePercent: t.sizePercent ?? config?.sizePercent ?? 14,
-                  opacity: t.opacity ?? config?.opacity ?? 0.40,
-                  color: t.color ?? config?.color ?? "original",
-                });
-              }
+          const activeId = config.activeTemplateId;
+          for (const t of config.templates) {
+            if (t.enabled !== false && t.dataUrl) {
+              const isActive = t.id === activeId;
+              layersToDraw.push({
+                src: t.dataUrl,
+                xPercent: (isActive && config.xPercent !== undefined ? config.xPercent : t.xPercent) ?? 88,
+                yPercent: (isActive && config.yPercent !== undefined ? config.yPercent : t.yPercent) ?? 88,
+                sizePercent: (isActive && config.sizePercent !== undefined ? config.sizePercent : t.sizePercent) ?? 16,
+                opacity: (isActive && config.opacity !== undefined ? config.opacity : t.opacity) ?? 0.70,
+                color: (isActive && config.color !== undefined ? config.color : t.color) ?? "original",
+              });
             }
           }
         }
 
-        // If no template items enabled, fallback to single imageUrl or default watermark
+        // If no template items enabled, fallback to single custom imageUrl or default logo
         if (layersToDraw.length === 0) {
-          layersToDraw.push({
-            src: config?.imageUrl || "/watermark.png",
-            xPercent: config?.xPercent ?? 88,
-            yPercent: config?.yPercent ?? 88,
-            sizePercent: config?.sizePercent ?? 14,
-            opacity: config?.opacity ?? 0.40,
-            color: config?.color ?? "original",
-          });
+          if (config?.imageUrl) {
+            layersToDraw.push({
+              src: config.imageUrl,
+              xPercent: config.xPercent ?? 88,
+              yPercent: config.yPercent ?? 88,
+              sizePercent: config.sizePercent ?? 16,
+              opacity: config.opacity ?? 0.70,
+              color: config.color ?? "original",
+            });
+          } else {
+            layersToDraw.push({
+              src: "/watermark.png",
+              xPercent: config?.xPercent ?? 88,
+              yPercent: config?.yPercent ?? 88,
+              sizePercent: config?.sizePercent ?? 14,
+              opacity: config?.opacity ?? 0.40,
+              color: config?.color ?? "original",
+            });
+          }
         }
 
         // Draw each template onto the canvas at its own position, size and opacity

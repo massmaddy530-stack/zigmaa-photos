@@ -122,8 +122,8 @@ export function EventSettings({ event, onSaved }: { event: EventOut; onSaved: (e
           dataUrl,
           xPercent: corner.x,
           yPercent: corner.y,
-          sizePercent: 14,
-          opacity: 0.40,
+          sizePercent: 16,
+          opacity: 0.70,
           enabled: true,
         });
       } catch {
@@ -133,8 +133,8 @@ export function EventSettings({ event, onSaved }: { event: EventOut; onSaved: (e
 
     if (newItems.length > 0) {
       setWm((prev) => {
-        // Disable previous templates so the newly uploaded watermark takes precedence cleanly
-        const existing = (prev.templates || []).map((t) => ({ ...t, enabled: false }));
+        // Keep all existing templates enabled so multiple watermarks are active together!
+        const existing = (prev.templates || []).map((t) => ({ ...t, enabled: t.enabled !== false }));
         const updated = [...existing, ...newItems];
         const active = updated[updated.length - 1]; // select the newest uploaded template
         const next: WatermarkConfig = {
@@ -142,8 +142,8 @@ export function EventSettings({ event, onSaved }: { event: EventOut; onSaved: (e
           templates: updated,
           activeTemplateId: active.id,
           imageUrl: active.dataUrl,
-          sizePercent: active.sizePercent ?? 18,
-          opacity: active.opacity ?? 0.60,
+          sizePercent: active.sizePercent ?? 16,
+          opacity: active.opacity ?? 0.70,
           xPercent: active.xPercent ?? 88,
           yPercent: active.yPercent ?? 88,
         };
@@ -152,27 +152,23 @@ export function EventSettings({ event, onSaved }: { event: EventOut; onSaved: (e
       });
       toast.success(
         newItems.length > 1 ? `${newItems.length} templates uploaded` : "Watermark uploaded & applied!",
-        "Saved and applied to photo downloads."
+        "Active on photo downloads with custom position, scale and opacity."
       );
     }
   }
 
   function selectTemplate(item: WatermarkTemplateItem) {
     setWm((prev) => {
-      // When clicking a template, make it the sole active enabled template
-      const updatedTemplates = (prev.templates || []).map((t) => ({
-        ...t,
-        enabled: t.id === item.id,
-      }));
+      // Keep ALL templates enabled - only switch which template is active for editing!
+      const activeItem = (prev.templates || []).find((t) => t.id === item.id) || item;
       const next: WatermarkConfig = {
         ...prev,
-        templates: updatedTemplates,
         activeTemplateId: item.id,
-        imageUrl: item.dataUrl,
-        sizePercent: item.sizePercent ?? prev.sizePercent ?? 14,
-        opacity: item.opacity ?? prev.opacity ?? 0.40,
-        xPercent: item.xPercent ?? prev.xPercent ?? 88,
-        yPercent: item.yPercent ?? prev.yPercent ?? 88,
+        imageUrl: activeItem.dataUrl,
+        sizePercent: activeItem.sizePercent ?? 16,
+        opacity: activeItem.opacity ?? 0.70,
+        xPercent: activeItem.xPercent ?? 88,
+        yPercent: activeItem.yPercent ?? 88,
       };
       saveEventWatermarkConfig(event.id, event.slug, next);
       return next;
@@ -199,6 +195,10 @@ export function EventSettings({ event, onSaved }: { event: EventOut; onSaved: (e
         templates: updated,
         activeTemplateId: nextActive?.id || null,
         imageUrl: nextActive?.dataUrl || null,
+        sizePercent: nextActive?.sizePercent ?? prev.sizePercent ?? 16,
+        opacity: nextActive?.opacity ?? prev.opacity ?? 0.70,
+        xPercent: nextActive?.xPercent ?? prev.xPercent ?? 88,
+        yPercent: nextActive?.yPercent ?? prev.yPercent ?? 88,
       };
       saveEventWatermarkConfig(event.id, event.slug, next);
       return next;
@@ -235,7 +235,7 @@ export function EventSettings({ event, onSaved }: { event: EventOut; onSaved: (e
       color: "original",
     };
     setWm((prev) => {
-      const existing = (prev.templates || []).map((t) => ({ ...t, enabled: false }));
+      const existing = (prev.templates || []).map((t) => ({ ...t, enabled: t.enabled !== false }));
       const updated = [...existing, newItem];
       const next: WatermarkConfig = {
         ...prev,

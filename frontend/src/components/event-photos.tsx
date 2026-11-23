@@ -43,6 +43,8 @@ export function EventPhotos({ eventId, refreshKey, pollWhileProcessing, onChange
   const dq = useDebounced(q.trim(), 300);
 
   useEffect(() => {
+    const localCfg = getSavedWatermarkConfig(eventId);
+    if (localCfg) setEventWatermark(localCfg);
     void fetchEventWatermarkConfig(eventId).then((cfg) => {
       if (cfg) setEventWatermark(cfg);
     });
@@ -127,7 +129,7 @@ export function EventPhotos({ eventId, refreshKey, pollWhileProcessing, onChange
     setBusyBatchDownload(true);
     setDownloadProgress({ done: 0, total: selectedIds.size });
     try {
-      let wmConfig = eventWatermark || getSavedWatermarkConfig(eventId);
+      let wmConfig = getSavedWatermarkConfig(eventId) || eventWatermark;
       if (!wmConfig) {
         wmConfig = await fetchEventWatermarkConfig(eventId);
         if (wmConfig) setEventWatermark(wmConfig);
@@ -155,7 +157,7 @@ export function EventPhotos({ eventId, refreshKey, pollWhileProcessing, onChange
     setBusyBatchDownload(true);
     setDownloadProgress({ done: 0, total: data.total });
     try {
-      let wmConfig = eventWatermark || getSavedWatermarkConfig(eventId);
+      let wmConfig = getSavedWatermarkConfig(eventId) || eventWatermark;
       if (!wmConfig) {
         wmConfig = await fetchEventWatermarkConfig(eventId);
         if (wmConfig) setEventWatermark(wmConfig);
@@ -396,7 +398,7 @@ export function EventPhotos({ eventId, refreshKey, pollWhileProcessing, onChange
               variant="outline"
               className="border-white/20 bg-black/40 text-white hover:bg-black/60"
               onClick={() => {
-                downloadImage(dlUrl, currentPhoto?.original_filename || item.alt || "photo.jpg", eventWatermark || getSavedWatermarkConfig(eventId));
+                downloadImage(dlUrl, currentPhoto?.original_filename || item.alt || "photo.jpg", getSavedWatermarkConfig(eventId) || eventWatermark);
               }}
               icon={<Download className="h-4 w-4" />}
             >

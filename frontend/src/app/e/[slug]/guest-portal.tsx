@@ -227,32 +227,32 @@ function Portal({ event, slug }: { event: PublicEventOut; slug: string }) {
         {event.description && <p className="mt-6 whitespace-pre-line text-[15px] leading-relaxed text-ink/80">{event.description}</p>}
 
         {/* Tab Switcher: Find My Face (Selfie) vs Browse All Photos */}
-        <div className="mt-6 flex rounded-2xl border border-zinc-200/90 bg-zinc-100 p-1.5 shadow-sm">
+        <div className="mt-6 flex rounded-2xl border border-zinc-200 bg-zinc-100 p-1.5 shadow-sm">
           <button
             type="button"
             onClick={() => setActiveTab("face")}
             className={cn(
-              "flex flex-1 items-center justify-center gap-2 rounded-xl py-2.5 text-xs font-bold sm:text-sm transition-all select-none",
+              "flex flex-1 items-center justify-center gap-2 rounded-xl py-2.5 text-xs sm:text-sm transition-all select-none cursor-pointer",
               activeTab === "face"
-                ? "bg-white text-zinc-900 shadow-sm ring-1 ring-zinc-900/10"
-                : "text-zinc-600 hover:text-zinc-900 hover:bg-white/60",
+                ? "bg-white text-zinc-950 shadow-md ring-1 ring-zinc-300 font-bold"
+                : "text-zinc-600 hover:text-zinc-900 hover:bg-white/80 font-medium",
             )}
           >
             <ScanFace className={cn("h-4 w-4", activeTab === "face" ? "text-brand-600" : "text-zinc-500")} />
-            <span className={activeTab === "face" ? "text-zinc-900 font-bold" : "text-zinc-600 font-medium"}>Find My Face (Selfie)</span>
+            <span className={activeTab === "face" ? "text-zinc-950 font-bold" : "text-zinc-600 font-medium"}>Find My Face (Selfie)</span>
           </button>
           <button
             type="button"
             onClick={() => setActiveTab("all")}
             className={cn(
-              "flex flex-1 items-center justify-center gap-2 rounded-xl py-2.5 text-xs font-bold sm:text-sm transition-all select-none",
+              "flex flex-1 items-center justify-center gap-2 rounded-xl py-2.5 text-xs sm:text-sm transition-all select-none cursor-pointer",
               activeTab === "all"
-                ? "bg-white text-zinc-900 shadow-sm ring-1 ring-zinc-900/10"
-                : "text-zinc-600 hover:text-zinc-900 hover:bg-white/60",
+                ? "bg-white text-zinc-950 shadow-md ring-1 ring-zinc-300 font-bold"
+                : "text-zinc-600 hover:text-zinc-900 hover:bg-white/80 font-medium",
             )}
           >
             <ImageIcon className={cn("h-4 w-4", activeTab === "all" ? "text-brand-600" : "text-zinc-500")} />
-            <span className={activeTab === "all" ? "text-zinc-900 font-bold" : "text-zinc-600 font-medium"}>Browse All Photos ({formatNumber(event.photo_count)})</span>
+            <span className={activeTab === "all" ? "text-zinc-950 font-bold" : "text-zinc-600 font-medium"}>Browse All Photos ({formatNumber(event.photo_count)})</span>
           </button>
         </div>
 

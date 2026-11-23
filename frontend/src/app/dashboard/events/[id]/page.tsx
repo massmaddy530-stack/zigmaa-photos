@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useParams, usePathname, useRouter, useSearchParams } from "next/navigation";
-import { CalendarDays, Camera, ChevronLeft, ExternalLink, Images, MapPin, Settings, Share2, UploadCloud } from "lucide-react";
+import { CalendarDays, Camera, ChevronLeft, ExternalLink, Images, MapPin, RotateCcw, Settings, Share2, UploadCloud } from "lucide-react";
 import { Suspense, useCallback, useEffect, useState } from "react";
 import { PageHeader } from "@/components/app-shell";
 import { EventPhotos } from "@/components/event-photos";
@@ -80,11 +80,25 @@ function EventDetailInner() {
 
   if (event.error && !event.data) {
     const notFound = event.error instanceof ApiError && event.error.status === 404;
+    const is429 = event.error instanceof ApiError && event.error.status === 429;
     return (
       <Card>
         {notFound ? (
           <EmptyState icon={<CalendarDays className="h-5 w-5" />} title="Event not found"
             description="It may have been deleted." action={<Link className="text-sm font-medium text-brand-700" href="/dashboard/events">Back to events</Link>} />
+        ) : is429 ? (
+          <div className="p-8 text-center space-y-4">
+            <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-full bg-amber-50 text-amber-600">
+              <RotateCcw className="h-6 w-6" />
+            </div>
+            <div>
+              <h3 className="text-base font-semibold text-ink">Server is busy</h3>
+              <p className="mt-1 text-sm text-muted">Processing requests. Auto-reconnecting in a moment...</p>
+            </div>
+            <Button onClick={event.reload} icon={<RotateCcw className="h-4 w-4" />}>
+              Try now
+            </Button>
+          </div>
         ) : <ErrorState error={event.error} onRetry={event.reload} />}
       </Card>
     );

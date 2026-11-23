@@ -90,7 +90,11 @@ function qs(query?: RequestOpts["query"]): string {
   return s ? `?${s}` : "";
 }
 
-async function request<T>(url: string, opts: RequestOpts = {}, extraHeaders: Record<string, string> = {}): Promise<T> {
+async function sleep(ms: number): Promise<void> {
+  return new Promise((r) => setTimeout(r, ms));
+}
+
+async function request<T>(url: string, opts: RequestOpts = {}, extraHeaders: Record<string, string> = {}, retries = 2): Promise<T> {
   const controller = new AbortController();
   // 90s timeout to gracefully allow Render free-tier cold starts to boot up
   const timer = setTimeout(() => controller.abort("timeout"), opts.timeoutMs ?? 90_000);
@@ -120,6 +124,15 @@ async function request<T>(url: string, opts: RequestOpts = {}, extraHeaders: Rec
   } finally {
     clearTimeout(timer);
   }
+
+  // Gracefully handle 429 Too Many Requests with automated backoff retry
+  if (res.status === 429 && retries > 0 && !opts.signal?.aborted) {
+    const retryAfterHeader = res.headers.get("retry-after");
+    const waitSec = retryAfterHeader && /^\d+$/.test(retryAfterHeader) ? Math.min(Number(retryAfterHeader), 5) : (3 - retries) * 1.5;
+    await sleep(waitSec * 1000);
+    return request<T>(url, opts, extraHeaders, retries - 1);
+  }
+
   if (!res.ok) throw await toApiError(res);
   if (res.status === 204) return undefined as T;
   return (await res.json()) as T;
@@ -144,7 +157,24 @@ function withBrowserMediaUrls(value: unknown): unknown {
 }
 
 function admin<T>(path: string, opts: RequestOpts = {}): Promise<T> {
-  return request<T>(`${ADMIN_PROXY}/${path}`, opts, CSRF_HEADER).then((data) => withBrowserMediaUrls(data) as T);
+  const headers: Record<string, string> = { ...CSRF_HEADER };
+  if (typeof document !== "undefined") {
+    const match = document.cookie.match(/evp_profile=([^;]+)/);
+    if (match) {
+      try {
+        let p: Record<string, unknown> | null = null;
+        try {
+          p = JSON.parse(match[1]);
+        } catch {
+          p = JSON.parse(decodeURIComponent(match[1]));
+        }
+        if (p && typeof p.email === "string" && p.email.includes("@")) {
+          headers["X-User-Email"] = p.email.trim().toLowerCase();
+        }
+      } catch {}
+    }
+  }
+  return request<T>(`${ADMIN_PROXY}/${path}`, opts, headers).then((data) => withBrowserMediaUrls(data) as T);
 }
 
 export const adminApi = {

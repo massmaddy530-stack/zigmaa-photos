@@ -59,14 +59,25 @@ async function proxy(req: NextRequest, ctx: { params: Promise<{ path: string[] }
 
   // Identify current user email to ensure multi-tenant event isolation
   let userEmail = "";
-  const profileRaw = req.cookies.get("evp_profile")?.value;
-  if (profileRaw) {
-    try {
-      const parsed = JSON.parse(decodeURIComponent(profileRaw));
-      if (parsed && typeof parsed.email === "string") {
-        userEmail = parsed.email.trim().toLowerCase();
-      }
-    } catch {}
+  const headerEmail = req.headers.get("x-user-email");
+  if (headerEmail && headerEmail.includes("@")) {
+    userEmail = headerEmail.trim().toLowerCase();
+  }
+  if (!userEmail) {
+    const profileRaw = req.cookies.get("evp_profile")?.value;
+    if (profileRaw) {
+      try {
+        let parsed: Record<string, unknown> | null = null;
+        try {
+          parsed = JSON.parse(profileRaw);
+        } catch {
+          parsed = JSON.parse(decodeURIComponent(profileRaw));
+        }
+        if (parsed && typeof parsed.email === "string" && parsed.email.includes("@")) {
+          userEmail = parsed.email.trim().toLowerCase();
+        }
+      } catch {}
+    }
   }
   if (!userEmail && token) {
     try {
@@ -182,13 +193,37 @@ async function proxy(req: NextRequest, ctx: { params: Promise<{ path: string[] }
           data.processing = 0;
           data.failures = 0;
           data.recent_events = [];
-        } else if (Array.isArray(data.recent_events)) {
-          data.recent_events = data.recent_events.filter((item: Record<string, unknown>) => {
-            const id = String(item?.id || "");
-            const owner = typeof item?.owner_email === "string" ? item.owner_email.toLowerCase() : "";
-            return userEventIds.has(id) || (owner && owner === userEmail);
-          });
-          data.events = data.recent_events.length;
+        } else {
+          if (Array.isArray(data.recent_events)) {
+            data.recent_events = data.recent_events.filter((item: Record<string, unknown>) => {
+              const id = String(item?.id || "");
+              const owner = typeof item?.owner_email === "string" ? item.owner_email.toLowerCase() : "";
+              return userEventIds.has(id) || (owner && owner === userEmail);
+            });
+          }
+          data.events = userEventIds.size;
+          const userEvents: Array<Record<string, unknown>> = Array.isArray(data.recent_events) ? data.recent_events : [];
+          data.active_events = userEvents.filter((e) => e.status === "active").length;
+          data.photos = userEvents.reduce((sum, e) => {
+            const c = e.counts as Record<string, unknown> | undefined;
+            return sum + (Number(c?.total) || 0);
+          }, 0);
+          data.indexed_photos = userEvents.reduce((sum, e) => {
+            const c = e.counts as Record<string, unknown> | undefined;
+            return sum + (Number(c?.indexed) || 0);
+          }, 0);
+          data.indexed_faces = userEvents.reduce((sum, e) => {
+            const c = e.counts as Record<string, unknown> | undefined;
+            return sum + (Number(c?.faces) || 0);
+          }, 0);
+          data.processing = userEvents.reduce((sum, e) => {
+            const c = e.counts as Record<string, unknown> | undefined;
+            return sum + (Number(c?.processing) || 0) + (Number(c?.pending) || 0);
+          }, 0);
+          data.failures = userEvents.reduce((sum, e) => {
+            const c = e.counts as Record<string, unknown> | undefined;
+            return sum + (Number(c?.failed) || 0);
+          }, 0);
         }
       }
       return NextResponse.json(data, { status: 200, headers: resHeaders });
