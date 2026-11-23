@@ -75,6 +75,27 @@ export function MatchResults({ initial, loadPage, showSimilarity, emptyTitle, em
     }
   }
 
+  async function downloadAllMatches() {
+    setBatchDownloading(true);
+    try {
+      let allItems = [...items];
+      let cur = cursor;
+      while (cur !== null && initial.match_token) {
+        setBatchProgress({ done: allItems.length, total: Math.max(initial.total, allItems.length) });
+        const page = await loadPage(initial.match_token, cur);
+        const seen = new Set(allItems.map((p) => p.photo_id));
+        allItems = [...allItems, ...page.items.filter((p) => !seen.has(p.photo_id))];
+        cur = page.next_cursor;
+        if (!page.items.length) break;
+      }
+      await downloadBatch(allItems);
+    } catch (err) {
+      setError(err);
+    } finally {
+      setBatchDownloading(false);
+    }
+  }
+
   async function download(m: MatchItem) {
     const url = m.download_url ?? m.preview_url;
     if (!url) return;
@@ -154,11 +175,13 @@ export function MatchResults({ initial, loadPage, showSimilarity, emptyTitle, em
           <Button
             size="sm"
             variant="outline"
-            onClick={() => void downloadBatch(items)}
+            onClick={() => void downloadAllMatches()}
             disabled={batchDownloading}
             icon={batchDownloading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Download className="h-4 w-4" />}
           >
-            Download all ({items.length})
+            {batchDownloading && batchProgress
+              ? `Downloading (${batchProgress.done}/${batchProgress.total})…`
+              : `Download all (${initial.total || items.length})`}
           </Button>
         </div>
       </div>
@@ -221,35 +244,57 @@ export function MatchResults({ initial, loadPage, showSimilarity, emptyTitle, em
         </div>
       )}
 
-      {/* Floating Bottom Bar for Mobile when photos are selected */}
-      {selectedIds.size > 0 && (
-        <div className="fixed bottom-4 left-3 right-3 z-50 flex items-center justify-between gap-3 rounded-2xl border border-brand-200 bg-white/95 p-3 shadow-2xl backdrop-blur-lg sm:hidden">
+      {/* Floating Bottom Bar for Mobile */}
+      {items.length > 0 && (
+        <div className="fixed bottom-4 left-3 right-3 z-50 flex items-center justify-between gap-3 rounded-2xl border border-zinc-200 bg-white/95 p-3 shadow-2xl backdrop-blur-lg dark:border-zinc-700 dark:bg-zinc-900/95 sm:hidden">
           <div className="flex items-center gap-2 min-w-0">
-            <span className="inline-flex h-6 items-center justify-center rounded-full bg-brand-600 px-2.5 text-xs font-bold text-white shadow-sm">
-              {selectedIds.size}
-            </span>
-            <span className="truncate text-xs font-bold text-zinc-900">
-              Selected
-            </span>
-            <button
-              type="button"
-              onClick={() => setSelectedIds(new Set())}
-              className="text-xs font-semibold text-zinc-500 underline hover:text-zinc-900 ml-1"
-            >
-              Clear
-            </button>
+            {selectedIds.size > 0 ? (
+              <>
+                <span className="inline-flex h-6 items-center justify-center rounded-full bg-brand-600 px-2.5 text-xs font-bold text-white shadow-sm">
+                  {selectedIds.size}
+                </span>
+                <span className="truncate text-xs font-bold text-zinc-900 dark:text-zinc-100">
+                  Selected
+                </span>
+                <button
+                  type="button"
+                  onClick={() => setSelectedIds(new Set())}
+                  className="text-xs font-semibold text-zinc-500 underline hover:text-zinc-900 dark:hover:text-zinc-200 ml-1"
+                >
+                  Clear
+                </button>
+              </>
+            ) : (
+              <span className="text-xs font-bold text-zinc-800 dark:text-zinc-200">
+                {initial.total || items.length} matches
+              </span>
+            )}
           </div>
-          <Button
-            size="sm"
-            onClick={() => void downloadBatch(items.filter((m) => selectedIds.has(m.photo_id)))}
-            disabled={batchDownloading}
-            className="bg-brand-600 text-white font-bold shadow-md active:scale-95 transition-transform"
-            icon={batchDownloading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Download className="h-4 w-4" />}
-          >
-            {batchDownloading && batchProgress
-              ? `${batchProgress.done}/${batchProgress.total}…`
-              : `Download (${selectedIds.size})`}
-          </Button>
+          {selectedIds.size > 0 ? (
+            <Button
+              size="sm"
+              onClick={() => void downloadBatch(items.filter((m) => selectedIds.has(m.photo_id)))}
+              disabled={batchDownloading}
+              className="bg-brand-600 text-white font-bold shadow-md active:scale-95 transition-transform"
+              icon={batchDownloading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Download className="h-4 w-4" />}
+            >
+              {batchDownloading && batchProgress
+                ? `${batchProgress.done}/${batchProgress.total}…`
+                : `Download (${selectedIds.size})`}
+            </Button>
+          ) : (
+            <Button
+              size="sm"
+              onClick={() => void downloadAllMatches()}
+              disabled={batchDownloading}
+              className="bg-brand-600 text-white font-bold shadow-md active:scale-95 transition-transform"
+              icon={batchDownloading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Download className="h-4 w-4" />}
+            >
+              {batchDownloading && batchProgress
+                ? `${batchProgress.done}/${batchProgress.total}…`
+                : `Download all (${initial.total || items.length})`}
+            </Button>
+          )}
         </div>
       )}
 

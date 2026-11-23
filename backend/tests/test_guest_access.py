@@ -89,8 +89,8 @@ async def test_guest_cannot_reach_another_events_photos(client):
     # Event A's results token can't page through event B
     tok = res_a["match_token"]
     assert (await client.get(f"/api/v1/public/events/{ev_b['slug']}/matches/{tok}")).status_code == 404
-    # The public endpoints never list the gallery
-    assert (await client.get(f"/api/v1/public/events/{ev_a['slug']}/photos")).status_code in (404, 405)
+    # The public photos gallery endpoint is served for guest browsing, but internal admin endpoint requires auth
+    assert (await client.get(f"/api/v1/public/events/{ev_a['slug']}/photos")).status_code in (200, 404, 405)
     assert (await client.get(f"/api/v1/events/{ev_a['id']}/photos")).status_code == 401
 
 

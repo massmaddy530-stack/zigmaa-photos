@@ -91,6 +91,7 @@ def event_out(event: Event, storage: Storage, counts: PhotoCounts | None = None)
         public_url=public_url(event.slug),
         cover_url=storage.signed_url(event.cover_key) if event.cover_key else None,
         guest_link_expires_at=event.guest_link_expires_at,
+        owner_email=getattr(event, "owner_email", None),
         counts=counts or PhotoCounts(),
     )
 

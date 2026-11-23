@@ -12,9 +12,10 @@ const OPENAI_API_KEY = (process.env.OPENAI_API_KEY || "")
   .replace(/^["']|["']$/g, "");
 
 const GEMINI_MODELS = [
-  "gemini-3.5-flash-lite",
-  "gemini-3.8-flash",
-  "gemini-3.1-flash-lite",
+  "gemini-2.5-flash",
+  "gemini-2.0-flash",
+  "gemini-1.5-flash",
+  "gemini-1.5-pro",
   "gemini-flash-latest",
 ];
 
@@ -56,6 +57,14 @@ export async function POST(req: NextRequest) {
   try {
     const body = await req.json().catch(() => ({}));
     const userPrompt = typeof body?.prompt === "string" ? body.prompt.trim() : "";
+    const customNames = typeof body?.names === "string" && body.names.trim()
+      ? body.names.trim()
+      : typeof body?.eventName === "string" && body.eventName.trim()
+      ? body.eventName.trim()
+      : "";
+    const customSubtitle = typeof body?.subtitle === "string" ? body.subtitle.trim() : "";
+    const customDate = typeof body?.dateText === "string" ? body.dateText.trim() : "";
+    const customVenue = typeof body?.venueText === "string" ? body.venueText.trim() : "";
 
     if (!userPrompt) {
       return NextResponse.json(
@@ -171,7 +180,7 @@ export async function POST(req: NextRequest) {
 
     // 3. Fallback to Ultra-Realistic Procedural 3D SVG Engine if API is busy/quota exhausted
     if (!parsedResult || typeof parsedResult.svg !== "string") {
-      const fallback = buildDynamicSvgFallback(userPrompt);
+      const fallback = buildDynamicSvgFallback(userPrompt, customNames, customSubtitle, customDate);
       return NextResponse.json({
         ok: true,
         isCustomSvg: true,
@@ -180,7 +189,7 @@ export async function POST(req: NextRequest) {
         names: fallback.names,
         subtitle: fallback.subtitle,
         dateText: fallback.dateText,
-        venueText: fallback.venueText,
+        venueText: fallback.venueText || customVenue,
         fontFamily: fallback.fontFamily,
         textColor: fallback.textColor,
         bgColor: fallback.bgColor,
@@ -190,15 +199,15 @@ export async function POST(req: NextRequest) {
     }
 
     const cleanedSvg = String(parsedResult.svg).trim();
-    const finalNames = typeof parsedResult.names === "string" && parsedResult.names.trim()
+    const finalNames = typeof parsedResult.names === "string" && parsedResult.names.trim() && !/rithvik|john doe/i.test(parsedResult.names)
       ? parsedResult.names.trim()
-      : extractNames(userPrompt);
+      : extractNames(userPrompt, customNames);
     const finalSubtitle = typeof parsedResult.subtitle === "string" && parsedResult.subtitle.trim()
       ? parsedResult.subtitle.trim()
-      : extractSubtitle(userPrompt);
+      : extractSubtitle(userPrompt, customSubtitle);
     const finalDate = typeof parsedResult.dateText === "string" && parsedResult.dateText.trim()
       ? parsedResult.dateText.trim()
-      : extractDate(userPrompt);
+      : extractDate(userPrompt, customDate);
 
     return NextResponse.json({
       ok: true,
@@ -223,41 +232,115 @@ export async function POST(req: NextRequest) {
   }
 }
 
-function extractNames(prompt: string): string {
+function extractNames(prompt: string, fallback?: string): string {
+  if (fallback && fallback.trim()) return fallback.trim();
   const p = prompt.trim();
-  const forMatch = p.match(/for\s+([A-Za-z0-9\s&]+?)(?=\s+(?:on|in|at|\d{1,2}[-/.]|\d{4}|$))/i);
+
+  // 1. Explicit 'for <event/person>'
+  const forMatch = p.match(/for\s+([A-Za-z0-9\s&'-]+?)(?=\s+(?:on|in|at|\d{1,2}[-/.]|\d{4}|$))/i);
   if (forMatch && forMatch[1].trim()) {
-    return forMatch[1].trim().replace(/birthday|wedding|reception|function|ceremony/gi, "").trim();
+    const cleaned = forMatch[1].trim().replace(/\b(birthday|wedding|reception|function|ceremony|party|meet|event)\b/gi, "").trim();
+    if (cleaned.length >= 2) return cleaned;
   }
-  if (p.includes("&")) {
-    const parts = p.split(/&/);
-    const name1 = parts[0].trim().split(/\s+/).pop() || "Arun";
-    const name2 = parts[1].trim().split(/\s+/)[0] || "Keerthana";
-    return `${name1} & ${name2}`;
+
+  // 2. Couple names 'A & B' or 'A and B'
+  if (p.includes("&") || /\band\b/i.test(p)) {
+    const parts = p.split(/&|\band\b/i);
+    const n1 = parts[0].trim().split(/\s+/).pop() || "";
+    const n2 = parts[1].trim().split(/\s+/)[0] || "";
+    if (n1 && n2 && !/^(bubble|template|vector|realistic|with|or)$/i.test(n1) && !/^(bubble|template|vector|realistic|with|or)$/i.test(n2)) {
+      return `${n1} & ${n2}`;
+    }
   }
-  return "Rithvik";
+
+  // 3. Strip visual style/prompt noise keywords
+  const noiseRegex = /\b(make|create|generate|give|me|a|an|the|with|and|or|for|of|in|at|on|template|watermark|logo|border|banner|design|background|frame|overlay|vector|realistic|real|3d|photorealistic|hd|4k|luxurious|luxury|gold|golden|silver|bubble|bubbles|flower|flowers|rose|roses|floral|sparkle|sparkles|neon|crescent|circle|glow|glass|soft|style|theme|please|white|black|red|blue|text|heading)\b/gi;
+  const stripped = p.replace(noiseRegex, " ").replace(/\s+/g, " ").trim();
+  if (stripped.length >= 2) {
+    return stripped.length > 50 ? stripped.slice(0, 50) : stripped;
+  }
+
+  return "Zigmaa Moments";
 }
 
-function extractSubtitle(prompt: string): string {
+function extractSubtitle(prompt: string, fallback?: string): string {
+  if (fallback && fallback.trim()) return fallback.trim().toUpperCase();
   const p = prompt.toLowerCase();
+  if (p.includes("silambam") || p.includes("karate") || p.includes("sports") || p.includes("tournament") || p.includes("championship") || p.includes("competition")) {
+    return "CHAMPIONSHIP";
+  }
   if (p.includes("birthday")) return "HAPPY BIRTHDAY";
-  if (p.includes("engagement")) return "ENGAGEMENT CEREMONY OF";
-  if (p.includes("reception")) return "WEDDING RECEPTION OF";
+  if (p.includes("engagement")) return "ENGAGEMENT CEREMONY";
+  if (p.includes("reception")) return "WEDDING RECEPTION";
   if (p.includes("anniversary")) return "CELEBRATING ANNIVERSARY";
-  return "THE WEDDING OF";
+  if (p.includes("conference") || p.includes("summit") || p.includes("annual")) return "ANNUAL MEET";
+  if (p.includes("wedding") || p.includes("marriage")) return "THE WEDDING OF";
+  return "GRAND CELEBRATION";
 }
 
-function extractDate(prompt: string): string {
-  const dateMatch = prompt.match(/\b\d{1,2}[-/.]\d{1,2}[-/.]\d{2,4}\b|\b\d{1,2}\s+[A-Za-z]+\s+\d{4}\b/i);
+function extractDate(prompt: string, fallback?: string): string {
+  if (fallback && fallback.trim()) return fallback.trim().toUpperCase();
+  const dateMatch = prompt.match(/\b\d{1,2}[-/.]\d{1,2}[-/.]\d{2,4}\b|\b\d{1,2}\s+[A-Za-z]+\s+\d{4}\b|\b\d{4}\b/i);
   if (dateMatch) return dateMatch[0].toUpperCase();
-  return "17 NOVEMBER 2026";
+  return "2026";
 }
 
-function buildDynamicSvgFallback(prompt: string) {
+function buildDynamicSvgFallback(prompt: string, customNames?: string, customSubtitle?: string, customDate?: string) {
   const p = prompt.toLowerCase();
-  const names = extractNames(prompt);
-  const subtitle = extractSubtitle(prompt);
-  const dateText = extractDate(prompt);
+  const names = extractNames(prompt, customNames);
+  const subtitle = extractSubtitle(prompt, customSubtitle);
+  const dateText = extractDate(prompt, customDate);
+
+  if (p.includes("silambam") || p.includes("sport") || p.includes("championship") || p.includes("tournament") || p.includes("competition")) {
+    // Ultra-Realistic Championship Sports Gold & Navy Banner
+    const svg = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 320" width="1200" height="320">
+      <defs>
+        <linearGradient id="bgGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+          <stop offset="0%" stop-color="#0a1128"/>
+          <stop offset="50%" stop-color="#1c2541"/>
+          <stop offset="100%" stop-color="#0b132b"/>
+        </linearGradient>
+        <linearGradient id="goldGrad" x1="0%" y1="0%" x2="100%" y2="0%">
+          <stop offset="0%" stop-color="#ffb703"/>
+          <stop offset="50%" stop-color="#fb8500"/>
+          <stop offset="100%" stop-color="#ffd166"/>
+        </linearGradient>
+        <filter id="softGlow" x="-20%" y="-20%" width="140%" height="140%">
+          <feGaussianBlur stdDeviation="6" result="blur"/>
+          <feComposite in="SourceGraphic" in2="blur" operator="over"/>
+        </filter>
+        <filter id="textShadow" x="-10%" y="-10%" width="120%" height="120%">
+          <feDropShadow dx="0" dy="3" stdDeviation="4" flood-color="#000000" flood-opacity="0.8"/>
+        </filter>
+      </defs>
+      <rect id="svg-bg" width="1200" height="320" rx="16" fill="url(#bgGrad)"/>
+      <path d="M 60,40 L 260,40 L 220,280 L 20,280 Z" fill="url(#goldGrad)" opacity="0.12"/>
+      <path d="M 1140,40 L 940,40 L 980,280 L 1180,280 Z" fill="url(#goldGrad)" opacity="0.12"/>
+      <circle cx="150" cy="160" r="70" fill="none" stroke="url(#goldGrad)" stroke-width="3" stroke-dasharray="8,6" opacity="0.6"/>
+      <circle cx="1050" cy="160" r="70" fill="none" stroke="url(#goldGrad)" stroke-width="3" stroke-dasharray="8,6" opacity="0.6"/>
+      <polygon points="150,110 156,145 190,150 156,155 150,190 144,155 110,150 144,145" fill="#ffd166" filter="url(#softGlow)"/>
+      <polygon points="1050,110 1056,145 1090,150 1056,155 1050,190 1044,155 1010,150 1044,145" fill="#ffd166" filter="url(#softGlow)"/>
+      <line x1="80" y1="285" x2="1120" y2="285" stroke="url(#goldGrad)" stroke-width="3" stroke-linecap="round"/>
+      <line x1="200" y1="295" x2="1000" y2="295" stroke="#ffffff" stroke-width="1" stroke-opacity="0.4" stroke-dasharray="10,6"/>
+      <g filter="url(#textShadow)">
+        <text id="svg-subtitle" x="600" y="125" text-anchor="middle" font-family="'Montserrat', sans-serif" font-size="20" font-weight="800" letter-spacing="10" fill="url(#goldGrad)">${subtitle}</text>
+        <text id="svg-names" x="600" y="200" text-anchor="middle" font-family="'Montserrat', sans-serif" font-size="52" font-weight="900" letter-spacing="3" fill="#ffffff">${names}</text>
+        <text id="svg-date" x="600" y="250" text-anchor="middle" font-family="'Montserrat', sans-serif" font-size="16" font-weight="700" letter-spacing="8" fill="#ffd166">${dateText}</text>
+      </g>
+    </svg>`;
+
+    return {
+      themeName: "Championship Sports Banner",
+      names,
+      subtitle,
+      dateText,
+      venueText: "",
+      fontFamily: "Montserrat",
+      textColor: "#ffffff",
+      bgColor: "#0a1128",
+      svg,
+    };
+  }
 
   if (p.includes("bubble")) {
     // Ultra-Realistic 3D Iridescent Soap Bubbles with Specular Glares & Sparkles

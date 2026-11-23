@@ -82,6 +82,7 @@ class Event(TimestampMixin, Base):
                                                 nullable=False)
     # Optional: the guest link / QR code stops working at this time. NULL = no expiry.
     guest_link_expires_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    owner_email: Mapped[str | None] = mapped_column(String(255), nullable=True)
 
     photos: Mapped[list[Photo]] = relationship(back_populates="event", passive_deletes=True)
     event_photos: Mapped[list[EventPhoto]] = relationship(back_populates="event", passive_deletes=True)

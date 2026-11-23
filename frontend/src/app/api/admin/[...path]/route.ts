@@ -3,6 +3,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { hasCsrfHeader } from "@/lib/auth/request";
 import { verifyMiddlewareSession, verifySessionToken } from "@/lib/auth/session";
+import { getUserEventIds, recordUserEvent } from "@/lib/auth/user-events";
 import {
   API_BASE_URL,
   authConfig,
@@ -55,6 +56,29 @@ async function proxy(req: NextRequest, ctx: { params: Promise<{ path: string[] }
   if (contentType) headers.set("content-type", contentType);
   const fwd = req.headers.get("x-forwarded-for");
   if (fwd) headers.set("x-forwarded-for", fwd);
+
+  // Identify current user email to ensure multi-tenant event isolation
+  let userEmail = "";
+  const profileRaw = req.cookies.get("evp_profile")?.value;
+  if (profileRaw) {
+    try {
+      const parsed = JSON.parse(decodeURIComponent(profileRaw));
+      if (parsed && typeof parsed.email === "string") {
+        userEmail = parsed.email.trim().toLowerCase();
+      }
+    } catch {}
+  }
+  if (!userEmail && token) {
+    try {
+      const p = await verifySessionToken(token, config, SESSION_MAX_AGE_S);
+      if (p?.sub && p.sub.includes("@")) {
+        userEmail = p.sub.trim().toLowerCase();
+      }
+    } catch {}
+  }
+  if (userEmail) {
+    headers.set("x-user-email", userEmail);
+  }
 
   const contentLength = req.headers.get("content-length");
   const isChunked = req.headers.get("transfer-encoding") === "chunked";
@@ -109,6 +133,70 @@ async function proxy(req: NextRequest, ctx: { params: Promise<{ path: string[] }
     const v = upstream.headers.get(h);
     if (v) resHeaders.set(h, v);
   }
+
+  // Intercept and isolate events per user account
+  const isEventsRoot = path[0] === "events" && path.length === 1;
+  const isDashboardOverview = path[0] === "dashboard" && path[1] === "overview";
+
+  if (req.method === "POST" && isEventsRoot && upstream.status === 201) {
+    try {
+      const data = await upstream.json();
+      if (userEmail && data?.id) {
+        await recordUserEvent(userEmail, String(data.id));
+      }
+      return NextResponse.json(data, { status: 201, headers: resHeaders });
+    } catch {
+      // Fallback to normal response
+    }
+  }
+
+  if (req.method === "GET" && isEventsRoot && upstream.ok) {
+    try {
+      const data = await upstream.json();
+      if (userEmail && Array.isArray(data?.items)) {
+        const userEventIds = await getUserEventIds(userEmail);
+        data.items = data.items.filter((item: Record<string, unknown>) => {
+          const id = String(item?.id || "");
+          const owner = typeof item?.owner_email === "string" ? item.owner_email.toLowerCase() : "";
+          return userEventIds.has(id) || (owner && owner === userEmail);
+        });
+        data.total = data.items.length;
+      }
+      return NextResponse.json(data, { status: 200, headers: resHeaders });
+    } catch {
+      // Fallback
+    }
+  }
+
+  if (req.method === "GET" && isDashboardOverview && upstream.ok) {
+    try {
+      const data = await upstream.json();
+      if (userEmail) {
+        const userEventIds = await getUserEventIds(userEmail);
+        if (userEventIds.size === 0) {
+          data.events = 0;
+          data.active_events = 0;
+          data.photos = 0;
+          data.indexed_photos = 0;
+          data.indexed_faces = 0;
+          data.processing = 0;
+          data.failures = 0;
+          data.recent_events = [];
+        } else if (Array.isArray(data.recent_events)) {
+          data.recent_events = data.recent_events.filter((item: Record<string, unknown>) => {
+            const id = String(item?.id || "");
+            const owner = typeof item?.owner_email === "string" ? item.owner_email.toLowerCase() : "";
+            return userEventIds.has(id) || (owner && owner === userEmail);
+          });
+          data.events = data.recent_events.length;
+        }
+      }
+      return NextResponse.json(data, { status: 200, headers: resHeaders });
+    } catch {
+      // Fallback
+    }
+  }
+
   return new NextResponse(upstream.status === 204 ? null : upstream.body, {
     status: upstream.status,
     headers: resHeaders,

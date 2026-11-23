@@ -45,6 +45,7 @@ class EventCreate(BaseModel):
     event_date: date | None = None
     venue: str | None = Field(default=None, max_length=300)
     description: str | None = Field(default=None, max_length=5000)
+    owner_email: str | None = None
 
     @field_validator("name")
     @classmethod
@@ -65,6 +66,7 @@ class EventUpdate(BaseModel):
     event_date: date | None = None
     venue: str | None = Field(default=None, max_length=300)
     description: str | None = Field(default=None, max_length=5000)
+    owner_email: str | None = None
     status: EventStatus | None = None
     # Send null to remove the expiry. A time without a timezone is taken as UTC.
     guest_link_expires_at: datetime | None = None
@@ -109,6 +111,7 @@ class EventOut(BaseModel):
     cover_url: str | None = None
     public_url: str
     guest_link_expires_at: datetime | None = None
+    owner_email: str | None = None
     created_at: datetime
     updated_at: datetime
     counts: PhotoCounts = PhotoCounts()

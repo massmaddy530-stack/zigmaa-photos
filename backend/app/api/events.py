@@ -6,7 +6,7 @@ import logging
 import uuid
 from typing import Annotated
 
-from fastapi import APIRouter, Depends, File, Query, Response, UploadFile, status
+from fastapi import APIRouter, Depends, File, Header, Query, Response, UploadFile, status
 from sqlalchemy import delete, func, or_, select
 from starlette.concurrency import run_in_threadpool
 
@@ -41,12 +41,20 @@ router = APIRouter(
 
 @router.post("/events", response_model=EventOut, status_code=status.HTTP_201_CREATED,
              responses={422: {"model": ErrorResponse}})
-async def create_event(body: EventCreate, session: SessionDep, storage: StorageDep) -> EventOut:
-    event = Event(slug=new_slug(), **body.model_dump())
+async def create_event(
+    body: EventCreate,
+    session: SessionDep,
+    storage: StorageDep,
+    x_user_email: Annotated[str | None, Header()] = None,
+) -> EventOut:
+    data = body.model_dump()
+    if not data.get("owner_email") and x_user_email:
+        data["owner_email"] = x_user_email.strip().lower()
+    event = Event(slug=new_slug(), **data)
     session.add(event)
     await session.commit()
     await session.refresh(event)
-    logger.info("Event created", extra={"event_id": str(event.id)})
+    logger.info("Event created", extra={"event_id": str(event.id), "owner_email": event.owner_email})
     return event_out(event, storage)
 
 
@@ -57,8 +65,12 @@ async def list_events(
     status_filter: Annotated[EventStatus | None, Query(alias="status")] = None,
     limit: Annotated[int, Query(ge=1, le=100)] = 20,
     offset: Annotated[int, Query(ge=0)] = 0,
+    x_user_email: Annotated[str | None, Header()] = None,
 ) -> Page[EventOut]:
     stmt = select(Event)
+    if x_user_email:
+        clean_email = x_user_email.strip().lower()
+        stmt = stmt.where(func.lower(Event.owner_email) == clean_email)
     if q:
         like = f"%{q.strip().lower()}%"
         stmt = stmt.where(or_(func.lower(Event.name).like(like), func.lower(Event.venue).like(like)))
@@ -257,17 +269,31 @@ async def storage_overview_endpoint(session: SessionDep, settings: SettingsDep) 
 
 
 @router.get("/dashboard/overview", response_model=OverviewOut, tags=["dashboard"])
-async def overview(session: SessionDep, storage: StorageDep, settings: SettingsDep) -> OverviewOut:
-    events = (await session.execute(select(func.count()).select_from(Event))).scalar_one()
-    active = (await session.execute(
-        select(func.count()).select_from(Event).where(Event.status == EventStatus.active))).scalar_one()
-    by_status = dict((await session.execute(
-        select(Photo.status, func.count()).join(Event, Photo.event_id == Event.id).group_by(Photo.status)
-    )).all())
-    faces = (await session.execute(
-        select(func.count()).select_from(FaceEmbedding).join(Event, FaceEmbedding.event_id == Event.id)
-    )).scalar_one()
-    recent = (await session.execute(select(Event).order_by(Event.created_at.desc()).limit(5))).scalars().all()
+async def overview(
+    session: SessionDep,
+    storage: StorageDep,
+    settings: SettingsDep,
+    x_user_email: Annotated[str | None, Header()] = None,
+) -> OverviewOut:
+    event_stmt = select(Event)
+    if x_user_email:
+        clean_email = x_user_email.strip().lower()
+        event_stmt = event_stmt.where(func.lower(Event.owner_email) == clean_email)
+
+    events = (await session.execute(select(func.count()).select_from(event_stmt.subquery()))).scalar_one()
+    active_stmt = event_stmt.where(Event.status == EventStatus.active)
+    active = (await session.execute(select(func.count()).select_from(active_stmt.subquery()))).scalar_one()
+
+    photo_query = select(Photo.status, func.count()).join(Event, Photo.event_id == Event.id)
+    face_query = select(func.count()).select_from(FaceEmbedding).join(Event, FaceEmbedding.event_id == Event.id)
+    if x_user_email:
+        clean_email = x_user_email.strip().lower()
+        photo_query = photo_query.where(func.lower(Event.owner_email) == clean_email)
+        face_query = face_query.where(func.lower(Event.owner_email) == clean_email)
+
+    by_status = dict((await session.execute(photo_query.group_by(Photo.status))).all())
+    faces = (await session.execute(face_query)).scalar_one()
+    recent = (await session.execute(event_stmt.order_by(Event.created_at.desc()).limit(5))).scalars().all()
     counts = await photo_counts(session, [e.id for e in recent])
 
     def n(s: PhotoStatus) -> int:

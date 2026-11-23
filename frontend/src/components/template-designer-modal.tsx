@@ -253,9 +253,10 @@ export function TemplateDesignerModal({
     } else if (lower.includes("college") || lower.includes("symposium") || lower.includes("fest") || lower.includes("hackathon")) {
       setSelectedCategory("college");
       setSelectedTemplateId("col-tech-symposium");
-    } else if (lower.includes("cricket") || lower.includes("football") || lower.includes("sports") || lower.includes("tournament")) {
+    } else if (lower.includes("silambam") || lower.includes("karate") || lower.includes("cricket") || lower.includes("football") || lower.includes("sports") || lower.includes("tournament") || lower.includes("competition")) {
       setSelectedCategory("sports");
       setSelectedTemplateId("spt-cricket-championship");
+      setSubtitle("CHAMPIONSHIP");
     } else if (lower.includes("baby") || lower.includes("seemantham") || lower.includes("valaikappu") || lower.includes("cradle")) {
       setSelectedCategory("baby_family");
       setSelectedTemplateId("fam-seemantham-valaikappu");
@@ -326,7 +327,13 @@ export function TemplateDesignerModal({
       const res = await fetch("/api/template/ai-generate", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ prompt: text }),
+        body: JSON.stringify({
+          prompt: text,
+          names: names.trim() || defaultEventName || "",
+          subtitle: subtitle.trim() || "",
+          dateText: dateText.trim() || defaultEventDate || "",
+          eventName: defaultEventName || "",
+        }),
       });
       const data = await res.json();
       if (data.ok && data.isCustomSvg && data.svg) {
