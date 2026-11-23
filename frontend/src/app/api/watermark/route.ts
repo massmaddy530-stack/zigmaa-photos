@@ -33,8 +33,8 @@ async function ensureWatermarkTable() {
 
 export async function GET(req: NextRequest) {
   const searchParams = req.nextUrl.searchParams;
-  const slug = searchParams.get("slug")?.trim();
-  const eventId = searchParams.get("eventId")?.trim();
+  const slug = searchParams.get("slug")?.trim() || "";
+  const eventId = searchParams.get("eventId")?.trim() || "";
   const key = slug || eventId;
 
   if (!key) {
@@ -42,7 +42,7 @@ export async function GET(req: NextRequest) {
   }
 
   // 1. Check in-memory cache
-  const cached = memoryCache.get(key);
+  const cached = (slug && memoryCache.get(slug)) || (eventId && memoryCache.get(eventId)) || memoryCache.get(key);
   if (cached) {
     return NextResponse.json({ ok: true, config: cached.config, source: "memory" });
   }
@@ -53,12 +53,16 @@ export async function GET(req: NextRequest) {
     try {
       await ensureWatermarkTable();
       const res = await pool.query(
-        `SELECT config_json FROM public.event_watermarks WHERE key = $1 OR slug = $1 OR event_id = $1 LIMIT 1`,
-        [key]
+        `SELECT config_json FROM public.event_watermarks
+         WHERE (key = $1 OR key = $2 OR event_id = $1 OR event_id = $2 OR slug = $1 OR slug = $2)
+         ORDER BY length(config_json) DESC LIMIT 1`,
+        [key, eventId || slug]
       );
       if (res.rows.length > 0 && res.rows[0].config_json) {
         const parsed = JSON.parse(res.rows[0].config_json);
-        memoryCache.set(key, { config: parsed, updatedAt: Date.now() });
+        if (key) memoryCache.set(key, { config: parsed, updatedAt: Date.now() });
+        if (slug) memoryCache.set(slug, { config: parsed, updatedAt: Date.now() });
+        if (eventId) memoryCache.set(eventId, { config: parsed, updatedAt: Date.now() });
         return NextResponse.json({ ok: true, config: parsed, source: "db" });
       }
     } catch (err) {
@@ -91,6 +95,11 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ ok: false, error: "invalid_payload" }, { status: 400 });
     }
 
+    const hasCustomWatermark = Boolean(
+      (Array.isArray(config.templates) && config.templates.some((t: Record<string, unknown>) => Boolean(t.dataUrl))) ||
+      config.imageUrl
+    );
+
     const configJson = JSON.stringify(config);
     const now = Date.now();
 
@@ -104,17 +113,34 @@ export async function POST(req: NextRequest) {
       try {
         await ensureWatermarkTable();
         const keysToSet = [eventId, slug].filter(Boolean) as string[];
-        for (const k of keysToSet) {
-          await pool.query(
-            `INSERT INTO public.event_watermarks (key, event_id, slug, config_json, updated_at)
-             VALUES ($1, $2, $3, $4, $5)
-             ON CONFLICT (key) DO UPDATE SET
-               config_json = EXCLUDED.config_json,
-               updated_at = EXCLUDED.updated_at,
-               event_id = EXCLUDED.event_id,
-               slug = EXCLUDED.slug`,
-            [k, eventId || null, slug || null, configJson, now]
+
+        // Safety check: If incoming config is empty, do NOT overwrite an existing rich watermark in the DB
+        let canOverwrite = true;
+        if (!hasCustomWatermark) {
+          const existing = await pool.query(
+            `SELECT length(config_json) as len FROM public.event_watermarks
+             WHERE key = $1 OR event_id = $1 OR slug = $1
+             ORDER BY length(config_json) DESC LIMIT 1`,
+            [eventId || slug]
           );
+          if (existing.rows.length > 0 && Number(existing.rows[0].len) > 300) {
+            canOverwrite = false;
+          }
+        }
+
+        if (canOverwrite) {
+          for (const k of keysToSet) {
+            await pool.query(
+              `INSERT INTO public.event_watermarks (key, event_id, slug, config_json, updated_at)
+               VALUES ($1, $2, $3, $4, $5)
+               ON CONFLICT (key) DO UPDATE SET
+                 config_json = EXCLUDED.config_json,
+                 updated_at = EXCLUDED.updated_at,
+                 event_id = EXCLUDED.event_id,
+                 slug = EXCLUDED.slug`,
+              [k, eventId || null, slug || null, configJson, now]
+            );
+          }
         }
       } catch (err) {
         console.warn("Could not save watermark to PostgreSQL:", err);

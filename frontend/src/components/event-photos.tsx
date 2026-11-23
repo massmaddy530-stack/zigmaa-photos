@@ -388,24 +388,6 @@ export function EventPhotos({ eventId, refreshKey, pollWhileProcessing, onChange
         index={open}
         onIndexChange={setOpen}
         onClose={() => setOpen(null)}
-        toolbar={(item) => {
-          const currentPhoto = data?.items.find((p) => p.id === item.id);
-          const dlUrl = currentPhoto?.preview_url ?? item.previewUrl ?? item.thumbnailUrl;
-          if (!dlUrl) return null;
-          return (
-            <Button
-              size="sm"
-              variant="outline"
-              className="border-white/20 bg-black/40 text-white hover:bg-black/60"
-              onClick={() => {
-                downloadImage(dlUrl, currentPhoto?.original_filename || item.alt || "photo.jpg", getSavedWatermarkConfig(eventId) || eventWatermark);
-              }}
-              icon={<Download className="h-4 w-4" />}
-            >
-              Download
-            </Button>
-          );
-        }}
         imageOverlay={(item) => (faceBoxes?.id === item.id ? <FaceBoxes faces={faceBoxes.faces} /> : null)}
         side={(item) => {
           const currentPhoto = data?.items.find((p) => p.id === item.id);
@@ -586,7 +568,18 @@ function PhotoDetailPanel({ eventId, photoId, initialPhoto, onLoaded, onDeleted,
         )}
         {downloadUrl && (
           <>
-            <Button size="sm" variant="outline" onClick={() => downloadImage(downloadUrl, p.original_filename || "photo.jpg", getSavedWatermarkConfig(eventId))} icon={<Download className="h-4 w-4" />}>
+            <Button
+              size="sm"
+              variant="outline"
+              onClick={async () => {
+                let cfg = getSavedWatermarkConfig(eventId);
+                if (!cfg || (!cfg.templates?.length && !cfg.imageUrl)) {
+                  cfg = (await fetchEventWatermarkConfig(eventId)) || cfg;
+                }
+                await downloadImage(downloadUrl, p.original_filename || "photo.jpg", cfg);
+              }}
+              icon={<Download className="h-4 w-4" />}
+            >
               Download
             </Button>
             {detailData?.original_url && (

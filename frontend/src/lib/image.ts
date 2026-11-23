@@ -136,12 +136,15 @@ export function fileToDataUrl(file: File): Promise<string> {
   });
 }
 
+// In-memory watermark cache: guarantees instant access across tab transitions and prevents localStorage quota crashes
+const memoryWatermarkStore = new Map<string, WatermarkConfig>();
+
 /**
- * Compresses and downscales a watermark image to max 1200px width/height PNG.
+ * Compresses and downscales a watermark image to max 800px width/height PNG.
  * Preserves transparency, remains ultra-crisp for high-res photo overlays,
- * and ensures the base64 string is only ~80KB-120KB so it never fails localStorage or network transfer limits.
+ * and ensures the base64 string is only ~40KB-70KB so it never fails localStorage or network transfer limits.
  */
-export async function optimizeWatermarkFile(file: File, maxSize = 1200): Promise<string> {
+export async function optimizeWatermarkFile(file: File, maxSize = 800): Promise<string> {
   if (typeof window === "undefined") return fileToDataUrl(file);
   return new Promise((resolve, reject) => {
     const reader = new FileReader();
@@ -152,10 +155,6 @@ export async function optimizeWatermarkFile(file: File, maxSize = 1200): Promise
         try {
           const width = img.naturalWidth || img.width;
           const height = img.naturalHeight || img.height;
-          if (width <= maxSize && height <= maxSize && file.size < 400 * 1024) {
-            resolve(dataUrl);
-            return;
-          }
           const scale = Math.min(1, maxSize / Math.max(width, height));
           const targetW = Math.max(1, Math.round(width * scale));
           const targetH = Math.max(1, Math.round(height * scale));
@@ -182,18 +181,44 @@ export async function optimizeWatermarkFile(file: File, maxSize = 1200): Promise
   });
 }
 
+function safeLocalStorageSet(key: string, value: string): void {
+  try {
+    localStorage.setItem(key, value);
+  } catch {
+    // If quota exceeded, remove older watermarks or legacy items
+    try {
+      for (let i = 0; i < localStorage.length; i++) {
+        const k = localStorage.key(i);
+        if (k && (k.startsWith("madx_") || (k.startsWith("zigmaa_") && k !== key))) {
+          localStorage.removeItem(k);
+        }
+      }
+      localStorage.setItem(key, value);
+    } catch {
+      // Ignore if still full - memory store handles it
+    }
+  }
+}
+
 export function saveEventWatermarkConfig(eventId: string, slug?: string | null, config?: WatermarkConfig) {
   if (typeof window === "undefined" || !config) return;
+
+  // 1. Always store in memory cache first for zero-latency instant access
+  if (eventId) memoryWatermarkStore.set(eventId, config);
+  if (slug) memoryWatermarkStore.set(slug, config);
+  memoryWatermarkStore.set("default", config);
+
+  // 2. Persist to localStorage safely
   try {
     const json = JSON.stringify(config);
-    if (eventId) localStorage.setItem(`zigmaa_event_watermark_${eventId}`, json);
-    if (slug) localStorage.setItem(`zigmaa_event_watermark_${slug}`, json);
-    localStorage.setItem("zigmaa_default_watermark", json);
+    if (eventId) safeLocalStorageSet(`zigmaa_event_watermark_${eventId}`, json);
+    if (slug) safeLocalStorageSet(`zigmaa_event_watermark_${slug}`, json);
+    safeLocalStorageSet("zigmaa_default_watermark", json);
   } catch (e) {
     console.warn("Could not save watermark config to localStorage", e);
   }
 
-  // Also sync to server API so guests and other devices automatically receive this exact watermark!
+  // 3. Sync to server API so guests and other devices automatically receive this exact watermark!
   if (eventId || slug) {
     void fetch("/api/watermark", {
       method: "POST",
@@ -205,11 +230,15 @@ export function saveEventWatermarkConfig(eventId: string, slug?: string | null, 
 
 export async function fetchEventWatermarkConfig(slugOrId: string): Promise<WatermarkConfig | undefined> {
   if (!slugOrId) return getSavedWatermarkConfig();
+  // Check memory store first
+  const inMem = memoryWatermarkStore.get(slugOrId);
+  if (inMem && (inMem.templates?.length || inMem.imageUrl)) return inMem;
+
   try {
-    const res = await fetch(`/api/watermark?slug=${encodeURIComponent(slugOrId)}`);
+    const res = await fetch(`/api/watermark?slug=${encodeURIComponent(slugOrId)}&eventId=${encodeURIComponent(slugOrId)}`);
     if (res.ok) {
       const data = await res.json();
-      if (data?.config) {
+      if (data?.config && typeof data.config === "object") {
         saveEventWatermarkConfig(slugOrId, slugOrId, data.config);
         return data.config as WatermarkConfig;
       }
@@ -222,22 +251,41 @@ export async function fetchEventWatermarkConfig(slugOrId: string): Promise<Water
 
 export function getSavedWatermarkConfig(eventIdOrSlug?: string): WatermarkConfig | undefined {
   if (typeof window === "undefined") return undefined;
-  try {
-    const syncActiveImage = (cfg: WatermarkConfig | undefined): WatermarkConfig | undefined => {
-      if (!cfg) return undefined;
-      if (Array.isArray(cfg.templates) && cfg.templates.length > 0) {
-        const active = cfg.templates.find((t) => t.id === cfg.activeTemplateId) || cfg.templates[0];
-        if (active?.dataUrl) {
-          cfg.imageUrl = active.dataUrl;
-          if (!cfg.activeTemplateId) cfg.activeTemplateId = active.id;
-        }
-      }
-      return cfg;
-    };
 
+  const syncActiveImage = (cfg: WatermarkConfig | undefined): WatermarkConfig | undefined => {
+    if (!cfg) return undefined;
+    if (Array.isArray(cfg.templates) && cfg.templates.length > 0) {
+      const active = cfg.templates.find((t) => t.id === cfg.activeTemplateId) || cfg.templates[0];
+      if (active?.dataUrl) {
+        cfg.imageUrl = active.dataUrl;
+        if (!cfg.activeTemplateId) cfg.activeTemplateId = active.id;
+      }
+    }
+    return cfg;
+  };
+
+  // 1. Check in-memory store
+  if (eventIdOrSlug && memoryWatermarkStore.has(eventIdOrSlug)) {
+    return syncActiveImage(memoryWatermarkStore.get(eventIdOrSlug));
+  }
+  if (memoryWatermarkStore.has("default")) {
+    const d = memoryWatermarkStore.get("default");
+    if (d?.templates?.length || d?.imageUrl) {
+      return syncActiveImage(d);
+    }
+  }
+
+  // 2. Check localStorage
+  try {
     if (eventIdOrSlug) {
       const saved = localStorage.getItem(`zigmaa_event_watermark_${eventIdOrSlug}`) || localStorage.getItem(`madx_event_watermark_${eventIdOrSlug}`);
-      if (saved) return syncActiveImage(JSON.parse(saved));
+      if (saved) {
+        const parsed = syncActiveImage(JSON.parse(saved));
+        if (parsed) {
+          memoryWatermarkStore.set(eventIdOrSlug, parsed);
+          return parsed;
+        }
+      }
     }
     // Also check current URL path to auto-detect event id or slug
     const pathParts = window.location.pathname.split("/").filter(Boolean);

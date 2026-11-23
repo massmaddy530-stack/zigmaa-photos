@@ -30,6 +30,8 @@ export function EventSettings({ event, onSaved }: { event: EventOut; onSaved: (e
   const [draggingId, setDraggingId] = useState<string | null>(null);
   const [showDesigner, setShowDesigner] = useState(false);
   const saveTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+  const isInitialMountRef = useRef(true);
+  const loadedFromServerRef = useRef(false);
 
   // Load existing watermark configuration or defaults
   const [wm, setWm] = useState<WatermarkConfig>(() => {
@@ -52,16 +54,30 @@ export function EventSettings({ event, onSaved }: { event: EventOut; onSaved: (e
     void fetch(`/api/watermark?eventId=${encodeURIComponent(event.id)}&slug=${encodeURIComponent(event.slug)}`)
       .then((r) => (r.ok ? r.json() : null))
       .then((data) => {
+        loadedFromServerRef.current = true;
         if (data?.config && typeof data.config === "object") {
           setWm(data.config);
           saveEventWatermarkConfig(event.id, event.slug, data.config);
         }
       })
-      .catch(() => undefined);
+      .catch(() => {
+        loadedFromServerRef.current = true;
+      });
   }, [event.id, event.slug]);
 
   // Debounced auto-save: ensures every slider, drag, and position change is persisted automatically
   useEffect(() => {
+    // Avoid overwriting database watermark on initial mount before server config has loaded
+    if (isInitialMountRef.current) {
+      isInitialMountRef.current = false;
+      return;
+    }
+    const hasCustomWatermark = Boolean(
+      (Array.isArray(wm.templates) && wm.templates.some((t) => Boolean(t.dataUrl))) || wm.imageUrl
+    );
+    // Don't save empty config unless we are certain the user explicitly cleared it after loading
+    if (!hasCustomWatermark && !loadedFromServerRef.current) return;
+
     if (saveTimeoutRef.current) clearTimeout(saveTimeoutRef.current);
     saveTimeoutRef.current = setTimeout(() => {
       saveEventWatermarkConfig(event.id, event.slug, wm);
