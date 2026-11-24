@@ -215,11 +215,11 @@ async def index_photo(
     return photo.status.value
 
 
-async def reset_for_retry(session: AsyncSession, photo_ids: list[uuid.UUID]) -> list[uuid.UUID]:
+async def reset_for_retry(session: AsyncSession, photo_ids: list[uuid.UUID], *, force: bool = False) -> list[uuid.UUID]:
     rows = (await session.execute(select(Photo).where(Photo.id.in_(photo_ids)))).scalars().all()
     reset = []
     for p in rows:
-        if p.status in (PhotoStatus.failed, PhotoStatus.pending, PhotoStatus.processing):
+        if force or p.status in (PhotoStatus.failed, PhotoStatus.pending, PhotoStatus.processing):
             p.status = PhotoStatus.pending
             p.error_message = None
             reset.append(p.id)

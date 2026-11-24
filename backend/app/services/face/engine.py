@@ -140,6 +140,32 @@ def align_face(image: Image.Image, kps: np.ndarray, size: int = 112) -> Image.Im
     return image.transform((size, size), Image.Transform.AFFINE, coeffs, resample=Image.Resampling.BILINEAR)
 
 
+def _map_bbox(bbox: np.ndarray, angle: int, w: int, h: int) -> np.ndarray:
+    rx1, ry1, rx2, ry2 = bbox
+    if angle == 90:
+        return np.array([w - 1 - ry2, rx1, w - 1 - ry1, rx2], dtype=np.float32)
+    elif angle == 180:
+        return np.array([w - 1 - rx2, h - 1 - ry2, w - 1 - rx1, h - 1 - ry1], dtype=np.float32)
+    elif angle == 270:
+        return np.array([ry1, h - 1 - rx2, ry2, h - 1 - rx1], dtype=np.float32)
+    return bbox.copy()
+
+
+def _map_kps(kps: np.ndarray, angle: int, w: int, h: int) -> np.ndarray:
+    out = np.zeros_like(kps)
+    for k in range(len(kps)):
+        rx, ry = kps[k]
+        if angle == 90:
+            out[k] = [w - 1 - ry, rx]
+        elif angle == 180:
+            out[k] = [w - 1 - rx, h - 1 - ry]
+        elif angle == 270:
+            out[k] = [ry, h - 1 - rx]
+        else:
+            out[k] = [rx, ry]
+    return out
+
+
 # --------------------------------------------------------------------------- ONNX analyzer
 
 
@@ -248,8 +274,22 @@ class BuffaloLAnalyzer:
 
     def analyze(self, image: Image.Image) -> list[DetectedFace]:
         img = np.asarray(image.convert("RGB"))
+        pw, ph = image.size
         with self._lock:  # ORT sessions are thread-safe, but this bounds CPU use per process
             dets, kps = self._detect(img)
+            detected_angle = 0
+            if len(dets) == 0:
+                for angle in (90, 270, 180):
+                    rot_img = image.rotate(angle, expand=True)
+                    rot_arr = np.asarray(rot_img.convert("RGB"))
+                    rot_dets, rot_kps = self._detect(rot_arr)
+                    if len(rot_dets) > 0:
+                        dets = rot_dets
+                        kps = rot_kps
+                        detected_angle = angle
+                        image = rot_img
+                        break
+
             faces = []
             for det, kp in zip(dets, kps):
                 bw, bh = det[2] - det[0], det[3] - det[1]
@@ -263,10 +303,16 @@ class BuffaloLAnalyzer:
             for i in range(0, len(crops), 16):
                 embs.append(self._embed(crops[i:i + 16]))
             emb = np.vstack(embs)
-        return [
-            DetectedFace(bbox=det[:4].copy(), kps=kp.copy(), det_score=float(det[4]), embedding=emb[i])
-            for i, (det, kp) in enumerate(faces)
-        ]
+
+        results = []
+        for i, (det, kp) in enumerate(faces):
+            bbox = det[:4].copy()
+            kp_coords = kp.copy()
+            if detected_angle != 0:
+                bbox = _map_bbox(bbox, detected_angle, pw, ph)
+                kp_coords = _map_kps(kp_coords, detected_angle, pw, ph)
+            results.append(DetectedFace(bbox=bbox, kps=kp_coords, det_score=float(det[4]), embedding=emb[i]))
+        return results
 
 
 class BuffaloSCAnalyzer:
@@ -284,9 +330,11 @@ class BuffaloSCAnalyzer:
         root = str(resolved_dir.parent.parent) if resolved_dir.name in ("buffalo_sc", "buffalo_l") else str(resolved_dir)
 
         self.app = FaceAnalysis(name="buffalo_sc", root=root, providers=["CPUExecutionProvider"])
-        self.app.prepare(ctx_id=0, det_size=(settings.face_det_size, settings.face_det_size))
+        self.det_size = settings.face_det_size
+        self.det_thresh = settings.face_det_threshold
         self.min_size = settings.face_min_size_px
         self.max_side = settings.face_analysis_max_side
+        self.app.prepare(ctx_id=0, det_thresh=self.det_thresh, det_size=(self.det_size, self.det_size))
         self._lock = threading.Lock()
         gc.collect()
 
@@ -301,15 +349,49 @@ class BuffaloSCAnalyzer:
         else:
             proc_img = image
 
+        pw, ph = proc_img.size
         img_np = np.asarray(proc_img.convert("RGB"))[:, :, ::-1]
 
         with self._lock:
             raw_faces = self.app.get(img_np)
 
+        # Multi-orientation detection:
+        # If no faces were detected, or only very weak detections found on a portrait/tilted photo,
+        # test rotations (90°, 270°, 180°) to catch sideways/landscape-oriented photos.
+        detected_angle = 0
+        scores0 = [f.det_score for f in raw_faces if hasattr(f, "det_score") and f.det_score >= self.det_thresh]
+        max_score0 = max(scores0) if scores0 else 0.0
+
+        need_rotation_check = (len(scores0) == 0) or (len(scores0) == 1 and max_score0 < 0.70)
+        if need_rotation_check:
+            best_angle = 0
+            best_faces = raw_faces
+            best_strength = sum(scores0)
+
+            for angle in (90, 270, 180):
+                rot_img = proc_img.rotate(angle, expand=True)
+                rot_np = np.asarray(rot_img.convert("RGB"))[:, :, ::-1]
+                with self._lock:
+                    rot_faces = self.app.get(rot_np)
+                rot_scores = [f.det_score for f in rot_faces if hasattr(f, "det_score") and f.det_score >= self.det_thresh]
+                rot_strength = sum(rot_scores)
+                if rot_strength > best_strength:
+                    best_strength = rot_strength
+                    best_angle = angle
+                    best_faces = rot_faces
+
+            if best_angle != 0:
+                detected_angle = best_angle
+                raw_faces = best_faces
+
         results: list[DetectedFace] = []
         for face in raw_faces:
             bbox = face.bbox.copy()
             kps = face.kps.copy() if hasattr(face, "kps") and face.kps is not None else np.zeros((5, 2), dtype=np.float32)
+
+            if detected_angle != 0:
+                bbox = _map_bbox(bbox, detected_angle, pw, ph)
+                kps = _map_kps(kps, detected_angle, pw, ph)
 
             if scale != 1.0:
                 bbox /= scale

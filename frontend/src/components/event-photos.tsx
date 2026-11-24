@@ -93,7 +93,7 @@ export function EventPhotos({ eventId, refreshKey, pollWhileProcessing, onChange
     if (selectedIds.size === 0) return;
     setBusyBatchRetry(true);
     try {
-      const res = await adminApi.batchRetryPhotos(eventId, Array.from(selectedIds));
+      const res = await adminApi.batchRetryPhotos(eventId, Array.from(selectedIds), true);
       toast.success(res.queued ? `Re-queued ${res.queued} photo${res.queued === 1 ? "" : "s"} for processing` : "No photos needed retry");
       setSelectedIds(new Set());
       setIsSelecting(false);

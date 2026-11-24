@@ -250,6 +250,7 @@ async def retry_failed(event_id: uuid.UUID, session: SessionDep,
 
 class BatchRetryPhotosRequest(BaseModel):
     photo_ids: list[uuid.UUID]
+    force: bool = False
 
 
 @router.post("/batch-retry", response_model=RetryResponse, status_code=status.HTTP_202_ACCEPTED,
@@ -270,7 +271,27 @@ async def batch_retry_photos(
     if not valid_ids:
         return RetryResponse(queued=0, photo_ids=[])
 
-    ids = await reset_for_retry(session, valid_ids)
+    ids = await reset_for_retry(session, valid_ids, force=body.force)
+    await _enqueue_or_503(ids)
+    return RetryResponse(queued=len(ids), photo_ids=ids)
+
+
+@router.post("/reindex-faces", response_model=RetryResponse, status_code=status.HTTP_202_ACCEPTED,
+             dependencies=[Depends(require_admin)],
+             summary="Re-index face detection on photos for this event (especially photos with 0 faces)")
+async def reindex_event_faces(
+    event_id: uuid.UUID,
+    session: SessionDep,
+    only_zero_faces: Annotated[bool, Query()] = True,
+) -> RetryResponse:
+    await get_event_or_404(session, event_id)
+    q = select(Photo.id).where(Photo.event_id == event_id)
+    if only_zero_faces:
+        q = q.where(Photo.face_count == 0)
+    photo_ids = list((await session.execute(q)).scalars())
+    if not photo_ids:
+        return RetryResponse(queued=0, photo_ids=[])
+    ids = await reset_for_retry(session, photo_ids, force=True)
     await _enqueue_or_503(ids)
     return RetryResponse(queued=len(ids), photo_ids=ids)
 

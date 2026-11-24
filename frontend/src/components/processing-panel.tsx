@@ -1,6 +1,6 @@
 "use client";
 
-import { AlertTriangle, CheckCircle2, Loader2, RotateCcw } from "lucide-react";
+import { AlertTriangle, CheckCircle2, Loader2, RotateCcw, ScanFace } from "lucide-react";
 import { useState } from "react";
 import { adminApi, errorMessage } from "@/lib/api";
 import { formatNumber } from "@/lib/format";
@@ -25,6 +25,7 @@ export function ProcessingPanel({ eventId, status, error, onReload, onChanged }:
 }) {
   const toast = useToast();
   const [retrying, setRetrying] = useState(false);
+  const [reindexing, setReindexing] = useState(false);
 
   if (error && !status) return <Card className="p-2"><ErrorState compact error={error} onRetry={onReload} /></Card>;
   if (!status) return <Card className="space-y-3 p-5"><Skeleton className="h-4 w-40" /><Skeleton className="h-2 w-full" /></Card>;
@@ -42,6 +43,19 @@ export function ProcessingPanel({ eventId, status, error, onReload, onChanged }:
       toast.error("Retry failed", errorMessage(err));
     } finally {
       setRetrying(false);
+    }
+  }
+
+  async function reindexZeroFaces() {
+    setReindexing(true);
+    try {
+      const r = await adminApi.reindexFaces(eventId, true);
+      toast.success(r.queued ? `Re-scanning ${r.queued} photo${r.queued === 1 ? "" : "s"} for faces…` : "All photos already have detected faces");
+      onChanged();
+    } catch (err) {
+      toast.error("Re-index failed", errorMessage(err));
+    } finally {
+      setReindexing(false);
     }
   }
 
@@ -65,11 +79,25 @@ export function ProcessingPanel({ eventId, status, error, onReload, onChanged }:
             </p>
           </div>
         </div>
-        {(c.failed > 0 || inFlight > 0) && (
-          <Button size="sm" variant="outline" onClick={retryAll} loading={retrying} icon={<RotateCcw className="h-4 w-4" />}>
-            {c.failed > 0 ? "Retry failed" : "Re-queue all"}
-          </Button>
-        )}
+        <div className="flex items-center gap-2">
+          {c.total > 0 && inFlight === 0 && (
+            <Button
+              size="sm"
+              variant="outline"
+              onClick={reindexZeroFaces}
+              loading={reindexing}
+              icon={<ScanFace className="h-4 w-4" />}
+              title="Re-run enhanced face detection on photos that have 0 detected faces"
+            >
+              Re-scan 0-face photos
+            </Button>
+          )}
+          {(c.failed > 0 || inFlight > 0) && (
+            <Button size="sm" variant="outline" onClick={retryAll} loading={retrying} icon={<RotateCcw className="h-4 w-4" />}>
+              {c.failed > 0 ? "Retry failed" : "Re-queue all"}
+            </Button>
+          )}
+        </div>
       </div>
 
       {c.total > 0 && (

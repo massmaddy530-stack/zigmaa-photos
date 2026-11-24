@@ -124,10 +124,10 @@ class Settings(BaseSettings):
     face_analysis_enabled: bool = True
     face_model_name: str = "buffalo_sc"
     face_model_dir: Path = BACKEND_DIR / "models" / "buffalo_sc"
-    face_det_size: int = 320
-    face_det_threshold: float = 0.5
-    face_min_size_px: int = 24
-    face_analysis_max_side: int = 1024
+    face_det_size: int = 640
+    face_det_threshold: float = 0.35
+    face_min_size_px: int = 10
+    face_analysis_max_side: int = 1920
     onnx_intra_op_threads: int = 2
     hf_model_repo: str | None = None
     hf_model_token: SecretStr | None = None

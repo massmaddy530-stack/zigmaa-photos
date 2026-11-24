@@ -208,10 +208,15 @@ export const adminApi = {
       method: "POST",
       json: { photo_ids: photoIds },
     }),
-  batchRetryPhotos: (eventId: string, photoIds: string[]) =>
+  batchRetryPhotos: (eventId: string, photoIds: string[], force = false) =>
     admin<RetryResponse>(`events/${eventId}/photos/batch-retry`, {
       method: "POST",
-      json: { photo_ids: photoIds },
+      json: { photo_ids: photoIds, force },
+    }),
+  reindexFaces: (eventId: string, onlyZeroFaces = true) =>
+    admin<RetryResponse>(`events/${eventId}/photos/reindex-faces`, {
+      method: "POST",
+      query: { only_zero_faces: onlyZeroFaces },
     }),
   retryPhoto: (eventId: string, photoId: string) =>
     admin<RetryResponse>(`events/${eventId}/photos/${photoId}/retry`, { method: "POST" }),
