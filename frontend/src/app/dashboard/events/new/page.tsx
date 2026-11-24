@@ -301,7 +301,7 @@ export default function NewEventPage() {
                   }
 
                   toast.success("Event created", "Now upload your photos.");
-                  router.push(`/dashboard/events/${ev.id}?tab=upload`);
+                  router.push(`/dashboard/events/${ev.id}`);
                 }}
               />
             </div>
@@ -319,15 +319,6 @@ export default function NewEventPage() {
                   <Badge tone="brand" dot>
                     Live preview
                   </Badge>
-                  <button
-                    type="button"
-                    onClick={() => setShowDesigner(true)}
-                    className="inline-flex items-center gap-1.5 rounded-lg border border-brand-300 bg-brand-50 px-2.5 py-1 text-xs font-semibold text-brand-700 hover:bg-brand-100 transition-colors cursor-pointer shadow-xs"
-                    title="Generate template with Gemini AI"
-                  >
-                    <Sparkles className="h-3.5 w-3.5 text-brand-600" />
-                    <span>✨ AI Generate Template</span>
-                  </button>
                   <button
                     type="button"
                     onClick={() => setShowDesigner(true)}
@@ -574,7 +565,7 @@ export default function NewEventPage() {
                   <input
                     type="range"
                     min={5}
-                    max={60}
+                    max={100}
                     step={1}
                     value={activeEditingItem?.sizePercent ?? wm.sizePercent ?? 14}
                     onChange={(e) => {

@@ -9,7 +9,6 @@ import {
   Sliders,
   Type,
   X,
-  Layers,
   Minus,
   Plus,
   Sparkles,
@@ -21,7 +20,6 @@ import { Button } from "./ui/button";
 import { Modal } from "./ui/modal";
 import { useToast } from "./ui/toast";
 import {
-  EVENT_CATEGORIES,
   EVENT_TEMPLATES,
   EventTemplateItem,
   TemplateRenderParams,
@@ -171,6 +169,17 @@ function getRenderedCustomSvg(
     }
   }
 
+  // 5. Update Text Colors on text elements if not gradient
+  if (params.textColor) {
+    svg = svg.replace(
+      /(<text[^>]*id=["']svg-(?:names|subtitle|date|venue)["'][^>]*?)(fill=["'][^"']*["'])/gi,
+      (match, prefix, fillPart) => {
+        if (fillPart.includes("url(")) return match;
+        return `${prefix}fill="${params.textColor}"`;
+      }
+    );
+  }
+
   return svg;
 }
 
@@ -181,25 +190,13 @@ export function TemplateDesignerModal({
   defaultEventName = "",
   defaultEventDate = "",
 }: TemplateDesignerModalProps) {
-  // Category selection (8 categories)
-  const [selectedCategory, setSelectedCategory] = useState<string>("wedding");
-
-  // Template selection (10 templates per category)
-  const [selectedTemplateId, setSelectedTemplateId] = useState<string>("wed-straight-flat");
-
-  // Filter templates for current category
-  const categoryTemplates = useMemo(() => {
-    return EVENT_TEMPLATES.filter((t) => t.categoryId === selectedCategory);
-  }, [selectedCategory]);
-
-  // Current active template item
+  // Current active template item - default is always "wed-straight-flat" (Straight Flat Ivory Banner)
   const activeTemplate = useMemo(() => {
     return (
-      EVENT_TEMPLATES.find((t) => t.id === selectedTemplateId) ||
-      categoryTemplates[0] ||
+      EVENT_TEMPLATES.find((t) => t.id === "wed-straight-flat") ||
       EVENT_TEMPLATES[0]
     );
-  }, [selectedTemplateId, categoryTemplates]);
+  }, []);
 
   // Text content
   const [subtitle, setSubtitle] = useState("THE WEDDING OF");
@@ -237,33 +234,9 @@ export function TemplateDesignerModal({
   // Refs for rendering
   const svgContainerRef = useRef<HTMLDivElement>(null);
 
-  // Auto-detect category from event name
+  // Use event name if provided
   useEffect(() => {
     if (!defaultEventName) return;
-    const lower = defaultEventName.toLowerCase();
-    if (lower.includes("birthday") || lower.includes("bday") || lower.includes("born")) {
-      setSelectedCategory("birthday");
-      setSelectedTemplateId("bday-luxury-gold");
-    } else if (lower.includes("reception")) {
-      setSelectedCategory("reception");
-      setSelectedTemplateId("rec-crystal-chandelier");
-    } else if (lower.includes("school") || lower.includes("annual day") || lower.includes("kindergarten")) {
-      setSelectedCategory("school");
-      setSelectedTemplateId("sch-annual-day");
-    } else if (lower.includes("college") || lower.includes("symposium") || lower.includes("fest") || lower.includes("hackathon")) {
-      setSelectedCategory("college");
-      setSelectedTemplateId("col-tech-symposium");
-    } else if (lower.includes("silambam") || lower.includes("karate") || lower.includes("cricket") || lower.includes("football") || lower.includes("sports") || lower.includes("tournament") || lower.includes("competition")) {
-      setSelectedCategory("sports");
-      setSelectedTemplateId("spt-cricket-championship");
-      setSubtitle("CHAMPIONSHIP");
-    } else if (lower.includes("baby") || lower.includes("seemantham") || lower.includes("valaikappu") || lower.includes("cradle")) {
-      setSelectedCategory("baby_family");
-      setSelectedTemplateId("fam-seemantham-valaikappu");
-    } else if (lower.includes("temple") || lower.includes("pooja") || lower.includes("kumbabishekam") || lower.includes("utsavam")) {
-      setSelectedCategory("temple_cultural");
-      setSelectedTemplateId("tem-gopuram-heritage");
-    }
     setNames(defaultEventName.trim());
   }, [defaultEventName]);
 
@@ -285,11 +258,10 @@ export function TemplateDesignerModal({
     }
   }, [defaultEventDate]);
 
-  // When selecting a template from the catalog
+  // When resetting or applying template attributes
   function handleSelectTemplate(tpl: EventTemplateItem) {
     setIsCustomAi(false);
     setCustomBgImage(null);
-    setSelectedTemplateId(tpl.id);
     setSubtitle(tpl.defaultSubtitle);
     setFontFamily(tpl.defaultFontFamily as SupportedFontFamily);
     if (typeof tpl.isItalic === "boolean") setIsItalic(tpl.isItalic);
@@ -332,6 +304,9 @@ export function TemplateDesignerModal({
           names: names.trim() || defaultEventName || "",
           subtitle: subtitle.trim() || "",
           dateText: dateText.trim() || defaultEventDate || "",
+          venueText: venueText.trim() || "",
+          textColor,
+          bgColor,
           eventName: defaultEventName || "",
         }),
       });
@@ -535,7 +510,7 @@ export function TemplateDesignerModal({
             <div>
               <h2 className="text-base font-bold text-ink">Watermark Template Studio</h2>
               <p className="text-xs text-muted">
-                Choose from 80 event templates (10 per function) or upload custom AI background art.
+                Straight Flat Ivory Banner default. Customize typography, colors, or generate custom designs with AI.
               </p>
             </div>
           </div>
@@ -649,98 +624,31 @@ export function TemplateDesignerModal({
               </div>
             )}
 
-            {/* 1. Event Category Selector (8 Categories) */}
-            <div>
-              <label className="text-xs font-bold uppercase tracking-wider text-muted flex items-center justify-between mb-1.5">
-                <span className="flex items-center gap-1.5">
-                  <Layers className="h-3.5 w-3.5 text-brand-600" />
-                  <span>Event Category</span>
-                </span>
-                <span className="text-[10px] text-brand-700 font-semibold bg-brand-50 px-2 py-0.5 rounded-full border border-brand-200">
-                  80 Templates Total
-                </span>
-              </label>
-
-              <div className="grid grid-cols-4 gap-1.5">
-                {EVENT_CATEGORIES.map((cat) => {
-                  const isActive = selectedCategory === cat.id;
-                  return (
-                    <button
-                      key={cat.id}
-                      type="button"
-                      onClick={() => {
-                        setSelectedCategory(cat.id);
-                        const firstInCat = EVENT_TEMPLATES.find((t) => t.categoryId === cat.id);
-                        if (firstInCat) handleSelectTemplate(firstInCat);
-                      }}
-                      className={`flex flex-col items-center justify-center p-2 rounded-xl border text-center transition-all cursor-pointer ${
-                        isActive
-                          ? "border-brand-500 bg-brand-50/70 text-brand-900 font-bold ring-1 ring-brand-500 shadow-2xs"
-                          : "border-line bg-surface hover:border-brand-300 text-ink"
-                      }`}
-                    >
-                      <span className="text-base">{cat.emoji}</span>
-                      <span className="text-[10px] leading-tight mt-0.5 font-medium truncate w-full">
-                        {cat.label}
-                      </span>
-                    </button>
-                  );
-                })}
+            {/* Background Art / Custom Image Option */}
+            <div className="flex items-center justify-between pb-2 border-b border-line">
+              <div>
+                <span className="text-xs font-bold uppercase tracking-wider text-muted block">Background Art</span>
+                <span className="text-[10px] text-muted">Custom PNG / JPG image or AI artwork</span>
               </div>
+              <button
+                type="button"
+                onClick={() => fileInputRef.current?.click()}
+                className="inline-flex items-center gap-1.5 text-xs font-semibold text-brand-700 hover:text-brand-900 bg-brand-50 hover:bg-brand-100 border border-brand-200 px-2.5 py-1 rounded-lg transition-colors cursor-pointer"
+              >
+                <Upload className="h-3.5 w-3.5" />
+                <span>Upload Image</span>
+              </button>
+              <input
+                ref={fileInputRef}
+                type="file"
+                accept="image/png,image/jpeg"
+                className="hidden"
+                onChange={handleImageUpload}
+              />
             </div>
 
-            {/* 2. 10 Templates for Selected Category */}
-            <div>
-              <div className="flex items-center justify-between mb-1.5">
-                <label className="text-xs font-bold uppercase tracking-wider text-muted">
-                  Choose Template (10 Available)
-                </label>
-                {/* Upload Custom Image Button */}
-                <button
-                  type="button"
-                  onClick={() => fileInputRef.current?.click()}
-                  className="inline-flex items-center gap-1 text-[11px] font-semibold text-brand-700 hover:text-brand-900 bg-brand-50 hover:bg-brand-100 border border-brand-200 px-2 py-0.5 rounded-lg transition-colors cursor-pointer"
-                >
-                  <Upload className="h-3 w-3" />
-                  <span>Upload AI Image</span>
-                </button>
-                <input
-                  ref={fileInputRef}
-                  type="file"
-                  accept="image/png,image/jpeg"
-                  className="hidden"
-                  onChange={handleImageUpload}
-                />
-              </div>
-
-              <div className="grid grid-cols-2 gap-1.5 max-h-[190px] overflow-y-auto p-1 border border-line rounded-xl bg-canvas/30">
-                {categoryTemplates.map((tpl) => {
-                  const isSelected = !customBgImage && !isCustomAi && selectedTemplateId === tpl.id;
-                  return (
-                    <button
-                      key={tpl.id}
-                      type="button"
-                      onClick={() => handleSelectTemplate(tpl)}
-                      className={`flex flex-col text-left p-2 rounded-lg border transition-all cursor-pointer ${
-                        isSelected
-                          ? "border-brand-500 bg-brand-50 ring-1 ring-brand-500 shadow-2xs"
-                          : "border-line bg-surface hover:border-brand-300"
-                      }`}
-                    >
-                      <span className="text-[11px] font-bold text-ink truncate w-full">
-                        {tpl.name}
-                      </span>
-                      <span className="text-[9px] text-muted line-clamp-1 mt-0.5">
-                        {tpl.tagline}
-                      </span>
-                    </button>
-                  );
-                })}
-              </div>
-            </div>
-
-            {/* 3. Text Content Fields */}
-            <div className="space-y-2.5 pt-1 border-t border-line">
+            {/* Text Content Fields */}
+            <div className="space-y-2.5 pt-1">
               <label className="text-xs font-bold uppercase tracking-wider text-muted flex items-center gap-1.5">
                 <Type className="h-3.5 w-3.5 text-brand-600" />
                 <span>Text Details</span>
@@ -1020,7 +928,7 @@ export function TemplateDesignerModal({
             onClick={() => {
               setCustomBgImage(null);
               setIsCustomAi(false);
-              const defaultTpl = EVENT_TEMPLATES[0];
+              const defaultTpl = EVENT_TEMPLATES.find((t) => t.id === "wed-straight-flat") || EVENT_TEMPLATES[0];
               handleSelectTemplate(defaultTpl);
             }}
             className="inline-flex items-center gap-1.5 text-xs text-muted hover:text-ink transition-colors cursor-pointer"

@@ -204,7 +204,7 @@ function EventsList() {
         <div className={cn("space-y-5 transition-opacity", events.loading && "opacity-60")}>
           <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
             {data.items.map((e) => (
-              <EventCard key={e.id} event={e} />
+              <EventCard key={e.id} event={e} onDeleted={events.reload} />
             ))}
           </div>
           <Pagination

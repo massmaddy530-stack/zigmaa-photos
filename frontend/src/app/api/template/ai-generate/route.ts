@@ -65,6 +65,8 @@ export async function POST(req: NextRequest) {
     const customSubtitle = typeof body?.subtitle === "string" ? body.subtitle.trim() : "";
     const customDate = typeof body?.dateText === "string" ? body.dateText.trim() : "";
     const customVenue = typeof body?.venueText === "string" ? body.venueText.trim() : "";
+    const customTextColor = typeof body?.textColor === "string" ? body.textColor.trim() : "";
+    const customBgColor = typeof body?.bgColor === "string" ? body.bgColor.trim() : "";
 
     if (!userPrompt) {
       return NextResponse.json(
@@ -72,6 +74,24 @@ export async function POST(req: NextRequest) {
         { status: 400 }
       );
     }
+
+    const contextualUserPrompt = `USER REQUEST: "${userPrompt}"
+
+CURRENT VALUES:
+- Names: "${customNames || "Zigmaa Moments"}"
+- Subtitle: "${customSubtitle || "THE WEDDING OF"}"
+- Date: "${customDate || "2026"}"
+- Venue: "${customVenue || ""}"
+- Text Color: "${customTextColor || "#581c25"}"
+- Background Color: "${customBgColor || "#faf6ee"}"
+
+INSTRUCTIONS:
+1. If the user specifies any text, title, or couple names in the prompt, set "names" to that exact text.
+2. If the user specifies any date, set "dateText" to that exact date.
+3. If the user specifies any color (e.g. "gold text", "black background", "navy blue", "white and red"), set "textColor" and "bgColor" accordingly and use them in the SVG.
+4. If the user requests a specific template style (e.g. "bubbles", "flowers", "roses", "balloons", "sports", "silambam", "royal gold", "minimalist", "traditional", "championship"), generate a stunning 3D vector SVG matching that exact style.
+5. Canvas specs: viewBox="0 0 1200 320" width="1200" height="320".
+6. Return valid JSON only with keys: themeName, names, subtitle, dateText, venueText, fontFamily, textColor, bgColor, svg.`;
 
     let parsedResult: Record<string, unknown> | null = null;
     let engineSource = "procedural_fallback";
@@ -90,7 +110,7 @@ export async function POST(req: NextRequest) {
             model: "gpt-4o",
             messages: [
               { role: "system", content: SYSTEM_INSTRUCTION },
-              { role: "user", content: `USER PROMPT: "${userPrompt}"\n\nReturn JSON:` },
+              { role: "user", content: contextualUserPrompt },
             ],
             response_format: { type: "json_object" },
             temperature: 0.5,
@@ -127,7 +147,7 @@ export async function POST(req: NextRequest) {
                 {
                   parts: [
                     {
-                      text: `${SYSTEM_INSTRUCTION}\n\nUSER PROMPT: "${userPrompt}"\n\nReturn JSON:`,
+                      text: `${SYSTEM_INSTRUCTION}\n\n${contextualUserPrompt}`,
                     },
                   ],
                 },
@@ -154,14 +174,15 @@ export async function POST(req: NextRequest) {
               if (candidateText.includes("<svg") && candidateText.includes("</svg>")) {
                 const svgMatch = candidateText.match(/<svg[\s\S]*?<\/svg>/i);
                 if (svgMatch) {
+                  const colors = extractColors(userPrompt, customTextColor, customBgColor);
                   parsedResult = {
                     themeName: "AI Artwork",
-                    names: extractNames(userPrompt),
-                    subtitle: extractSubtitle(userPrompt),
-                    dateText: extractDate(userPrompt),
+                    names: extractNames(userPrompt, customNames),
+                    subtitle: extractSubtitle(userPrompt, customSubtitle),
+                    dateText: extractDate(userPrompt, customDate),
                     fontFamily: "Playfair Display",
-                    textColor: "#ffffff",
-                    bgColor: "#090d16",
+                    textColor: colors.textColor,
+                    bgColor: colors.bgColor,
                     svg: svgMatch[0],
                   };
                   engineSource = "gemini";
@@ -180,7 +201,15 @@ export async function POST(req: NextRequest) {
 
     // 3. Fallback to Ultra-Realistic Procedural 3D SVG Engine if API is busy/quota exhausted
     if (!parsedResult || typeof parsedResult.svg !== "string") {
-      const fallback = buildDynamicSvgFallback(userPrompt, customNames, customSubtitle, customDate);
+      const fallback = buildDynamicSvgFallback(
+        userPrompt,
+        customNames,
+        customSubtitle,
+        customDate,
+        customVenue,
+        customTextColor,
+        customBgColor
+      );
       return NextResponse.json({
         ok: true,
         isCustomSvg: true,
@@ -199,6 +228,11 @@ export async function POST(req: NextRequest) {
     }
 
     const cleanedSvg = String(parsedResult.svg).trim();
+    const finalColors = extractColors(
+      userPrompt,
+      typeof parsedResult.textColor === "string" ? parsedResult.textColor : customTextColor,
+      typeof parsedResult.bgColor === "string" ? parsedResult.bgColor : customBgColor
+    );
     const finalNames = typeof parsedResult.names === "string" && parsedResult.names.trim() && !/rithvik|john doe/i.test(parsedResult.names)
       ? parsedResult.names.trim()
       : extractNames(userPrompt, customNames);
@@ -217,10 +251,10 @@ export async function POST(req: NextRequest) {
       names: finalNames,
       subtitle: finalSubtitle,
       dateText: finalDate,
-      venueText: typeof parsedResult.venueText === "string" ? parsedResult.venueText : "",
+      venueText: typeof parsedResult.venueText === "string" ? parsedResult.venueText : customVenue,
       fontFamily: typeof parsedResult.fontFamily === "string" ? parsedResult.fontFamily : "Playfair Display",
-      textColor: typeof parsedResult.textColor === "string" ? parsedResult.textColor : "#ffffff",
-      bgColor: typeof parsedResult.bgColor === "string" ? parsedResult.bgColor : "#090d16",
+      textColor: finalColors.textColor,
+      bgColor: finalColors.bgColor,
       source: engineSource,
     });
   } catch (error: unknown) {
@@ -232,40 +266,120 @@ export async function POST(req: NextRequest) {
   }
 }
 
+function extractColors(prompt: string, fallbackText = "#581c25", fallbackBg = "#faf6ee") {
+  const p = prompt.toLowerCase();
+  let text = fallbackText || "#581c25";
+  let bg = fallbackBg || "#faf6ee";
+
+  // Check explicit hex colors: #fff, #123456
+  const hexMatches = prompt.match(/#[0-9a-fA-F]{3,8}/g);
+  if (hexMatches && hexMatches.length > 0) {
+    if (/\b(?:bg|background)\b/i.test(p)) {
+      bg = hexMatches[0];
+      if (hexMatches[1]) text = hexMatches[1];
+    } else {
+      text = hexMatches[0];
+      if (hexMatches[1]) bg = hexMatches[1];
+    }
+  }
+
+  // Keywords
+  if (/\b(gold|golden|yellow)\b/i.test(p)) {
+    if (/\b(?:bg|background)\b/i.test(p) && p.includes("gold bg")) bg = "#fef3c7";
+    else text = "#c49b66";
+  }
+  if (/\b(black|dark|onyx|charcoal)\b/i.test(p)) {
+    if (/\b(?:text|font)\b/i.test(p) && p.includes("black text")) text = "#111827";
+    else {
+      bg = "#090d16";
+      if (text === "#581c25" || text === "#111827") text = "#ffffff";
+    }
+  }
+  if (/\b(white|ivory|cream)\b/i.test(p)) {
+    if (/\b(?:text|font)\b/i.test(p) && p.includes("white text")) text = "#ffffff";
+    else bg = p.includes("white") ? "#ffffff" : "#faf6ee";
+  }
+  if (/\b(navy|blue|royal blue)\b/i.test(p)) {
+    if (/\b(?:text|font)\b/i.test(p) && p.includes("blue text")) text = "#1e3a8a";
+    else {
+      bg = "#0a1128";
+      if (text === "#581c25") text = "#ffffff";
+    }
+  }
+  if (/\b(maroon|burgundy|wine|crimson)\b/i.test(p)) {
+    text = "#581c25";
+  }
+  if (/\b(red)\b/i.test(p) && !p.includes("maroon") && !p.includes("burgundy")) {
+    text = "#dc2626";
+  }
+  if (/\b(emerald|green)\b/i.test(p)) {
+    if (/\b(?:text|font)\b/i.test(p) && p.includes("green text")) text = "#065f46";
+    else {
+      bg = "#064e3b";
+      text = "#ffffff";
+    }
+  }
+  if (/\b(rose|pink)\b/i.test(p)) {
+    text = "#e11d48";
+  }
+  if (/\b(silver|gray|grey)\b/i.test(p)) {
+    text = "#94a3b8";
+  }
+
+  return { textColor: text, bgColor: bg };
+}
+
 function extractNames(prompt: string, fallback?: string): string {
-  if (fallback && fallback.trim()) return fallback.trim();
   const p = prompt.trim();
 
-  // 1. Explicit 'for <event/person>'
+  // 1. Explicit 'name is ...', 'name: ...', 'change name to ...', 'title: ...'
+  const explicitMatch = p.match(/\b(?:name[s]?|title)\s*(?:is|to|:)\s*([A-Za-z0-9\s&'-]+?)(?=\s*(?:date|color|bg|background|with|and|\d{1,2}[-/.]|$))/i);
+  if (explicitMatch && explicitMatch[1].trim()) {
+    const cleaned = explicitMatch[1].trim().replace(/^["']|["']$/g, "").trim();
+    if (cleaned.length >= 2) return cleaned;
+  }
+
+  // 2. Quoted text e.g. "Rahul & Sneha" or 'Silambam 2026'
+  const quoteMatch = p.match(/["']([^"']{2,60})["']/);
+  if (quoteMatch && quoteMatch[1].trim()) {
+    return quoteMatch[1].trim();
+  }
+
+  // 3. 'for <event/person>'
   const forMatch = p.match(/for\s+([A-Za-z0-9\s&'-]+?)(?=\s+(?:on|in|at|\d{1,2}[-/.]|\d{4}|$))/i);
   if (forMatch && forMatch[1].trim()) {
     const cleaned = forMatch[1].trim().replace(/\b(birthday|wedding|reception|function|ceremony|party|meet|event)\b/gi, "").trim();
     if (cleaned.length >= 2) return cleaned;
   }
 
-  // 2. Couple names 'A & B' or 'A and B'
+  // 4. Couple names 'A & B' or 'A and B'
   if (p.includes("&") || /\band\b/i.test(p)) {
     const parts = p.split(/&|\band\b/i);
     const n1 = parts[0].trim().split(/\s+/).pop() || "";
     const n2 = parts[1].trim().split(/\s+/)[0] || "";
-    if (n1 && n2 && !/^(bubble|template|vector|realistic|with|or)$/i.test(n1) && !/^(bubble|template|vector|realistic|with|or)$/i.test(n2)) {
+    if (n1 && n2 && !/^(bubble|template|vector|realistic|with|or|change|text|color|bg|date)$/i.test(n1) && !/^(bubble|template|vector|realistic|with|or|change|text|color|bg|date)$/i.test(n2)) {
       return `${n1} & ${n2}`;
     }
   }
 
-  // 3. Strip visual style/prompt noise keywords
-  const noiseRegex = /\b(make|create|generate|give|me|a|an|the|with|and|or|for|of|in|at|on|template|watermark|logo|border|banner|design|background|frame|overlay|vector|realistic|real|3d|photorealistic|hd|4k|luxurious|luxury|gold|golden|silver|bubble|bubbles|flower|flowers|rose|roses|floral|sparkle|sparkles|neon|crescent|circle|glow|glass|soft|style|theme|please|white|black|red|blue|text|heading)\b/gi;
+  if (fallback && fallback.trim()) return fallback.trim();
+
+  // 5. Strip visual style/prompt noise keywords
+  const noiseRegex = /\b(make|create|generate|give|me|a|an|the|with|and|or|for|of|in|at|on|template|watermark|logo|border|banner|design|background|frame|overlay|vector|realistic|real|3d|photorealistic|hd|4k|luxurious|luxury|gold|golden|silver|bubble|bubbles|flower|flowers|rose|roses|floral|sparkle|sparkles|neon|crescent|circle|glow|glass|soft|style|theme|please|white|black|red|blue|text|heading|color|date|change)\b/gi;
   const stripped = p.replace(noiseRegex, " ").replace(/\s+/g, " ").trim();
-  if (stripped.length >= 2) {
-    return stripped.length > 50 ? stripped.slice(0, 50) : stripped;
+  if (stripped.length >= 2 && stripped.length <= 60) {
+    return stripped;
   }
 
   return "Zigmaa Moments";
 }
 
 function extractSubtitle(prompt: string, fallback?: string): string {
-  if (fallback && fallback.trim()) return fallback.trim().toUpperCase();
   const p = prompt.toLowerCase();
+  const explicitMatch = prompt.match(/\bsubtitle\s*(?:is|to|:)\s*([A-Za-z0-9\s&'-]+?)(?=\s*(?:name|date|color|bg|background|with|$))/i);
+  if (explicitMatch && explicitMatch[1].trim()) {
+    return explicitMatch[1].trim().toUpperCase();
+  }
   if (p.includes("silambam") || p.includes("karate") || p.includes("sports") || p.includes("tournament") || p.includes("championship") || p.includes("competition")) {
     return "CHAMPIONSHIP";
   }
@@ -275,21 +389,37 @@ function extractSubtitle(prompt: string, fallback?: string): string {
   if (p.includes("anniversary")) return "CELEBRATING ANNIVERSARY";
   if (p.includes("conference") || p.includes("summit") || p.includes("annual")) return "ANNUAL MEET";
   if (p.includes("wedding") || p.includes("marriage")) return "THE WEDDING OF";
+  if (fallback && fallback.trim()) return fallback.trim().toUpperCase();
   return "GRAND CELEBRATION";
 }
 
 function extractDate(prompt: string, fallback?: string): string {
-  if (fallback && fallback.trim()) return fallback.trim().toUpperCase();
-  const dateMatch = prompt.match(/\b\d{1,2}[-/.]\d{1,2}[-/.]\d{2,4}\b|\b\d{1,2}\s+[A-Za-z]+\s+\d{4}\b|\b\d{4}\b/i);
+  const p = prompt.trim();
+  const explicitMatch = p.match(/\bdate\s*(?:is|to|:)\s*([A-Za-z0-9\s,.-]+?)(?=\s*(?:name|color|bg|background|with|$))/i);
+  if (explicitMatch && explicitMatch[1].trim()) {
+    return explicitMatch[1].trim().toUpperCase();
+  }
+  const dateMatch = p.match(/\b\d{1,2}[-/.]\d{1,2}[-/.]\d{2,4}\b|\b\d{1,2}\s+[A-Za-z]+\s+\d{4}\b|\b[A-Za-z]+\s+\d{1,2},?\s+\d{4}\b|\b20\d{2}\b/i);
   if (dateMatch) return dateMatch[0].toUpperCase();
+  if (fallback && fallback.trim()) return fallback.trim().toUpperCase();
   return "2026";
 }
 
-function buildDynamicSvgFallback(prompt: string, customNames?: string, customSubtitle?: string, customDate?: string) {
+function buildDynamicSvgFallback(
+  prompt: string,
+  customNames?: string,
+  customSubtitle?: string,
+  customDate?: string,
+  customVenue?: string,
+  customTextColor?: string,
+  customBgColor?: string
+) {
   const p = prompt.toLowerCase();
   const names = extractNames(prompt, customNames);
   const subtitle = extractSubtitle(prompt, customSubtitle);
   const dateText = extractDate(prompt, customDate);
+  const venueText = customVenue || "";
+  const { textColor, bgColor } = extractColors(prompt, customTextColor, customBgColor);
 
   if (p.includes("silambam") || p.includes("sport") || p.includes("championship") || p.includes("tournament") || p.includes("competition")) {
     // Ultra-Realistic Championship Sports Gold & Navy Banner
@@ -523,37 +653,32 @@ function buildDynamicSvgFallback(prompt: string, customNames?: string, customSub
     };
   }
 
-  // Default: Clean Straight Flat Ivory Banner
+  // Default: Clean Straight Flat Banner
   const svg = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 260" width="1200" height="260">
-    <defs>
-      <linearGradient id="ivoryGrad" x1="0%" y1="0%" x2="0%" y2="100%">
-        <stop offset="0%" stop-color="#faf6ee"/>
-        <stop offset="100%" stop-color="#f5efe1"/>
-      </linearGradient>
-    </defs>
-    <!-- Straight flat banner card with gold accent lines -->
-    <rect id="svg-bg" x="0" y="0" width="1200" height="260" fill="url(#ivoryGrad)"/>
-    <line x1="0" y1="2" x2="1200" y2="2" stroke="#c49b66" stroke-width="2" stroke-opacity="0.8"/>
-    <line x1="0" y1="6" x2="1200" y2="6" stroke="#c49b66" stroke-width="1" stroke-opacity="0.4"/>
+    <!-- Straight flat banner card with accent lines -->
+    <rect id="svg-bg" x="0" y="0" width="1200" height="260" fill="${bgColor}"/>
+    <line x1="0" y1="2" x2="1200" y2="2" stroke="${textColor}" stroke-width="2" stroke-opacity="0.8"/>
+    <line x1="0" y1="6" x2="1200" y2="6" stroke="${textColor}" stroke-width="1" stroke-opacity="0.4"/>
     <!-- Central Typography -->
-    <text id="svg-subtitle" x="600" y="65" text-anchor="middle" font-family="'Cinzel', Georgia, serif" font-size="18" font-weight="600" letter-spacing="6" fill="#581c25">${subtitle}</text>
-    <text id="svg-names" x="600" y="145" text-anchor="middle" font-family="'Playfair Display', serif" font-size="72" font-style="italic" font-weight="700" fill="#581c25">${names}</text>
+    <text id="svg-subtitle" x="600" y="65" text-anchor="middle" font-family="'Cinzel', Georgia, serif" font-size="18" font-weight="600" letter-spacing="6" fill="${textColor}">${subtitle}</text>
+    <text id="svg-names" x="600" y="145" text-anchor="middle" font-family="'Playfair Display', serif" font-size="72" font-style="italic" font-weight="700" fill="${textColor}">${names}</text>
     <g transform="translate(600, 195)">
-      <line x1="-240" y1="-5" x2="-100" y2="-5" stroke="#c49b66" stroke-width="1" stroke-opacity="0.5"/>
-      <text id="svg-date" x="0" y="0" text-anchor="middle" font-family="'Montserrat', sans-serif" font-size="16" letter-spacing="4" fill="#581c25">${dateText}</text>
-      <line x1="100" y1="-5" x2="240" y2="-5" stroke="#c49b66" stroke-width="1" stroke-opacity="0.5"/>
+      <line x1="-240" y1="-5" x2="-100" y2="-5" stroke="${textColor}" stroke-width="1" stroke-opacity="0.5"/>
+      <text id="svg-date" x="0" y="0" text-anchor="middle" font-family="'Montserrat', sans-serif" font-size="16" letter-spacing="4" fill="${textColor}">${dateText}</text>
+      <line x1="100" y1="-5" x2="240" y2="-5" stroke="${textColor}" stroke-width="1" stroke-opacity="0.5"/>
     </g>
+    ${venueText ? `<text id="svg-venue" x="600" y="235" text-anchor="middle" font-family="'Montserrat', sans-serif" font-size="12" letter-spacing="2" fill="${textColor}" opacity="0.8">${venueText.toUpperCase()}</text>` : ""}
   </svg>`;
 
   return {
-    themeName: "Straight Flat Ivory Banner",
+    themeName: "Straight Flat Banner",
     names,
     subtitle,
     dateText,
-    venueText: "",
+    venueText,
     fontFamily: "Playfair Display",
-    textColor: "#581c25",
-    bgColor: "#faf6ee",
+    textColor,
+    bgColor,
     svg,
   };
 }

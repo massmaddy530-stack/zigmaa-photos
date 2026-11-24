@@ -1,6 +1,6 @@
 "use client";
 
-import { Check, CheckSquare, Download, ExternalLink, ImageIcon, RotateCcw, ScanFace, Search, Trash2, UploadCloud } from "lucide-react";
+import { Check, CheckSquare, Download, ExternalLink, ImageIcon, RotateCcw, ScanFace, Search, Square, Trash2, UploadCloud } from "lucide-react";
 import { useCallback, useEffect, useState } from "react";
 import { adminApi, errorMessage } from "@/lib/api";
 import { downloadImage, downloadImagesInBatch, getSavedWatermarkConfig, fetchEventWatermarkConfig, type WatermarkConfig } from "@/lib/image";
@@ -257,25 +257,33 @@ export function EventPhotos({ eventId, refreshKey, pollWhileProcessing, onChange
 
       {isSelecting && data && data.items.length > 0 && (
         <div className="flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-brand-200 bg-brand-50/70 p-3 sm:px-5">
-          <div className="flex items-center gap-3">
-            <span className="inline-flex h-7 items-center rounded-full bg-brand-600 px-3 text-xs font-semibold text-white">
-              {selectedIds.size} selected
-            </span>
-            <button
+          <div className="flex items-center gap-2">
+            <Button
               type="button"
+              variant="outline"
+              size="sm"
               onClick={selectAllOnPage}
-              className="text-xs font-medium text-brand-700 underline hover:text-brand-800"
+              icon={
+                data.items.every((p) => selectedIds.has(p.id)) ? (
+                  <CheckSquare className="h-3.5 w-3.5 text-brand-600" />
+                ) : (
+                  <Square className="h-3.5 w-3.5 text-muted" />
+                )
+              }
+              className="text-xs font-semibold"
             >
               {data.items.every((p) => selectedIds.has(p.id)) ? "Deselect page" : "Select all on page"}
-            </button>
+            </Button>
             {selectedIds.size > 0 && (
-              <button
+              <Button
                 type="button"
+                variant="ghost"
+                size="sm"
                 onClick={() => setSelectedIds(new Set())}
-                className="text-xs font-medium text-muted hover:text-ink"
+                className="text-xs text-muted hover:text-ink"
               >
                 Clear
-              </button>
+              </Button>
             )}
           </div>
           <div className="flex items-center gap-2">

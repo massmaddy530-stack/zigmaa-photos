@@ -578,17 +578,7 @@ export function EventSettings({ event, onSaved }: { event: EventOut; onSaved: (e
                     })}
                   </div>
 
-                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
-                    <Button
-                      type="button"
-                      variant="outline"
-                      size="sm"
-                      className="text-xs bg-brand-50/70 border-brand-300 text-brand-700 hover:bg-brand-100 font-semibold"
-                      onClick={() => setShowDesigner(true)}
-                      icon={<Sparkles className="h-3.5 w-3.5 text-brand-600" />}
-                    >
-                      ✨ AI Generate
-                    </Button>
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
                     <Button
                       type="button"
                       variant="outline"
@@ -616,11 +606,11 @@ export function EventSettings({ event, onSaved }: { event: EventOut; onSaved: (e
                   <Button
                     type="button"
                     variant="outline"
-                    className="text-xs bg-brand-50/70 border-brand-300 text-brand-700 hover:bg-brand-100 font-semibold"
+                    className="text-xs font-semibold text-ink"
                     onClick={() => setShowDesigner(true)}
-                    icon={<Sparkles className="h-4 w-4 text-brand-600" />}
+                    icon={<Palette className="h-4 w-4 text-brand-600" />}
                   >
-                    ✨ AI Generate Template
+                    🎨 Customize
                   </Button>
                   <Button
                     type="button"
@@ -708,7 +698,7 @@ export function EventSettings({ event, onSaved }: { event: EventOut; onSaved: (e
               <input
                 type="range"
                 min={5}
-                max={60}
+                max={100}
                 step={1}
                 value={
                   wm.templates?.find((t) => t.id === (wm.activeTemplateId || wm.templates?.[0]?.id))?.sizePercent ??
