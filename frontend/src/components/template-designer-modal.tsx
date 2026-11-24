@@ -90,17 +90,49 @@ function getRenderedCustomSvg(
       /(<text[^>]*id=["']svg-names["'][^>]*>)([\s\S]*?)(<\/text>)/i,
       (_match, open, _oldText, close) => {
         let updatedOpen = open;
+        const nameLen = params.names ? params.names.trim().length : 1;
+        const maxSafeWidth = 1060;
+        const requestedSize = params.namesFontSize || 72;
+        const estWidth = nameLen * (requestedSize * 0.58);
+        const safeFontSize = estWidth > maxSafeWidth
+          ? Math.max(24, Math.floor(requestedSize * (maxSafeWidth / estWidth)))
+          : requestedSize;
+
         if (params.fontFamily) {
-          updatedOpen = updatedOpen.replace(
-            /font-family=["'][^"']*["']/i,
-            `font-family="'${params.fontFamily}', serif"`
-          );
+          if (updatedOpen.includes("font-family:")) {
+            updatedOpen = updatedOpen.replace(
+              /font-family:\s*[^;"]+/i,
+              `font-family: '${params.fontFamily}', 'Playfair Display', Georgia, serif`
+            );
+          } else if (updatedOpen.includes("font-family=")) {
+            updatedOpen = updatedOpen.replace(
+              /font-family=["'][^"']*["']/i,
+              `font-family="'${params.fontFamily}', serif"`
+            );
+          } else {
+            updatedOpen = updatedOpen.replace(
+              /<text/i,
+              `<text font-family="'${params.fontFamily}', serif"`
+            );
+          }
         }
-        if (params.namesFontSize) {
-          updatedOpen = updatedOpen.replace(
-            /font-size=["'][^"']*["']/i,
-            `font-size="${params.namesFontSize}"`
-          );
+        if (safeFontSize) {
+          if (updatedOpen.includes("font-size:")) {
+            updatedOpen = updatedOpen.replace(
+              /font-size:\s*[^;"]+/i,
+              `font-size: ${safeFontSize}px`
+            );
+          } else if (updatedOpen.includes("font-size=")) {
+            updatedOpen = updatedOpen.replace(
+              /font-size=["'][^"']*["']/i,
+              `font-size="${safeFontSize}"`
+            );
+          } else {
+            updatedOpen = updatedOpen.replace(
+              /<text/i,
+              `<text font-size="${safeFontSize}"`
+            );
+          }
         }
         if (!updatedOpen.includes("dominant-baseline")) {
           updatedOpen = updatedOpen.replace(/<text/i, '<text dominant-baseline="central"');
@@ -110,6 +142,11 @@ function getRenderedCustomSvg(
             updatedOpen = updatedOpen.replace(
               /font-style=["'][^"']*["']/i,
               `font-style="${params.isItalic ? "italic" : "normal"}"`
+            );
+          } else if (updatedOpen.includes("font-style:")) {
+            updatedOpen = updatedOpen.replace(
+              /font-style:\s*[^;"]+/i,
+              `font-style: ${params.isItalic ? "italic" : "normal"}`
             );
           } else {
             updatedOpen = updatedOpen.replace(
@@ -402,7 +439,7 @@ export function TemplateDesignerModal({
               xPercent: 50,
               yPercent: 88,
               sizePercent: 100,
-              opacity: 100,
+              opacity: 1.0,
             };
 
             onApplyTemplate(result);
@@ -923,19 +960,20 @@ export function TemplateDesignerModal({
 
         {/* Footer Actions */}
         <div className="flex items-center justify-between border-t border-line px-6 py-3.5 bg-canvas/40 shrink-0">
-          <button
+          <Button
             type="button"
+            variant="outline"
+            size="sm"
             onClick={() => {
               setCustomBgImage(null);
               setIsCustomAi(false);
               const defaultTpl = EVENT_TEMPLATES.find((t) => t.id === "wed-straight-flat") || EVENT_TEMPLATES[0];
               handleSelectTemplate(defaultTpl);
             }}
-            className="inline-flex items-center gap-1.5 text-xs text-muted hover:text-ink transition-colors cursor-pointer"
+            icon={<RotateCcw className="h-3.5 w-3.5" />}
           >
-            <RotateCcw className="h-3.5 w-3.5" />
-            <span>Reset Defaults</span>
-          </button>
+            Reset Defaults
+          </Button>
 
           <div className="flex items-center gap-2">
             <Button variant="ghost" size="sm" onClick={onClose}>

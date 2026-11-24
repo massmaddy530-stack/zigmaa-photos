@@ -8,13 +8,13 @@ import {
   RotateCcw,
   Sparkles,
   Sliders,
-  Palette,
 } from "lucide-react";
 import { useRef, useState } from "react";
 import { PageHeader } from "@/components/app-shell";
 import { EventForm, type TemplateItem } from "@/components/event-form";
 import { TemplateDesignerModal, type GeneratedTemplateResult } from "@/components/template-designer-modal";
-import { Badge, Card, CardHeader } from "@/components/ui/primitives";
+import { Button } from "@/components/ui/button";
+import { Card, CardHeader } from "@/components/ui/primitives";
 import { useToast } from "@/components/ui/toast";
 import { adminApi, errorMessage } from "@/lib/api";
 import { fileToDataUrl, saveEventWatermarkConfig, type WatermarkConfig, type WatermarkTemplateItem } from "@/lib/image";
@@ -315,29 +315,15 @@ export default function NewEventPage() {
               title="Watermark & Template Studio"
               description="Live preview of how your watermark will appear on downloaded photos"
               action={
-                <div className="flex items-center gap-2">
-                  <Badge tone="brand" dot>
-                    Live preview
-                  </Badge>
-                  <button
-                    type="button"
-                    onClick={() => setShowDesigner(true)}
-                    className="inline-flex items-center gap-1.5 rounded-lg border border-line bg-surface px-2.5 py-1 text-xs font-semibold text-ink hover:bg-canvas transition-colors cursor-pointer shadow-xs"
-                    title="Open Template Customization Studio"
-                  >
-                    <Palette className="h-3.5 w-3.5 text-brand-600" />
-                    <span>🎨 Customize</span>
-                  </button>
-                  <button
-                    type="button"
-                    onClick={resetDefaults}
-                    title="Reset to Zigmaa defaults"
-                    className="inline-flex items-center gap-1 rounded-lg border border-line bg-surface px-2.5 py-1 text-xs font-medium text-muted hover:bg-canvas hover:text-ink transition-colors"
-                  >
-                    <RotateCcw className="h-3 w-3" />
-                    Reset
-                  </button>
-                </div>
+                <Button
+                  size="sm"
+                  variant="outline"
+                  onClick={resetDefaults}
+                  icon={<RotateCcw className="h-3.5 w-3.5" />}
+                  title="Reset to defaults"
+                >
+                  Reset
+                </Button>
               }
             />
 
@@ -591,7 +577,7 @@ export default function NewEventPage() {
                       <span>Transparency / Opacity {activeEditingItem ? `(${activeEditingItem.name})` : ""}</span>
                     </label>
                     <span className="text-xs font-mono font-medium text-ink">
-                      {Math.round((activeEditingItem?.opacity ?? wm.opacity ?? 0.40) * 100)}%
+                      {Math.round(((activeEditingItem?.opacity ?? wm.opacity ?? 0.40) > 1 ? (activeEditingItem?.opacity ?? wm.opacity ?? 0.40) / 100 : (activeEditingItem?.opacity ?? wm.opacity ?? 0.40)) * 100)}%
                     </span>
                   </div>
                   <input
@@ -599,7 +585,7 @@ export default function NewEventPage() {
                     min={0.05}
                     max={1.0}
                     step={0.05}
-                    value={activeEditingItem?.opacity ?? wm.opacity ?? 0.40}
+                    value={(activeEditingItem?.opacity ?? wm.opacity ?? 0.40) > 1 ? (activeEditingItem?.opacity ?? wm.opacity ?? 0.40) / 100 : (activeEditingItem?.opacity ?? wm.opacity ?? 0.40)}
                     onChange={(e) => {
                       const newOpacity = Number(e.target.value);
                       if (activeEditingItem) {

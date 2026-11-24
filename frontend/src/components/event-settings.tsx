@@ -1,7 +1,7 @@
 "use client";
 
 import { useRouter } from "next/navigation";
-import { Eye, EyeOff, ImagePlus, Move, Palette, ScanFace, Sliders, Sparkles, Trash2, Upload, X } from "lucide-react";
+import { Eye, EyeOff, ImagePlus, Move, Palette, RotateCcw, Sliders, Sparkles, Upload, X } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 import { adminApi, errorMessage } from "@/lib/api";
 import { ACCEPTED_IMAGE_TYPES, MAX_UPLOAD_MB } from "@/lib/config";
@@ -381,16 +381,244 @@ export function EventSettings({ event, onSaved }: { event: EventOut; onSaved: (e
     }
   }
 
+  const activeTemplateItem = wm.templates?.find(
+    (t) => t.id === (wm.activeTemplateId || wm.templates?.[0]?.id)
+  );
+  const rawOpacity = activeTemplateItem?.opacity ?? wm.opacity ?? 0.70;
+  const safeOpacity = rawOpacity > 1 ? rawOpacity / 100 : rawOpacity;
+  const safeSize = activeTemplateItem?.sizePercent ?? wm.sizePercent ?? 100;
+
   return (
-    <div className="grid gap-6 lg:grid-cols-3">
-      {/* Left 2 Columns: Watermark Template & Customization */}
-      <div className="lg:col-span-2 space-y-6">
-        <Card>
-          <CardHeader
-            title="Watermark template"
-            description="Custom watermark applied to all photo downloads for this event"
-          />
-          <div className="space-y-4 p-5">
+    <div className="space-y-6">
+      <div className="grid gap-6 lg:grid-cols-12 items-start">
+        {/* Left Column: Event information, Cover image, and Templates / Watermark overlays (5 cols) */}
+        <div className="space-y-6 lg:col-span-6 xl:col-span-5">
+          {/* 1. Event Information Form */}
+          <Card>
+            <CardHeader title="Event information" description="Basic information about your photoshoot event." />
+            <div className="p-5">
+              <EventForm
+                initial={event}
+                withCover={false}
+                submitLabel="Save changes"
+                onSubmit={async ({ name, event_date, venue, description }) => {
+                  onSaved(await adminApi.updateEvent(event.id, { name, event_date, venue, description }));
+                  toast.success("Changes saved");
+                }}
+              />
+            </div>
+          </Card>
+
+          {/* 2. Cover Image Card */}
+          <Card>
+            <CardHeader title="Cover image" description="Event cover photo shown on guest gallery and watermark preview" />
+            <div className="space-y-3 p-5">
+              <div className="overflow-hidden rounded-xl border border-line bg-canvas/60 p-2 flex items-center justify-center min-h-[160px] max-h-[300px]">
+                <CoverImage
+                  src={event.cover_url}
+                  name={event.name}
+                  className="max-h-[280px] w-auto max-w-full object-contain block mx-auto shadow-sm"
+                />
+              </div>
+              <input
+                ref={coverRef}
+                type="file"
+                accept={ACCEPTED_IMAGE_TYPES.join(",")}
+                className="sr-only"
+                tabIndex={-1}
+                onChange={(e) => {
+                  void changeCover(e.target.files?.[0]);
+                  e.target.value = "";
+                }}
+              />
+              <Button
+                variant="outline"
+                className="w-full"
+                loading={coverBusy}
+                onClick={() => coverRef.current?.click()}
+                icon={<ImagePlus className="h-4 w-4" />}
+              >
+                {event.cover_url ? "Replace cover" : "Add cover"}
+              </Button>
+            </div>
+          </Card>
+
+          {/* 3. Templates / Watermark Overlays Card */}
+          <Card>
+            <CardHeader
+              title="Templates / Watermark overlays"
+              description="Manage attached vector templates and watermark overlays"
+              action={
+                wm.templates && wm.templates.length > 0 ? (
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    onClick={resetTemplates}
+                    icon={<RotateCcw className="h-3 w-3" />}
+                    className="h-7 text-xs px-2.5"
+                    title="Clear custom templates and restore default logo"
+                  >
+                    Reset defaults
+                  </Button>
+                ) : undefined
+              }
+            />
+            <div className="space-y-3 p-5">
+              <input
+                ref={templateRef}
+                type="file"
+                multiple
+                accept="image/png,image/svg+xml,image/webp,image/jpeg"
+                className="sr-only"
+                tabIndex={-1}
+                onChange={(e) => {
+                  void addTemplates(e.target.files);
+                  e.target.value = "";
+                }}
+              />
+
+              {wm.templates && wm.templates.length > 0 ? (
+                <div className="space-y-2.5">
+                  <div className="grid grid-cols-1 gap-2 max-h-[240px] overflow-y-auto p-0.5">
+                    {wm.templates.map((t) => {
+                      const isActive = t.id === (wm.activeTemplateId || wm.templates![0]?.id);
+                      const isEnabled = t.enabled !== false;
+                      return (
+                        <div
+                          key={t.id}
+                          onClick={() => selectTemplate(t)}
+                          className={`relative flex items-center justify-between gap-2.5 rounded-xl border p-2.5 transition-all cursor-pointer select-none ${
+                            isActive
+                              ? "border-brand-500 bg-brand-50/40 ring-1 ring-brand-500 shadow-xs"
+                              : "border-line bg-surface hover:border-brand-300 hover:bg-canvas/50"
+                          }`}
+                        >
+                          <div className="flex items-center gap-2.5 min-w-0 flex-1">
+                            <div className="h-9 w-9 shrink-0 rounded-lg border border-line bg-[repeating-conic-gradient(#e8e4dc_0%_25%,#fdfbf7_0%_50%)] bg-[length:8px_8px] p-0.5 flex items-center justify-center overflow-hidden">
+                              <img src={t.dataUrl} alt={t.name} className="max-h-full max-w-full object-contain" />
+                            </div>
+                            <div className="min-w-0 flex-1">
+                              <div className="flex items-center gap-1.5">
+                                <p className={`truncate text-xs font-semibold text-ink ${!isEnabled ? "line-through opacity-50" : ""}`}>
+                                  {t.name}
+                                </p>
+                                {isActive && (
+                                  <span className="shrink-0 rounded-full bg-brand-100 px-1.5 py-0.2 text-[9px] font-semibold text-brand-700">
+                                    Active
+                                  </span>
+                                )}
+                              </div>
+                              <p className="text-[11px] text-muted">
+                                {t.sizeBytes ? `${(t.sizeBytes / 1024).toFixed(1)} KB • ` : ""}
+                                {isEnabled ? "Visible" : "Hidden"}
+                              </p>
+                            </div>
+                          </div>
+                          <div className="flex items-center gap-1">
+                            <button
+                              type="button"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                toggleTemplateEnabled(t.id);
+                              }}
+                              aria-label={isEnabled ? "Hide from photo" : "Show on photo"}
+                              className={`grid h-6 w-6 shrink-0 place-items-center rounded-md transition-colors ${
+                                isEnabled ? "text-brand-600 hover:bg-brand-50" : "text-muted hover:bg-canvas hover:text-ink"
+                              }`}
+                              title={isEnabled ? "Visible on photo" : "Hidden - click to show"}
+                            >
+                              {isEnabled ? <Eye className="h-3.5 w-3.5" /> : <EyeOff className="h-3.5 w-3.5" />}
+                            </button>
+                            <button
+                              type="button"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                removeTemplateItem(t.id);
+                              }}
+                              aria-label={`Remove ${t.name}`}
+                              className="grid h-6 w-6 shrink-0 place-items-center rounded-md text-muted hover:bg-red-50 hover:text-red-600 transition-colors"
+                              title="Remove template"
+                            >
+                              <X className="h-3.5 w-3.5" />
+                            </button>
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 pt-1">
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="sm"
+                      className="text-xs font-semibold text-ink"
+                      onClick={() => setShowDesigner(true)}
+                      icon={<Palette className="h-4 w-4 text-brand-600" />}
+                    >
+                      Customize Template
+                    </Button>
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="sm"
+                      className="text-xs"
+                      onClick={() => templateRef.current?.click()}
+                      icon={<Upload className="h-4 w-4" />}
+                    >
+                      + Upload custom
+                    </Button>
+                  </div>
+                </div>
+              ) : (
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
+                  <Button
+                    type="button"
+                    variant="outline"
+                    className="text-xs font-semibold text-ink py-4 h-auto flex flex-col gap-1"
+                    onClick={() => setShowDesigner(true)}
+                    icon={<Palette className="h-5 w-5 text-brand-600" />}
+                  >
+                    <span className="font-bold text-sm">Customize Template</span>
+                    <span className="text-[11px] font-normal text-muted">Customize classic arched banner</span>
+                  </Button>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    className="text-xs py-4 h-auto flex flex-col gap-1 border-dashed"
+                    onClick={() => templateRef.current?.click()}
+                    icon={<ImagePlus className="h-5 w-5 text-brand-600" />}
+                  >
+                    <span className="font-medium text-brand-700">Upload custom watermark</span>
+                    <span className="text-[11px] text-muted">PNG, SVG with transparency</span>
+                  </Button>
+                </div>
+              )}
+            </div>
+          </Card>
+        </div>
+
+        {/* Right Column: Live Watermark Studio & Customization Controls (7 cols) */}
+        <div className="space-y-6 lg:col-span-6 xl:col-span-7">
+          <Card className="overflow-hidden">
+            <CardHeader
+              title="Watermark & Template Studio"
+              description="Live preview of how your watermark will appear on downloaded photos"
+              action={
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  onClick={resetTemplates}
+                  icon={<RotateCcw className="h-3.5 w-3.5" />}
+                  title="Reset to defaults"
+                >
+                  Reset
+                </Button>
+              }
+            />
+            <div className="space-y-4 p-5">
             {/* Live Watermark Preview on Event Cover - Tightly wrapped around photo so coordinates match 100% */}
             <div
               className="relative mx-auto min-h-[260px] max-h-[460px] w-full overflow-hidden rounded-xl border border-line bg-canvas flex items-center justify-center select-none shadow-sm p-2"
@@ -479,160 +707,14 @@ export function EventSettings({ event, onSaved }: { event: EventOut; onSaved: (e
               </div>
             </div>
 
-            {/* Template / Watermark Upload Section */}
-            <div className="space-y-3">
-              <input
-                ref={templateRef}
-                type="file"
-                multiple
-                accept="image/png,image/svg+xml,image/webp,image/jpeg"
-                className="sr-only"
-                tabIndex={-1}
-                onChange={(e) => {
-                  void addTemplates(e.target.files);
-                  e.target.value = "";
-                }}
-              />
-
-              {wm.templates && wm.templates.length > 0 ? (
-                <div className="space-y-2.5">
-                  <div className="flex items-center justify-between text-xs">
-                    <span className="font-semibold uppercase tracking-wider text-muted">
-                      Templates ({wm.templates.filter((t) => t.enabled !== false).length}/{wm.templates.length} visible)
-                    </span>
-                    <button
-                      type="button"
-                      onClick={resetTemplates}
-                      className="text-[11px] text-muted hover:text-red-600 transition-colors underline cursor-pointer"
-                      title="Clear custom templates and restore default logo"
-                    >
-                      Reset to default
-                    </button>
-                  </div>
-
-                  <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-2 max-h-[220px] overflow-y-auto p-1">
-                    {wm.templates.map((t) => {
-                      const isActive = t.id === (wm.activeTemplateId || wm.templates![0]?.id);
-                      const isEnabled = t.enabled !== false;
-                      return (
-                        <div
-                          key={t.id}
-                          onClick={() => selectTemplate(t)}
-                          className={`relative flex items-center justify-between gap-2 rounded-xl border p-2 transition-all cursor-pointer select-none ${
-                            isActive
-                              ? "border-brand-500 bg-brand-50/40 ring-1 ring-brand-500 shadow-xs"
-                              : "border-line bg-surface hover:border-brand-300 hover:bg-canvas/50"
-                          }`}
-                        >
-                          <div className="flex items-center gap-2 min-w-0 flex-1">
-                            <div className="h-9 w-9 shrink-0 rounded-lg border border-line bg-[repeating-conic-gradient(#e8e4dc_0%_25%,#fdfbf7_0%_50%)] bg-[length:8px_8px] p-0.5 flex items-center justify-center overflow-hidden">
-                              <img src={t.dataUrl} alt={t.name} className="max-h-full max-w-full object-contain" />
-                            </div>
-                            <div className="min-w-0 flex-1">
-                              <div className="flex items-center gap-1">
-                                <p className={`truncate text-xs font-semibold text-ink ${!isEnabled ? "line-through opacity-50" : ""}`}>
-                                  {t.name}
-                                </p>
-                                {isActive && (
-                                  <span className="shrink-0 rounded-full bg-brand-100 px-1.5 py-0.2 text-[9px] font-semibold text-brand-700">
-                                    Active
-                                  </span>
-                                )}
-                              </div>
-                              <p className="text-[10px] text-muted">
-                                {t.sizeBytes ? `${(t.sizeBytes / 1024).toFixed(1)} KB • ` : ""}
-                                {isEnabled ? "Visible" : "Hidden"}
-                              </p>
-                            </div>
-                          </div>
-                          <div className="flex items-center gap-1">
-                            <button
-                              type="button"
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                toggleTemplateEnabled(t.id);
-                              }}
-                              aria-label={isEnabled ? "Hide from photo" : "Show on photo"}
-                              className={`grid h-6 w-6 shrink-0 place-items-center rounded-md transition-colors ${
-                                isEnabled ? "text-brand-600 hover:bg-brand-50" : "text-muted hover:bg-canvas hover:text-ink"
-                              }`}
-                              title={isEnabled ? "Visible on photo" : "Hidden - click to show"}
-                            >
-                              {isEnabled ? <Eye className="h-3 w-3" /> : <EyeOff className="h-3 w-3" />}
-                            </button>
-                            <button
-                              type="button"
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                removeTemplateItem(t.id);
-                              }}
-                              aria-label={`Remove ${t.name}`}
-                              className="grid h-6 w-6 shrink-0 place-items-center rounded-md text-muted hover:bg-red-50 hover:text-red-600 transition-colors"
-                              title="Remove template"
-                            >
-                              <X className="h-3 w-3" />
-                            </button>
-                          </div>
-                        </div>
-                      );
-                    })}
-                  </div>
-
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-                    <Button
-                      type="button"
-                      variant="outline"
-                      size="sm"
-                      className="text-xs font-semibold text-ink"
-                      onClick={() => setShowDesigner(true)}
-                      icon={<Palette className="h-3.5 w-3.5 text-brand-600" />}
-                    >
-                      🎨 Customize
-                    </Button>
-                    <Button
-                      type="button"
-                      variant="outline"
-                      size="sm"
-                      className="text-xs"
-                      onClick={() => templateRef.current?.click()}
-                      icon={<Upload className="h-3.5 w-3.5" />}
-                    >
-                      + Upload
-                    </Button>
-                  </div>
-                </div>
-              ) : (
-                <div className="grid grid-cols-2 gap-2">
-                  <Button
-                    type="button"
-                    variant="outline"
-                    className="text-xs font-semibold text-ink"
-                    onClick={() => setShowDesigner(true)}
-                    icon={<Palette className="h-4 w-4 text-brand-600" />}
-                  >
-                    🎨 Customize
-                  </Button>
-                  <Button
-                    type="button"
-                    variant="outline"
-                    className="text-xs"
-                    onClick={() => templateRef.current?.click()}
-                    icon={<ImagePlus className="h-4 w-4 text-brand-600" />}
-                  >
-                    Upload files
-                  </Button>
-                </div>
-              )}
-            </div>
-
-            {/* 1-Click Quick Corner Placement */}
+            {/* Quick Corner Placement */}
             <div>
               <div className="mb-1.5 flex items-center justify-between text-xs">
                 <span className="font-semibold uppercase tracking-wider text-muted flex items-center gap-1">
                   <Move className="h-3 w-3 text-brand-600" /> Quick Position
                 </span>
                 <span className="text-[11px] text-muted">
-                  X: {wm.templates?.find((t) => t.id === (wm.activeTemplateId || wm.templates?.[0]?.id))?.xPercent ?? wm.xPercent ?? 88}%, Y: {wm.templates?.find((t) => t.id === (wm.activeTemplateId || wm.templates?.[0]?.id))?.yPercent ?? wm.yPercent ?? 88}%
+                  X: {activeTemplateItem?.xPercent ?? wm.xPercent ?? 88}%, Y: {activeTemplateItem?.yPercent ?? wm.yPercent ?? 88}%
                 </span>
               </div>
               <div className="grid grid-cols-5 gap-1.5">
@@ -684,15 +766,10 @@ export function EventSettings({ event, onSaved }: { event: EventOut; onSaved: (e
               <div className="mb-1.5 flex items-center justify-between text-xs">
                 <span className="font-semibold uppercase tracking-wider text-muted flex items-center gap-1">
                   <Sliders className="h-3 w-3 text-brand-600" /> Size{" "}
-                  {wm.templates?.find((t) => t.id === (wm.activeTemplateId || wm.templates?.[0]?.id))
-                    ? `(${wm.templates.find((t) => t.id === (wm.activeTemplateId || wm.templates?.[0]?.id))?.name})`
-                    : ""}
+                  {activeTemplateItem ? `(${activeTemplateItem.name})` : ""}
                 </span>
                 <span className="font-mono font-medium text-ink">
-                  {wm.templates?.find((t) => t.id === (wm.activeTemplateId || wm.templates?.[0]?.id))?.sizePercent ??
-                    wm.sizePercent ??
-                    14}
-                  %
+                  {safeSize}%
                 </span>
               </div>
               <input
@@ -700,21 +777,21 @@ export function EventSettings({ event, onSaved }: { event: EventOut; onSaved: (e
                 min={5}
                 max={100}
                 step={1}
-                value={
-                  wm.templates?.find((t) => t.id === (wm.activeTemplateId || wm.templates?.[0]?.id))?.sizePercent ??
-                  wm.sizePercent ??
-                  14
-                }
+                value={safeSize}
                 onChange={(e) => {
                   const val = Number(e.target.value);
                   const activeId = wm.activeTemplateId || wm.templates?.[0]?.id;
-                  setWm((prev) => ({
-                    ...prev,
-                    sizePercent: val,
-                    templates: (prev.templates || []).map((t) =>
-                      t.id === activeId ? { ...t, sizePercent: val } : t
-                    ),
-                  }));
+                  setWm((prev) => {
+                    const next = {
+                      ...prev,
+                      sizePercent: val,
+                      templates: (prev.templates || []).map((t) =>
+                        t.id === activeId ? { ...t, sizePercent: val } : t
+                      ),
+                    };
+                    saveEventWatermarkConfig(event.id, event.slug, next);
+                    return next;
+                  });
                 }}
                 className="w-full accent-brand-500 cursor-pointer h-1.5 bg-line rounded-lg"
               />
@@ -725,17 +802,10 @@ export function EventSettings({ event, onSaved }: { event: EventOut; onSaved: (e
               <div className="mb-1.5 flex items-center justify-between text-xs">
                 <span className="font-semibold uppercase tracking-wider text-muted flex items-center gap-1">
                   <Sparkles className="h-3 w-3 text-brand-600" /> Opacity{" "}
-                  {wm.templates?.find((t) => t.id === (wm.activeTemplateId || wm.templates?.[0]?.id))
-                    ? `(${wm.templates.find((t) => t.id === (wm.activeTemplateId || wm.templates?.[0]?.id))?.name})`
-                    : ""}
+                  {activeTemplateItem ? `(${activeTemplateItem.name})` : ""}
                 </span>
                 <span className="font-mono font-medium text-ink">
-                  {Math.round(
-                    (wm.templates?.find((t) => t.id === (wm.activeTemplateId || wm.templates?.[0]?.id))?.opacity ??
-                      wm.opacity ??
-                      0.4) * 100
-                  )}
-                  %
+                  {Math.round(safeOpacity * 100)}%
                 </span>
               </div>
               <input
@@ -743,21 +813,21 @@ export function EventSettings({ event, onSaved }: { event: EventOut; onSaved: (e
                 min={0.1}
                 max={1.0}
                 step={0.05}
-                value={
-                  wm.templates?.find((t) => t.id === (wm.activeTemplateId || wm.templates?.[0]?.id))?.opacity ??
-                  wm.opacity ??
-                  0.4
-                }
+                value={safeOpacity}
                 onChange={(e) => {
                   const val = Number(e.target.value);
                   const activeId = wm.activeTemplateId || wm.templates?.[0]?.id;
-                  setWm((prev) => ({
-                    ...prev,
-                    opacity: val,
-                    templates: (prev.templates || []).map((t) =>
-                      t.id === activeId ? { ...t, opacity: val } : t
-                    ),
-                  }));
+                  setWm((prev) => {
+                    const next = {
+                      ...prev,
+                      opacity: val,
+                      templates: (prev.templates || []).map((t) =>
+                        t.id === activeId ? { ...t, opacity: val } : t
+                      ),
+                    };
+                    saveEventWatermarkConfig(event.id, event.slug, next);
+                    return next;
+                  });
                 }}
                 className="w-full accent-brand-500 cursor-pointer h-1.5 bg-line rounded-lg"
               />
@@ -774,85 +844,8 @@ export function EventSettings({ event, onSaved }: { event: EventOut; onSaved: (e
             </Button>
           </div>
         </Card>
-
-        {/* Cover image Card (Moved to Left Side) */}
-        <Card>
-          <CardHeader title="Cover image" description="Event cover photo shown on guest gallery and watermark preview" />
-          <div className="space-y-3 p-5">
-            <div className="overflow-hidden rounded-xl border border-line bg-canvas/60 p-2 flex items-center justify-center min-h-[160px] max-h-[320px]">
-              <CoverImage
-                src={event.cover_url}
-                name={event.name}
-                className="max-h-[300px] w-auto max-w-full object-contain block mx-auto shadow-sm"
-              />
-            </div>
-            <input
-              ref={coverRef}
-              type="file"
-              accept={ACCEPTED_IMAGE_TYPES.join(",")}
-              className="sr-only"
-              tabIndex={-1}
-              onChange={(e) => {
-                void changeCover(e.target.files?.[0]);
-                e.target.value = "";
-              }}
-            />
-            <Button
-              variant="outline"
-              className="w-full"
-              loading={coverBusy}
-              onClick={() => coverRef.current?.click()}
-              icon={<ImagePlus className="h-4 w-4" />}
-            >
-              {event.cover_url ? "Replace cover" : "Add cover"}
-            </Button>
-          </div>
-        </Card>
       </div>
-
-      {/* Right Column: Event details + Privacy & data */}
-      <div className="space-y-6">
-        <Card>
-          <CardHeader title="Event details" />
-          <div className="p-5">
-            <EventForm
-              initial={event}
-              withCover={false}
-              submitLabel="Save changes"
-              onSubmit={async ({ name, event_date, venue, description }) => {
-                onSaved(await adminApi.updateEvent(event.id, { name, event_date, venue, description }));
-                toast.success("Changes saved");
-              }}
-            />
-          </div>
-        </Card>
-
-        <Card className="border-red-200">
-          <CardHeader title="Privacy & data" description="Irreversible actions" />
-          <div className="space-y-3 p-5">
-            <Button
-              variant="outline"
-              className="w-full"
-              onClick={() => setDialog("purge")}
-              disabled={event.counts.faces === 0}
-              icon={<ScanFace className="h-4 w-4" />}
-            >
-              Delete face data ({formatNumber(event.counts.faces)})
-            </Button>
-            <Button
-              variant="danger"
-              className="w-full"
-              onClick={() => {
-                setConfirmName("");
-                setDialog("delete");
-              }}
-              icon={<Trash2 className="h-4 w-4" />}
-            >
-              Delete event
-            </Button>
-          </div>
-        </Card>
-      </div>
+    </div>
 
       <ConfirmDialog open={dialog === "purge"} onClose={() => setDialog(null)} onConfirm={purgeFaces} loading={busy} danger
         title="Delete all face data?" confirmLabel="Delete face data"

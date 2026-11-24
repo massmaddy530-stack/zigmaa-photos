@@ -3,7 +3,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { hasCsrfHeader } from "@/lib/auth/request";
 import { verifyMiddlewareSession, verifySessionToken } from "@/lib/auth/session";
-import { getUserEventIds, recordUserEvent } from "@/lib/auth/user-events";
+import { getUserEventIds, recordUserEvent, removeUserEvent } from "@/lib/auth/user-events";
 import {
   API_BASE_URL,
   authConfig,
@@ -148,6 +148,12 @@ async function proxy(req: NextRequest, ctx: { params: Promise<{ path: string[] }
   // Intercept and isolate events per user account
   const isEventsRoot = path[0] === "events" && path.length === 1;
   const isDashboardOverview = path[0] === "dashboard" && path[1] === "overview";
+
+  if (req.method === "DELETE" && path[0] === "events" && path.length === 2 && upstream.ok) {
+    if (userEmail && path[1]) {
+      await removeUserEvent(userEmail, path[1]);
+    }
+  }
 
   if (req.method === "POST" && isEventsRoot && upstream.status === 201) {
     try {

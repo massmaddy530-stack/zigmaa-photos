@@ -9,7 +9,6 @@ import { EventPhotos } from "@/components/event-photos";
 import { EventSettings } from "@/components/event-settings";
 import { EventShare } from "@/components/event-share";
 import { ProcessingPanel } from "@/components/processing-panel";
-import { EventStatusBadge } from "@/components/status-badges";
 import { Button } from "@/components/ui/button";
 import { Modal } from "@/components/ui/modal";
 import { Card, Skeleton } from "@/components/ui/primitives";
@@ -110,7 +109,7 @@ function EventDetailInner() {
     <>
       <PageHeader
         breadcrumb={<Link href="/dashboard" className="inline-flex items-center gap-1 hover:text-ink"><ChevronLeft className="h-4 w-4" />Dashboard</Link>}
-        title={<span className="flex flex-wrap items-center gap-3"><span className="min-w-0 break-words">{ev.name}</span><EventStatusBadge status={ev.status} /></span>}
+        title={<span className="min-w-0 break-words">{ev.name}</span>}
         description={
           <span className="flex flex-wrap gap-x-4 gap-y-1">
             {ev.event_date && <span className="inline-flex items-center gap-1.5"><CalendarDays className="h-4 w-4" />{formatDate(ev.event_date, { weekday: "short", day: "numeric", month: "long", year: "numeric" })}</span>}

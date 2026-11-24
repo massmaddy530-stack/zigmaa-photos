@@ -69,6 +69,35 @@ export async function recordUserEvent(userEmail: string, eventId: string, role =
   }
 }
 
+/** Remove an event mapping when an event is deleted */
+export async function removeUserEvent(userEmail: string, eventId: string): Promise<void> {
+  const cleanEventId = eventId.trim();
+  if (!cleanEventId) return;
+
+  const pool = getPool();
+  if (pool) {
+    try {
+      await pool.query(
+        `DELETE FROM public.user_events WHERE event_id = $1`,
+        [cleanEventId]
+      );
+    } catch (err) {
+      console.warn("PostgreSQL removeUserEvent failed:", err);
+    }
+  }
+
+  // Remove from local file fallback
+  try {
+    const local = await readLocalRecords();
+    const updated = local.filter((r) => r.event_id !== cleanEventId);
+    if (updated.length !== local.length) {
+      await writeLocalRecords(updated);
+    }
+  } catch {
+    // Ignore
+  }
+}
+
 /** Returns the set of event IDs accessible to this user */
 export async function getUserEventIds(userEmail: string): Promise<Set<string>> {
   const normEmail = userEmail.trim().toLowerCase();
@@ -78,10 +107,16 @@ export async function getUserEventIds(userEmail: string): Promise<Set<string>> {
   const pool = getPool();
   if (pool) {
     try {
+      // Inner join with public.events so deleted events are excluded
       const res = await pool.query(
-        `SELECT event_id FROM public.user_events WHERE LOWER(user_email) = $1
+        `SELECT ue.event_id
+         FROM public.user_events ue
+         JOIN public.events e ON ue.event_id = e.id::text
+         WHERE LOWER(ue.user_email) = $1
          UNION
-         SELECT id::text as event_id FROM public.events WHERE LOWER(owner_email) = $1`,
+         SELECT id::text as event_id
+         FROM public.events
+         WHERE LOWER(owner_email) = $1`,
         [normEmail]
       );
       for (const row of res.rows) {

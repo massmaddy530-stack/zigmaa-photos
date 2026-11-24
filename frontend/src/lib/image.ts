@@ -404,7 +404,7 @@ export async function applyWatermark(blob: Blob, customConfig?: WatermarkConfig)
                 y = Math.max(0, Math.min(y, height - targetHeight));
 
                 ctx.save();
-                ctx.globalAlpha = layer.opacity;
+                ctx.globalAlpha = Math.min(1, Math.max(0, layer.opacity > 1 ? layer.opacity / 100 : layer.opacity));
 
                 const color = layer.color || "original";
                 if (color !== "original") {

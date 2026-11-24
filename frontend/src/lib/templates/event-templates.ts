@@ -55,11 +55,20 @@ function renderTypography(params: TemplateRenderParams) {
   const dateY = 178;
   const fontStack = `'${params.fontFamily}', 'Playfair Display', Georgia, serif`;
 
+  // Dynamically calculate safe font size so long titles never overflow outside banner edges
+  const nameLen = params.names ? params.names.trim().length : 1;
+  const maxSafeWidth = 1060;
+  const requestedSize = params.namesFontSize || 72;
+  const estWidth = nameLen * (requestedSize * 0.58);
+  const safeFontSize = estWidth > maxSafeWidth
+    ? Math.max(24, Math.floor(requestedSize * (maxSafeWidth / estWidth)))
+    : requestedSize;
+
   return `
     <text id="svg-subtitle" x="600" y="${subtitleY}" text-anchor="middle" fill="${params.textColor}" style="font-family: 'Cinzel', 'Playfair Display', Georgia, serif; font-size: ${params.subtitleFontSize}px; letter-spacing: 4px; font-weight: 600; opacity: 0.9;">
       ${params.subtitle.toUpperCase()}
     </text>
-    <text id="svg-names" x="600" y="${namesY}" text-anchor="middle" dominant-baseline="central" fill="${params.textColor}" style="font-family: ${fontStack}; font-size: ${params.namesFontSize}px; font-style: ${params.isItalic ? 'italic' : 'normal'}; font-weight: ${params.isItalic ? 500 : 600};">
+    <text id="svg-names" x="600" y="${namesY}" text-anchor="middle" dominant-baseline="central" fill="${params.textColor}" style="font-family: ${fontStack}; font-size: ${safeFontSize}px; font-style: ${params.isItalic ? 'italic' : 'normal'}; font-weight: ${params.isItalic ? 500 : 600};">
       ${params.names}
     </text>
     <g fill="${params.textColor}">
@@ -86,6 +95,9 @@ function renderBg(bgColor: string, height: number = 240, rx: number = 0) {
 // Helper SVG Defs (Gradients & Filters)
 const COMMON_DEFS = `
   <defs>
+    <style>
+      @import url('https://fonts.googleapis.com/css2?family=Alex+Brush&family=Allura&family=Bodoni+Moda:ital,opsz,wght@0,6..96,400..700;1,6..96,400..700&family=Cinzel+Decorative:wght@400;700&family=Cinzel:wght@400;600;700&family=Cormorant+Garamond:ital,wght@0,400..700;1,400..700&family=Dancing+Script:wght@500;700&family=Great+Vibes&family=Italianno&family=Marcellus&family=Montserrat:ital,wght@0,300..800;1,300..800&family=Parisienne&family=Pinyon+Script&family=Playfair+Display:ital,wght@0,400..900;1,400..900&family=Prata&display=swap');
+    </style>
     <linearGradient id="goldLuxe" x1="0%" y1="0%" x2="100%" y2="100%">
       <stop offset="0%" stop-color="#f6d365" />
       <stop offset="50%" stop-color="#fda085" />
