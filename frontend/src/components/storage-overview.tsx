@@ -63,7 +63,7 @@ export function StorageOverview({ initialData, className, compact = false }: Sto
   return (
     <div
       className={cn(
-        "rounded-2xl border border-line bg-surface p-5 shadow-xs transition-shadow hover:shadow-sm",
+        "dashboard-card p-5 transition-shadow hover:shadow-md",
         className
       )}
     >

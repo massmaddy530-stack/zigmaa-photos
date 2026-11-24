@@ -41,10 +41,10 @@ export function SignOut({ className }: { className?: string }) {
 
 export function AppShell({ children }: { children: ReactNode }) {
   return (
-    <div className="min-h-dvh bg-canvas">
+    <div className="min-h-dvh dashboard-background">
       {/* Top Navigation Bar: Logo & Name in top-left, Actions & Sign Out in top-right */}
-      <header className="sticky top-0 z-30 border-b border-line bg-surface/90 backdrop-blur-md">
-        <div className="mx-auto flex h-16 max-w-7xl items-center justify-between px-4 sm:px-6 lg:px-8">
+      <header className="sticky top-0 z-30 border-b border-[#E2E8F0]/80 bg-white/80 backdrop-blur-md">
+        <div className="flex h-16 w-full items-center justify-between px-4 sm:px-6 lg:px-8">
           <Link href="/dashboard" className="transition-opacity hover:opacity-90">
             <Logo />
           </Link>
@@ -54,7 +54,7 @@ export function AppShell({ children }: { children: ReactNode }) {
         </div>
       </header>
 
-      <main className="mx-auto w-full max-w-7xl px-4 py-6 sm:px-6 lg:px-8 lg:py-8">
+      <main className="w-full px-4 py-6 sm:px-6 lg:px-8 lg:py-8">
         {children}
       </main>
     </div>

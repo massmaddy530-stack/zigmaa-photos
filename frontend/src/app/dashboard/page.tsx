@@ -14,6 +14,7 @@ import { Suspense, useState } from "react";
 import { EventCard, EventCardSkeleton } from "@/components/event-card";
 import { StatCard } from "@/components/stat-card";
 import { StorageOverview } from "@/components/storage-overview";
+import { PhotoAnalytics } from "@/components/photo-analytics";
 import { ButtonLink } from "@/components/ui/button";
 import { Pagination } from "@/components/ui/pagination";
 import { Card, Input } from "@/components/ui/primitives";
@@ -93,8 +94,9 @@ export default function DashboardPage() {
         )}
 
         {o && (
-          <div className="mt-4 max-w-xl">
-            <StorageOverview initialData={o.storage} />
+          <div className="mt-5 grid grid-cols-1 gap-4 lg:grid-cols-2 items-stretch">
+            <StorageOverview initialData={o.storage} className="h-full" />
+            <PhotoAnalytics photosTotal={o.photos} eventsTotal={o.events} className="h-full" />
           </div>
         )}
       </section>

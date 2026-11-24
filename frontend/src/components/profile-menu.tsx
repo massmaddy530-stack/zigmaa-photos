@@ -227,8 +227,6 @@ export function ProfileMenu() {
           ) : (
             <User className="h-4 w-4 text-white" />
           )}
-          {/* Active Online Indicator */}
-          <span className="absolute bottom-0 right-0 h-2.5 w-2.5 rounded-full border-2 border-white bg-emerald-500" />
         </div>
 
         <div className="hidden text-left lg:block">

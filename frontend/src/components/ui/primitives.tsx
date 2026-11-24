@@ -2,7 +2,7 @@ import type { ComponentProps, ReactNode } from "react";
 import { cn } from "@/lib/format";
 
 export function Card({ className, ...rest }: ComponentProps<"div">) {
-  return <div className={cn("rounded-2xl border border-line bg-surface shadow-[var(--shadow-card)]", className)} {...rest} />;
+  return <div className={cn("dashboard-card", className)} {...rest} />;
 }
 
 export function CardHeader({ title, description, action, className }: {
