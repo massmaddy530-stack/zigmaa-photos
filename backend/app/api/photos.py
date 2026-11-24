@@ -10,7 +10,7 @@ from typing import Annotated
 from fastapi import APIRouter, Depends, File, Form, Query, Response, UploadFile, status
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel, Field
-from sqlalchemy import delete, func, select
+from sqlalchemy import and_, delete, func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from starlette.concurrency import run_in_threadpool
 
@@ -164,7 +164,7 @@ async def list_photos(
     event_id: uuid.UUID, session: SessionDep, storage: StorageDep,
     status_filter: Annotated[str | None, Query(alias="status")] = None,
     q: Annotated[str | None, Query(max_length=100, description="Filter by filename")] = None,
-    has_faces: Annotated[bool | None, Query()] = None,
+    has_faces: Annotated[str | None, Query()] = None,
     limit: Annotated[int, Query(ge=1, le=200)] = 48,
     offset: Annotated[int, Query(ge=0)] = 0,
 ) -> Page[PhotoOut]:
@@ -172,17 +172,30 @@ async def list_photos(
     stmt = select(Photo).where(Photo.event_id == event_id)
     if status_filter and status_filter.strip():
         val = status_filter.strip().lower()
-        try:
-            parsed_status = PhotoStatus(val)
-            stmt = stmt.where(Photo.status == parsed_status)
-        except ValueError:
-            stmt = stmt.where(Photo.status == val)
+        if val in ("queued", "queue"):
+            stmt = stmt.where(Photo.status.in_([PhotoStatus.pending, PhotoStatus.processing]))
+        elif val in ("pending",):
+            stmt = stmt.where(Photo.status == PhotoStatus.pending)
+        elif val in ("processing", "in_progress"):
+            stmt = stmt.where(Photo.status == PhotoStatus.processing)
+        elif val in ("ready", "indexed", "complete", "completed"):
+            stmt = stmt.where(Photo.status == PhotoStatus.indexed)
+        elif val in ("failed", "error"):
+            stmt = stmt.where(Photo.status == PhotoStatus.failed)
+        else:
+            try:
+                parsed_status = PhotoStatus(val)
+                stmt = stmt.where(Photo.status == parsed_status)
+            except ValueError:
+                stmt = stmt.where(Photo.status == val)
     if q and q.strip():
         stmt = stmt.where(func.lower(Photo.original_filename).like(f"%{q.strip().lower()}%"))
-    if has_faces is True:
-        stmt = stmt.where(Photo.face_count > 0)
-    elif has_faces is False:
-        stmt = stmt.where(Photo.face_count == 0)
+    if has_faces is not None and str(has_faces).strip():
+        hf = str(has_faces).strip().lower()
+        if hf in ("true", "1", "yes", "with_faces"):
+            stmt = stmt.where(or_(Photo.face_count > 0, Photo.faces.any()))
+        elif hf in ("false", "0", "no", "no_faces", "without_faces"):
+            stmt = stmt.where(and_(or_(Photo.face_count == 0, Photo.face_count.is_(None)), ~Photo.faces.any()))
     total = (await session.execute(select(func.count()).select_from(stmt.subquery()))).scalar_one()
     photos = (await session.execute(
         stmt.order_by(Photo.created_at.desc(), Photo.id).limit(limit).offset(offset))).scalars().all()

@@ -1,6 +1,6 @@
 "use client";
 
-import { Check, CheckSquare, Download, ExternalLink, ImageIcon, RotateCcw, ScanFace, Search, Square, Trash2, UploadCloud } from "lucide-react";
+import { Check, CheckSquare, Download, ExternalLink, ImageIcon, RotateCcw, ScanFace, Search, Square, Trash2, UploadCloud, X } from "lucide-react";
 import { useCallback, useEffect, useState } from "react";
 import { adminApi, errorMessage } from "@/lib/api";
 import { downloadImage, downloadImagesInBatch, getSavedWatermarkConfig, fetchEventWatermarkConfig, type WatermarkConfig } from "@/lib/image";
@@ -17,6 +17,14 @@ import { EmptyState, ErrorState } from "./ui/states";
 import { useToast } from "./ui/toast";
 
 const LIMIT = 48;
+
+const STATUS_FILTER_OPTIONS: { value: PhotoStatus | ""; label: string }[] = [
+  { value: "", label: "All statuses" },
+  { value: "indexed", label: "Ready" },
+  { value: "pending", label: "Queued" },
+  { value: "processing", label: "Processing" },
+  { value: "failed", label: "Failed" },
+];
 
 export function EventPhotos({ eventId, refreshKey, pollWhileProcessing, onChanged, onGoUpload }: {
   eventId: string;
@@ -52,7 +60,11 @@ export function EventPhotos({ eventId, refreshKey, pollWhileProcessing, onChange
 
   const photos = useQuery(
     () => adminApi.listPhotos(eventId, {
-      status, q: dq, has_faces: faces === "" ? null : faces === "yes", limit: LIMIT, offset,
+      status,
+      q: dq,
+      has_faces: faces === "yes" ? true : faces === "no" ? false : null,
+      limit: LIMIT,
+      offset,
     }),
     [eventId, status, dq, faces, offset, refreshKey],
     { pollMs: pollWhileProcessing ? 4000 : false },
@@ -205,16 +217,35 @@ export function EventPhotos({ eventId, refreshKey, pollWhileProcessing, onChange
           <Input type="search" placeholder="Search filename" value={q} onChange={(e) => resetPage(setQ)(e.target.value)}
                  className="pl-10" aria-label="Search by filename" />
         </div>
-        <div className="grid grid-cols-2 gap-2 sm:flex">
+        <div className="grid grid-cols-2 gap-2 sm:flex sm:items-center">
           <Select value={status} onChange={(e) => resetPage(setStatus)(e.target.value as PhotoStatus | "")} aria-label="Filter by status" className="sm:w-40">
-            <option value="">All statuses</option>
-            {(Object.keys(PHOTO_STATUS_META) as PhotoStatus[]).map((s) => <option key={s} value={s}>{PHOTO_STATUS_META[s].label}</option>)}
+            {STATUS_FILTER_OPTIONS.map((opt) => (
+              <option key={opt.value} value={opt.value}>{opt.label}</option>
+            ))}
           </Select>
           <Select value={faces} onChange={(e) => resetPage(setFaces)(e.target.value as "" | "yes" | "no")} aria-label="Filter by faces" className="sm:w-40">
             <option value="">Any faces</option>
             <option value="yes">With faces</option>
             <option value="no">No faces</option>
           </Select>
+          {filtered && (
+            <Button
+              type="button"
+              variant="ghost"
+              size="sm"
+              onClick={() => {
+                setStatus("");
+                setFaces("");
+                setQ("");
+                setOffset(0);
+              }}
+              className="text-xs text-muted hover:text-ink h-10 px-2.5"
+              icon={<X className="h-3.5 w-3.5" />}
+              title="Reset all filters"
+            >
+              Clear
+            </Button>
+          )}
           <Button
             type="button"
             variant={isSelecting ? "secondary" : "outline"}
@@ -330,14 +361,40 @@ export function EventPhotos({ eventId, refreshKey, pollWhileProcessing, onChange
         </div>
       )}
 
-      {photos.error && !data ? (
+      {photos.error ? (
         <Card><ErrorState error={photos.error} onRetry={photos.reload} /></Card>
       ) : !data ? (
         <GridSkeleton />
       ) : data.items.length === 0 ? (
         <Card>
           {filtered ? (
-            <EmptyState icon={<Search className="h-5 w-5" />} title="No photos match these filters" />
+            <EmptyState
+              icon={<Search className="h-5 w-5" />}
+              title="No photos match these filters"
+              description={
+                `No photos found with` +
+                (status ? ` status: ${PHOTO_STATUS_META[status]?.label || status}` : "") +
+                (faces ? ` · faces: ${faces === "yes" ? "With faces" : "No faces"}` : "") +
+                (dq ? ` · search: "${dq}"` : "") +
+                ". Try resetting or clearing the filters."
+              }
+              action={
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  onClick={() => {
+                    setStatus("");
+                    setFaces("");
+                    setQ("");
+                    setOffset(0);
+                  }}
+                  icon={<RotateCcw className="h-3.5 w-3.5" />}
+                >
+                  Reset all filters
+                </Button>
+              }
+            />
           ) : (
             <EmptyState icon={<ImageIcon className="h-5 w-5" />} title="No photos yet"
               description="Photos synced from the camera or watch folder will appear here automatically."

@@ -238,6 +238,13 @@ async def test_list_photos_filters(client):
     base = f"/api/v1/events/{ev['id']}/photos"
     assert (await client.get(base, headers=ADMIN)).json()["total"] == 3
     assert (await client.get(base, params={"has_faces": True}, headers=ADMIN)).json()["total"] == 2
+    assert (await client.get(base, params={"has_faces": "true"}, headers=ADMIN)).json()["total"] == 2
+    assert (await client.get(base, params={"has_faces": False}, headers=ADMIN)).json()["total"] == 1
+    assert (await client.get(base, params={"has_faces": "false"}, headers=ADMIN)).json()["total"] == 1
+    assert (await client.get(base, params={"has_faces": ""}, headers=ADMIN)).json()["total"] == 3
+    assert (await client.get(base, params={"status": "ready"}, headers=ADMIN)).json()["total"] == 3
+    assert (await client.get(base, params={"status": "indexed"}, headers=ADMIN)).json()["total"] == 3
+    assert (await client.get(base, params={"status": "queued"}, headers=ADMIN)).json()["total"] == 0
     assert (await client.get(base, params={"q": "n.png"}, headers=ADMIN)).json()["total"] == 1
     assert (await client.get(base, params={"status": "failed"}, headers=ADMIN)).json()["total"] == 0
     page = (await client.get(base, params={"limit": 2, "offset": 2}, headers=ADMIN)).json()
