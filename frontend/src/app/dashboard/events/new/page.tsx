@@ -209,15 +209,15 @@ export default function NewEventPage() {
         description="Set up the event details, cover image, and watermark template for photo downloads."
       />
 
-      <div className="grid gap-6 lg:grid-cols-12 items-start">
-        {/* Left Column: Event Form Details (5 cols) */}
-        <div className="lg:col-span-6 xl:col-span-5">
-          <Card>
+      <div className="grid gap-6 lg:grid-cols-12 items-stretch">
+        {/* Left Column: Event Form Details (6 cols) */}
+        <div className="lg:col-span-6 xl:col-span-6 flex flex-col">
+          <Card className="h-full flex flex-col justify-between">
             <CardHeader
               title="Event information"
               description="Basic information, cover photo and watermark template."
             />
-            <div className="p-5 sm:p-6">
+            <div className="p-5 sm:p-6 flex-1 flex flex-col justify-between">
               <EventForm
                 submitLabel="Create event"
                 templateItems={templateItems}
@@ -308,9 +308,9 @@ export default function NewEventPage() {
           </Card>
         </div>
 
-        {/* Right Column: Live Watermark Studio & Customization Controls (6 or 7 cols) */}
-        <div className="space-y-6 lg:col-span-6 xl:col-span-7">
-          <Card className="overflow-hidden">
+        {/* Right Column: Live Watermark Studio & Customization Controls (6 cols) */}
+        <div className="space-y-6 lg:col-span-6 xl:col-span-6 flex flex-col">
+          <Card className="overflow-hidden h-full flex flex-col justify-between">
             <CardHeader
               title="Watermark & Template Studio"
               description="Live preview of how your watermark will appear on downloaded photos"

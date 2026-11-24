@@ -145,6 +145,7 @@ export interface OverviewOut {
   failures: number;
   recent_events: EventOut[];
   storage?: StorageOverviewOut;
+  photo_timeline?: Array<{ date: string; count: number }>;
 }
 
 export interface PublicEventOut {

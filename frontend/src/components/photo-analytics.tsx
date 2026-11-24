@@ -1,7 +1,7 @@
 "use client";
 
 import { useMemo, useState } from "react";
-import { BarChart3, ChevronDown, TrendingUp } from "lucide-react";
+import { BarChart3, ChevronDown, ImageIcon } from "lucide-react";
 import { cn, formatNumber } from "@/lib/format";
 
 export type AnalyticsRange = "7d" | "14d" | "30d" | "90d" | "all";
@@ -9,51 +9,77 @@ export type AnalyticsRange = "7d" | "14d" | "30d" | "90d" | "all";
 interface PhotoAnalyticsProps {
   photosTotal?: number;
   eventsTotal?: number;
+  timeline?: Array<{ date: string; count: number }>;
   className?: string;
 }
 
-export function PhotoAnalytics({ photosTotal = 480, className }: PhotoAnalyticsProps) {
+export function PhotoAnalytics({ photosTotal = 0, timeline = [], className }: PhotoAnalyticsProps) {
   const [range, setRange] = useState<AnalyticsRange>("7d");
   const [hoveredIndex, setHoveredIndex] = useState<number | null>(null);
 
-  // Generate realistic data points based on total photos and selected range
+  // Build real timeline data from user's actual database photos
   const chartData = useMemo(() => {
+    // If user has 0 photos, return completely empty 0-state
+    if (!photosTotal || photosTotal <= 0) {
+      const today = new Date();
+      const numDays = range === "7d" ? 7 : range === "14d" ? 14 : range === "30d" ? 15 : 10;
+      return Array.from({ length: numDays }, (_, i) => {
+        const d = new Date(today);
+        d.setDate(d.getDate() - (numDays - 1 - i));
+        return {
+          label: d.toLocaleDateString("en-US", { weekday: "short" }),
+          date: d.toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" }),
+          count: 0,
+        };
+      });
+    }
+
+    // Map real date strings (YYYY-MM-DD) to photo counts
+    const dateCountMap = new Map<string, number>();
+    for (const item of timeline) {
+      if (item.date && item.count) {
+        dateCountMap.set(item.date, (dateCountMap.get(item.date) || 0) + item.count);
+      }
+    }
+
     const today = new Date();
-    let numBars = 7;
+    let numDays = 7;
+    let stepDays = 1;
     let labelFormat: "day" | "date" | "month" = "day";
 
     switch (range) {
       case "7d":
-        numBars = 7;
+        numDays = 7;
+        stepDays = 1;
         labelFormat = "day";
         break;
       case "14d":
-        numBars = 14;
+        numDays = 14;
+        stepDays = 1;
         labelFormat = "date";
         break;
       case "30d":
-        numBars = 15; // 15 bi-daily bars
+        numDays = 15;
+        stepDays = 2;
         labelFormat = "date";
         break;
       case "90d":
-        numBars = 12; // 12 weekly bars
+        numDays = 12;
+        stepDays = 7;
         labelFormat = "date";
         break;
       case "all":
-        numBars = 10;
+        numDays = 10;
+        stepDays = 30;
         labelFormat = "month";
         break;
     }
 
-    // Weights representing natural photoshoot upload spikes
-    const rawWeights = [24, 68, 32, 112, 85, 142, 95, 45, 80, 120, 90, 60, 130, 75, 105];
-    const subset = rawWeights.slice(0, numBars);
-    const weightSum = subset.reduce((acc, w) => acc + w, 0);
-
-    return subset.map((w, i) => {
+    const result = [];
+    for (let i = numDays - 1; i >= 0; i--) {
       const d = new Date(today);
-      const daysBack = numBars - 1 - i;
-      d.setDate(d.getDate() - (range === "all" ? daysBack * 14 : range === "90d" ? daysBack * 7 : daysBack));
+      d.setDate(d.getDate() - i * stepDays);
+      const isoDate = d.toISOString().split("T")[0];
 
       let label = "";
       if (labelFormat === "day") {
@@ -64,15 +90,35 @@ export function PhotoAnalytics({ photosTotal = 480, className }: PhotoAnalyticsP
         label = `${d.getDate()}/${d.getMonth() + 1}`;
       }
 
-      const count = Math.max(8, Math.round((w / weightSum) * (photosTotal || 480)));
+      // Check real count for this date/period
+      let periodCount = 0;
+      if (stepDays === 1) {
+        periodCount = dateCountMap.get(isoDate) || 0;
+      } else {
+        // Aggregate days in this step interval
+        for (let s = 0; s < stepDays; s++) {
+          const stepDate = new Date(d);
+          stepDate.setDate(stepDate.getDate() - s);
+          const stepIso = stepDate.toISOString().split("T")[0];
+          periodCount += dateCountMap.get(stepIso) || 0;
+        }
+      }
 
-      return {
+      // If user has photos overall but no specific date split was stored in timeline yet,
+      // attribute to the most recent day (today)
+      if (dateCountMap.size === 0 && i === 0 && photosTotal > 0) {
+        periodCount = photosTotal;
+      }
+
+      result.push({
         label,
         date: d.toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" }),
-        count,
-      };
-    });
-  }, [range, photosTotal]);
+        count: periodCount,
+      });
+    }
+
+    return result;
+  }, [range, photosTotal, timeline]);
 
   const maxVal = Math.max(...chartData.map((d) => d.count), 1);
   const rangeTotal = chartData.reduce((acc, d) => acc + d.count, 0);
@@ -118,19 +164,20 @@ export function PhotoAnalytics({ photosTotal = 480, className }: PhotoAnalyticsP
             <span className="font-display text-2xl font-bold tracking-tight text-ink">
               {formatNumber(rangeTotal)}
             </span>
-            <span className="ml-1.5 text-xs text-muted">photos uploaded</span>
+            <span className="ml-1.5 text-xs text-muted">photos in this period</span>
           </div>
 
-          <div className="inline-flex items-center gap-1 rounded-full bg-emerald-50 px-2 py-0.5 text-[11px] font-semibold text-emerald-700">
-            <TrendingUp className="h-3 w-3" />
-            <span>+18% activity</span>
+          <div className="inline-flex items-center gap-1 rounded-full bg-slate-100 px-2 py-0.5 text-[11px] font-semibold text-slate-700">
+            <ImageIcon className="h-3 w-3 text-muted" />
+            <span>Total: {formatNumber(photosTotal)}</span>
           </div>
         </div>
 
-        {/* Bar Chart Area matching Image 2 */}
+        {/* Bar Chart Area */}
         <div className="relative flex h-24 items-end gap-1.5 sm:gap-2.5 pt-2">
           {chartData.map((item, idx) => {
-            const heightPercent = Math.max(16, Math.round((item.count / maxVal) * 100));
+            const hasData = item.count > 0;
+            const heightPercent = hasData ? Math.max(16, Math.round((item.count / maxVal) * 100)) : 4;
             const isHovered = hoveredIndex === idx;
 
             return (
@@ -147,16 +194,18 @@ export function PhotoAnalytics({ photosTotal = 480, className }: PhotoAnalyticsP
                   </div>
                 )}
 
-                {/* Animated Gradient Bar */}
+                {/* Bar */}
                 <div
                   style={{ height: `${heightPercent}%` }}
                   className={cn(
                     "w-full rounded-t-md transition-all duration-300",
-                    isHovered
-                      ? "bg-gradient-to-t from-[#b91c1c] via-[#e50914] to-[#f87171] shadow-sm"
-                      : idx % 2 === 0
-                      ? "bg-gradient-to-t from-[#dc2626] to-[#f87171]"
-                      : "bg-gradient-to-t from-[#ef4444] to-[#fca5a5]"
+                    hasData
+                      ? isHovered
+                        ? "bg-gradient-to-t from-[#b91c1c] via-[#e50914] to-[#f87171] shadow-sm"
+                        : idx % 2 === 0
+                        ? "bg-gradient-to-t from-[#dc2626] to-[#f87171]"
+                        : "bg-gradient-to-t from-[#ef4444] to-[#fca5a5]"
+                      : "bg-slate-200/80 hover:bg-slate-300"
                   )}
                 />
 

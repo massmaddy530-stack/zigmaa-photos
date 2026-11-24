@@ -137,3 +137,37 @@ export async function getUserEventIds(userEmail: string): Promise<Set<string>> {
   }
   return result;
 }
+
+/** Returns real photo upload timeline grouped by date for the user's events */
+export async function getUserPhotoTimeline(
+  userEmail: string,
+  userEventIds: Set<string>
+): Promise<Array<{ date: string; count: number }>> {
+  const normEmail = userEmail.trim().toLowerCase();
+  if (!normEmail || userEventIds.size === 0) return [];
+
+  const pool = getPool();
+  if (pool) {
+    try {
+      const eventIds = Array.from(userEventIds);
+      const res = await pool.query(
+        `SELECT
+           TO_CHAR(p.created_at, 'YYYY-MM-DD') AS upload_date,
+           COUNT(*)::int AS count
+         FROM public.photos p
+         WHERE p.event_id::text = ANY($1)
+         GROUP BY TO_CHAR(p.created_at, 'YYYY-MM-DD')
+         ORDER BY upload_date ASC`,
+        [eventIds]
+      );
+      return res.rows.map((r) => ({
+        date: String(r.upload_date),
+        count: Number(r.count) || 0,
+      }));
+    } catch (err) {
+      console.warn("PostgreSQL getUserPhotoTimeline failed:", err);
+    }
+  }
+
+  return [];
+}

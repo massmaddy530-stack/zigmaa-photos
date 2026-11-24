@@ -3,7 +3,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { hasCsrfHeader } from "@/lib/auth/request";
 import { verifyMiddlewareSession, verifySessionToken } from "@/lib/auth/session";
-import { getUserEventIds, recordUserEvent, removeUserEvent } from "@/lib/auth/user-events";
+import { getUserEventIds, getUserPhotoTimeline, recordUserEvent, removeUserEvent } from "@/lib/auth/user-events";
 import {
   API_BASE_URL,
   authConfig,
@@ -199,6 +199,7 @@ async function proxy(req: NextRequest, ctx: { params: Promise<{ path: string[] }
           data.processing = 0;
           data.failures = 0;
           data.recent_events = [];
+          data.photo_timeline = [];
         } else {
           if (Array.isArray(data.recent_events)) {
             data.recent_events = data.recent_events.filter((item: Record<string, unknown>) => {
@@ -230,6 +231,8 @@ async function proxy(req: NextRequest, ctx: { params: Promise<{ path: string[] }
             const c = e.counts as Record<string, unknown> | undefined;
             return sum + (Number(c?.failed) || 0);
           }, 0);
+
+          data.photo_timeline = await getUserPhotoTimeline(userEmail, userEventIds);
         }
       }
       return NextResponse.json(data, { status: 200, headers: resHeaders });

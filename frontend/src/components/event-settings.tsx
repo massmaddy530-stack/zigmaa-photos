@@ -390,9 +390,9 @@ export function EventSettings({ event, onSaved }: { event: EventOut; onSaved: (e
 
   return (
     <div className="space-y-6">
-      <div className="grid gap-6 lg:grid-cols-12 items-start">
-        {/* Left Column: Event information, Cover image, and Templates / Watermark overlays (5 cols) */}
-        <div className="space-y-6 lg:col-span-6 xl:col-span-5">
+      <div className="grid gap-6 lg:grid-cols-12 items-stretch">
+        {/* Left Column: Event information, Cover image, and Templates / Watermark overlays (6 cols) */}
+        <div className="space-y-6 lg:col-span-6 xl:col-span-6 flex flex-col">
           {/* 1. Event Information Form */}
           <Card>
             <CardHeader title="Event information" description="Basic information about your photoshoot event." />
@@ -599,9 +599,9 @@ export function EventSettings({ event, onSaved }: { event: EventOut; onSaved: (e
           </Card>
         </div>
 
-        {/* Right Column: Live Watermark Studio & Customization Controls (7 cols) */}
-        <div className="space-y-6 lg:col-span-6 xl:col-span-7">
-          <Card className="overflow-hidden">
+        {/* Right Column: Live Watermark Studio & Customization Controls (6 cols) */}
+        <div className="space-y-6 lg:col-span-6 xl:col-span-6 flex flex-col">
+          <Card className="overflow-hidden h-full flex flex-col justify-between">
             <CardHeader
               title="Watermark & Template Studio"
               description="Live preview of how your watermark will appear on downloaded photos"

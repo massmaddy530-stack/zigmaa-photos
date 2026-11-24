@@ -96,7 +96,12 @@ export default function DashboardPage() {
         {o && (
           <div className="mt-5 grid grid-cols-1 gap-4 lg:grid-cols-2 items-stretch">
             <StorageOverview initialData={o.storage} className="h-full" />
-            <PhotoAnalytics photosTotal={o.photos} eventsTotal={o.events} className="h-full" />
+            <PhotoAnalytics
+              photosTotal={o.photos}
+              eventsTotal={o.events}
+              timeline={o.photo_timeline}
+              className="h-full"
+            />
           </div>
         )}
       </section>
