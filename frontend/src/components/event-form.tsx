@@ -1,6 +1,6 @@
 "use client";
 
-import { Eye, EyeOff, ImagePlus, Palette, Upload, X } from "lucide-react";
+import { Eye, EyeOff, ImagePlus, Palette, Sparkles, Upload, X } from "lucide-react";
 import { useEffect, useRef, useState, type FormEvent, type ReactNode } from "react";
 import { ApiError, errorMessage } from "@/lib/api";
 import { ACCEPTED_IMAGE_TYPES, MAX_UPLOAD_MB } from "@/lib/config";
@@ -280,9 +280,10 @@ export function EventForm({
   }
 
   return (
-    <form onSubmit={submit} className="space-y-5" noValidate>
-      {formError ? <Alert tone="error" title="Could not save">{errorMessage(formError)}</Alert> : null}
-      <Field label="Event name" htmlFor="ev-name" error={errors.name}>
+    <form onSubmit={submit} className="flex-1 flex flex-col justify-between h-full space-y-5" noValidate>
+      <div className="space-y-5">
+        {formError ? <Alert tone="error" title="Could not save">{errorMessage(formError)}</Alert> : null}
+        <Field label="Event name" htmlFor="ev-name" error={errors.name}>
         <Input id="ev-name" value={name} onChange={(e) => setName(e.target.value)} maxLength={200} required
                placeholder="e.g. Aisha & Rohan's Wedding" aria-invalid={!!errors.name} />
       </Field>
@@ -452,6 +453,19 @@ export function EventForm({
         </>
       )}
 
+      {withCover && (
+        <div className="rounded-xl border border-line/70 bg-canvas/60 p-3.5 text-xs text-muted space-y-1">
+          <div className="flex items-center gap-1.5 font-semibold text-ink">
+            <Sparkles className="h-3.5 w-3.5 text-brand-600" />
+            <span>Watermark & Cover Guide</span>
+          </div>
+          <p className="leading-relaxed">
+            Your cover image and watermark appear in real-time on the right. You can drag and position watermarks directly on the preview photo before creating the event.
+          </p>
+        </div>
+      )}
+      </div>
+
       {/* Template Studio Modal */}
       <TemplateDesignerModal
         isOpen={showDesigner}
@@ -460,7 +474,7 @@ export function EventForm({
         defaultEventName={name}
         defaultEventDate={date}
       />
-      <div className="flex flex-wrap items-center justify-end gap-2 pt-2">
+      <div className="flex flex-wrap items-center justify-end gap-2 pt-4 border-t border-line/40 mt-auto">
         {footerExtra}
         <Button type="submit" loading={busy}>{submitLabel}</Button>
       </div>

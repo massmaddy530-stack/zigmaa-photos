@@ -9,6 +9,15 @@ echo.
 
 set ROOT_DIR=%~dp0
 
+:: 0. Free ports 3001 and 8001 if previously occupied by stale processes
+echo [0/2] Checking and freeing ports 3001 and 8001...
+for /f "tokens=5" %%a in ('netstat -aon ^| findstr ":3001" ^| findstr "LISTENING"') do (
+    taskkill /f /pid %%a >nul 2>&1
+)
+for /f "tokens=5" %%a in ('netstat -aon ^| findstr ":8001" ^| findstr "LISTENING"') do (
+    taskkill /f /pid %%a >nul 2>&1
+)
+
 :: 1. Ensure Frontend Production Build exists
 if not exist "%ROOT_DIR%frontend\.next\BUILD_ID" (
     echo [INFO] First-time setup: Building frontend for production...
