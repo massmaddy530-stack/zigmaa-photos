@@ -279,7 +279,7 @@ class BuffaloLAnalyzer:
             dets, kps = self._detect(img)
             detected_angle = 0
             if len(dets) == 0:
-                for angle in (90, 270, 180):
+                for angle in (90, 270):
                     rot_img = image.rotate(angle, expand=True)
                     rot_arr = np.asarray(rot_img.convert("RGB"))
                     rot_dets, rot_kps = self._detect(rot_arr)
@@ -368,7 +368,7 @@ class BuffaloSCAnalyzer:
             best_faces = raw_faces
             best_strength = sum(scores0)
 
-            for angle in (90, 270, 180):
+            for angle in (90, 270):
                 rot_img = proc_img.rotate(angle, expand=True)
                 rot_np = np.asarray(rot_img.convert("RGB"))[:, :, ::-1]
                 with self._lock:
@@ -379,6 +379,9 @@ class BuffaloSCAnalyzer:
                     best_strength = rot_strength
                     best_angle = angle
                     best_faces = rot_faces
+                    # If strong confident faces detected on rotated photo, stop checking further angles
+                    if any(s >= 0.70 for s in rot_scores) or len(rot_scores) >= 2:
+                        break
 
             if best_angle != 0:
                 detected_angle = best_angle

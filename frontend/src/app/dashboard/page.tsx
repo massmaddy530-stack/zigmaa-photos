@@ -26,7 +26,7 @@ import { useDebounced, useQuery } from "@/lib/hooks";
 const LIMIT = 12;
 
 export default function DashboardPage() {
-  const overview = useQuery(() => adminApi.overview(), [], { pollMs: 10_000 });
+  const overview = useQuery(() => adminApi.overview(), [], { pollMs: 20_000 });
   const o = overview.data;
   const loading = overview.loading && !o;
 

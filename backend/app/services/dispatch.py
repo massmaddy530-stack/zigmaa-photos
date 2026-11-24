@@ -29,6 +29,7 @@ def _thread_job(photo_id: uuid.UUID) -> None:
     for attempt in range(1, max_attempts + 1):
         try:
             asyncio.run(run_index_isolated(photo_id, attempt, max_attempts, None))
+            time.sleep(0.05)
             return
         except TransientProcessingError as exc:
             last_err = str(exc)

@@ -128,8 +128,14 @@ async function request<T>(url: string, opts: RequestOpts = {}, extraHeaders: Rec
   // Gracefully handle 429 Too Many Requests with automated backoff retry
   if (res.status === 429 && retries > 0 && !opts.signal?.aborted) {
     const retryAfterHeader = res.headers.get("retry-after");
-    const waitSec = retryAfterHeader && /^\d+$/.test(retryAfterHeader) ? Math.min(Number(retryAfterHeader), 5) : (3 - retries) * 1.5;
+    const waitSec = retryAfterHeader && /^\d+$/.test(retryAfterHeader) ? Math.min(Number(retryAfterHeader), 8) : 2.0 * (3 - retries);
     await sleep(waitSec * 1000);
+    return request<T>(url, opts, extraHeaders, retries - 1);
+  }
+
+  // Gracefully handle 502 / 503 / 504 Gateway errors with retry (Render spin-up / transient restart)
+  if ([502, 503, 504].includes(res.status) && retries > 0 && !opts.signal?.aborted) {
+    await sleep(2000 * (3 - retries));
     return request<T>(url, opts, extraHeaders, retries - 1);
   }
 
@@ -218,8 +224,8 @@ export const adminApi = {
       method: "POST",
       query: { only_zero_faces: onlyZeroFaces },
     }),
-  retryPhoto: (eventId: string, photoId: string) =>
-    admin<RetryResponse>(`events/${eventId}/photos/${photoId}/retry`, { method: "POST" }),
+  retryPhoto: (eventId: string, photoId: string, force = true) =>
+    admin<RetryResponse>(`events/${eventId}/photos/${photoId}/retry`, { method: "POST", query: { force } }),
   retryFailed: (eventId: string, includePending = true) =>
     admin<RetryResponse>(`events/${eventId}/photos/retry-failed`, {
       method: "POST",

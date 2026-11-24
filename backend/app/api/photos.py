@@ -238,11 +238,16 @@ async def get_photo(event_id: uuid.UUID, photo_id: uuid.UUID, session: SessionDe
 
 @router.post("/{photo_id}/retry", response_model=RetryResponse, status_code=status.HTTP_202_ACCEPTED,
              dependencies=[Depends(require_admin)])
-async def retry_photo(event_id: uuid.UUID, photo_id: uuid.UUID, session: SessionDep) -> RetryResponse:
+async def retry_photo(
+    event_id: uuid.UUID,
+    photo_id: uuid.UUID,
+    session: SessionDep,
+    force: Annotated[bool, Query()] = False,
+) -> RetryResponse:
     photo = await _get_photo(session, event_id, photo_id)
-    if photo.status == PhotoStatus.indexed:
+    if photo.status == PhotoStatus.indexed and not force:
         raise ConflictError("Photo is already indexed", code="already_indexed")
-    ids = await reset_for_retry(session, [photo.id])
+    ids = await reset_for_retry(session, [photo.id], force=force)
     await _enqueue_or_503(ids)
     return RetryResponse(queued=len(ids), photo_ids=ids)
 

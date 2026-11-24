@@ -127,8 +127,37 @@ async function proxy(req: NextRequest, ctx: { params: Promise<{ path: string[] }
         return errorJson(502, "backend_unreachable", "The API server is not reachable.");
       }
     } else {
-      return errorJson(502, "backend_unreachable", "The API server is not reachable.");
+      // Production on Vercel: retry once after 1s in case Render is spinning up
+      try {
+        await new Promise((r) => setTimeout(r, 1000));
+        upstream = await fetch(target, {
+          method: req.method,
+          headers,
+          body: hasBody ? req.body : undefined,
+          cache: "no-store",
+          redirect: "manual",
+          ...(hasBody ? { duplex: "half" } : {}),
+        } as RequestInit);
+      } catch {
+        return errorJson(502, "backend_unreachable", "The API server is not reachable.");
+      }
     }
+  }
+
+  // Gracefully handle upstream 502/503/504 on Render wakeups for GET requests
+  if ([502, 503, 504].includes(upstream.status) && (req.method === "GET" || req.method === "HEAD")) {
+    try {
+      await new Promise((r) => setTimeout(r, 1200));
+      const retryUpstream = await fetch(target, {
+        method: req.method,
+        headers,
+        cache: "no-store",
+        redirect: "manual",
+      });
+      if (retryUpstream.ok || retryUpstream.status < 500) {
+        upstream = retryUpstream;
+      }
+    } catch {}
   }
 
   // The backend only answers 401/403 when it rejects the API key itself: a server misconfiguration, not an
