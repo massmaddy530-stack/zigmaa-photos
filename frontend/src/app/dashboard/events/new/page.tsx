@@ -6,6 +6,7 @@ import {
   ChevronLeft,
   Move,
   RotateCcw,
+  RotateCw,
   Sparkles,
   Sliders,
 } from "lucide-react";
@@ -13,6 +14,7 @@ import { useRef, useState } from "react";
 import { PageHeader } from "@/components/app-shell";
 import { EventForm, type TemplateItem } from "@/components/event-form";
 import { TemplateDesignerModal, type GeneratedTemplateResult } from "@/components/template-designer-modal";
+import { WatermarkOverlayBox } from "@/components/watermark-overlay-box";
 import { Button } from "@/components/ui/button";
 import { Card, CardHeader } from "@/components/ui/primitives";
 import { useToast } from "@/components/ui/toast";
@@ -107,17 +109,17 @@ export default function NewEventPage() {
   }
 
   // Direct mouse & touch dragging on photo
-  function startDrag(e: React.PointerEvent<HTMLDivElement>, targetId: string) {
+  function startDrag(e: React.PointerEvent, targetId: string) {
     e.stopPropagation();
     e.preventDefault();
-    setActiveTemplateId(targetId);
+    if (targetId !== "default") setActiveTemplateId(targetId);
     setDraggingId(targetId);
 
     const startX = e.clientX;
     const startY = e.clientY;
     const targetItem = templateItems.find((t) => t.id === targetId);
-    const startXPercent = targetItem?.xPercent ?? 88;
-    const startYPercent = targetItem?.yPercent ?? 88;
+    const startXPercent = targetItem?.xPercent ?? wm.xPercent ?? 88;
+    const startYPercent = targetItem?.yPercent ?? wm.yPercent ?? 88;
 
     const onPointerMove = (moveEvent: PointerEvent) => {
       if (!previewRef.current) return;
@@ -263,6 +265,8 @@ export default function NewEventPage() {
                         xPercent: item.xPercent ?? 88,
                         yPercent: item.yPercent ?? 88,
                         sizePercent: item.sizePercent ?? 14,
+                        heightPercent: item.heightPercent,
+                        rotation: item.rotation ?? 0,
                         opacity: item.opacity ?? 0.40,
                         enabled: item.enabled !== false,
                         color: wm.color ?? "original",
@@ -370,68 +374,52 @@ export default function NewEventPage() {
                     const opVal = t.opacity ?? 0.40;
 
                     return (
-                      <div
+                      <WatermarkOverlayBox
                         key={t.id}
-                        onPointerDown={(e) => startDrag(e, t.id)}
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          setActiveTemplateId(t.id);
+                        src={t.preview}
+                        alt={t.name}
+                        isEditing={isEditing}
+                        isDragging={draggingId === t.id}
+                        xPercent={xPct}
+                        yPercent={yPct}
+                        sizePercent={sizePct}
+                        heightPercent={t.heightPercent}
+                        rotation={t.rotation ?? 0}
+                        opacity={opVal}
+                        filterCss={getFilterCss(wm.color)}
+                        previewRef={previewRef}
+                        onSelect={() => setActiveTemplateId(t.id)}
+                        onStartDrag={(e) => startDrag(e, t.id)}
+                        onTransformChange={(patch) => {
+                          setTemplateItems((prev) =>
+                            prev.map((item) => (item.id === t.id ? { ...item, ...patch } : item))
+                          );
+                          setWm((prev) => ({ ...prev, ...patch }));
                         }}
-                        style={{
-                          position: "absolute",
-                          left: `${xPct}%`,
-                          top: `${yPct}%`,
-                          transform: `translate(-${xPct}%, -${yPct}%)`,
-                          width: `${sizePct}%`,
-                          opacity: opVal,
-                          cursor: draggingId === t.id ? "grabbing" : "grab",
-                          touchAction: "none",
-                          userSelect: "none",
-                        }}
-                        className={`transition-opacity duration-150 select-none ${
-                          isEditing ? "ring-1 ring-white/50 rounded" : ""
-                        }`}
-                        title={`Drag to reposition "${t.name}" or select to edit`}
-                      >
-                        <img
-                          src={t.preview}
-                          alt={t.name}
-                          draggable={false}
-                          style={{
-                            width: "100%",
-                            height: "auto",
-                            display: "block",
-                            filter: getFilterCss(wm.color),
-                            pointerEvents: "none",
-                          }}
-                        />
-                      </div>
+                        title={`Drag to move "${t.name}", use arrows to resize width/height, or top handle to rotate`}
+                      />
                     );
                   })
                 ) : (
-                  <div
-                    style={{
-                      position: "absolute",
-                      left: `${wm.xPercent}%`,
-                      top: `${wm.yPercent}%`,
-                      transform: `translate(-${wm.xPercent}%, -${wm.yPercent}%)`,
-                      width: `${wm.sizePercent}%`,
-                      opacity: wm.opacity,
-                      pointerEvents: "none",
-                      transition: "opacity 0.15s ease",
+                  <WatermarkOverlayBox
+                    src="/watermark.png"
+                    alt="Watermark Overlay"
+                    isEditing={true}
+                    isDragging={draggingId === "default"}
+                    xPercent={wm.xPercent ?? 88}
+                    yPercent={wm.yPercent ?? 88}
+                    sizePercent={wm.sizePercent ?? 14}
+                    heightPercent={wm.heightPercent}
+                    rotation={wm.rotation ?? 0}
+                    opacity={wm.opacity ?? 0.40}
+                    filterCss={getFilterCss(wm.color)}
+                    previewRef={previewRef}
+                    onStartDrag={(e) => startDrag(e, "default")}
+                    onTransformChange={(patch) => {
+                      setWm((prev) => ({ ...prev, ...patch }));
                     }}
-                  >
-                    <img
-                      src="/watermark.png"
-                      alt="Watermark Overlay"
-                      style={{
-                        width: "100%",
-                        height: "auto",
-                        display: "block",
-                        filter: getFilterCss(wm.color),
-                      }}
-                    />
-                  </div>
+                    title="Drag to move, use arrows to resize width/height, or top handle to rotate"
+                  />
                 )}
               </div>
             </div>
@@ -535,17 +523,17 @@ export default function NewEventPage() {
                 </div>
               </div>
 
-              {/* Sliders: Size & Transparency */}
-              <div className="grid gap-5 sm:grid-cols-2 pt-1">
-                {/* Size & Scale Control */}
+              {/* Sliders: Width, Height, Rotation & Transparency */}
+              <div className="grid gap-4 sm:grid-cols-2 pt-1">
+                {/* Width Control */}
                 <div>
-                  <div className="mb-2 flex items-center justify-between">
+                  <div className="mb-1.5 flex items-center justify-between">
                     <label className="text-xs font-semibold uppercase tracking-wider text-muted flex items-center gap-1.5">
                       <Sliders className="h-3.5 w-3.5 text-brand-600" />
-                      <span>Watermark Size {activeEditingItem ? `(${activeEditingItem.name})` : ""}</span>
+                      <span>Width {activeEditingItem ? `(${activeEditingItem.name})` : ""}</span>
                     </label>
                     <span className="text-xs font-mono font-medium text-ink">
-                      {activeEditingItem?.sizePercent ?? wm.sizePercent ?? 14}% of photo width
+                      {activeEditingItem?.sizePercent ?? wm.sizePercent ?? 14}%
                     </span>
                   </div>
                   <input
@@ -565,16 +553,122 @@ export default function NewEventPage() {
                       }
                       setWm((prev) => ({ ...prev, sizePercent: newSize }));
                     }}
-                    className="w-full accent-brand-500 cursor-pointer h-2 bg-line rounded-lg mt-2"
+                    className="w-full accent-brand-500 cursor-pointer h-1.5 bg-line rounded-lg mt-1"
+                  />
+                </div>
+
+                {/* Height Control */}
+                <div>
+                  <div className="mb-1.5 flex items-center justify-between">
+                    <label className="text-xs font-semibold uppercase tracking-wider text-muted flex items-center gap-1.5">
+                      <Sliders className="h-3.5 w-3.5 text-brand-600" />
+                      <span>Height</span>
+                    </label>
+                    <div className="flex items-center gap-2">
+                      <span className="text-xs font-mono font-medium text-ink">
+                        {(activeEditingItem?.heightPercent ?? wm.heightPercent ?? 0) > 0
+                          ? `${activeEditingItem?.heightPercent ?? wm.heightPercent}%`
+                          : "Auto"}
+                      </span>
+                      {(activeEditingItem?.heightPercent ?? wm.heightPercent ?? 0) > 0 && (
+                        <button
+                          type="button"
+                          onClick={() => {
+                            if (activeEditingItem) {
+                              setTemplateItems((prev) =>
+                                prev.map((t) =>
+                                  t.id === activeEditingItem.id ? { ...t, heightPercent: undefined } : t
+                                )
+                              );
+                            }
+                            setWm((prev) => ({ ...prev, heightPercent: undefined }));
+                          }}
+                          className="text-[10px] text-brand-600 hover:underline cursor-pointer"
+                        >
+                          Auto
+                        </button>
+                      )}
+                    </div>
+                  </div>
+                  <input
+                    type="range"
+                    min={5}
+                    max={100}
+                    step={1}
+                    value={activeEditingItem?.heightPercent ?? wm.heightPercent ?? 20}
+                    onChange={(e) => {
+                      const newHeight = Number(e.target.value);
+                      if (activeEditingItem) {
+                        setTemplateItems((prev) =>
+                          prev.map((t) =>
+                            t.id === activeEditingItem.id ? { ...t, heightPercent: newHeight } : t
+                          )
+                        );
+                      }
+                      setWm((prev) => ({ ...prev, heightPercent: newHeight }));
+                    }}
+                    className="w-full accent-brand-500 cursor-pointer h-1.5 bg-line rounded-lg mt-1"
+                  />
+                </div>
+
+                {/* Rotation Control */}
+                <div>
+                  <div className="mb-1.5 flex items-center justify-between">
+                    <label className="text-xs font-semibold uppercase tracking-wider text-muted flex items-center gap-1.5">
+                      <RotateCw className="h-3.5 w-3.5 text-brand-600" />
+                      <span>Rotate</span>
+                    </label>
+                    <div className="flex items-center gap-2">
+                      <span className="text-xs font-mono font-medium text-ink">
+                        {activeEditingItem?.rotation ?? wm.rotation ?? 0}°
+                      </span>
+                      {(activeEditingItem?.rotation ?? wm.rotation ?? 0) !== 0 && (
+                        <button
+                          type="button"
+                          onClick={() => {
+                            if (activeEditingItem) {
+                              setTemplateItems((prev) =>
+                                prev.map((t) =>
+                                  t.id === activeEditingItem.id ? { ...t, rotation: 0 } : t
+                                )
+                              );
+                            }
+                            setWm((prev) => ({ ...prev, rotation: 0 }));
+                          }}
+                          className="text-[10px] text-brand-600 hover:underline cursor-pointer"
+                        >
+                          0°
+                        </button>
+                      )}
+                    </div>
+                  </div>
+                  <input
+                    type="range"
+                    min={-180}
+                    max={180}
+                    step={1}
+                    value={activeEditingItem?.rotation ?? wm.rotation ?? 0}
+                    onChange={(e) => {
+                      const newRot = Number(e.target.value);
+                      if (activeEditingItem) {
+                        setTemplateItems((prev) =>
+                          prev.map((t) =>
+                            t.id === activeEditingItem.id ? { ...t, rotation: newRot } : t
+                          )
+                        );
+                      }
+                      setWm((prev) => ({ ...prev, rotation: newRot }));
+                    }}
+                    className="w-full accent-brand-500 cursor-pointer h-1.5 bg-line rounded-lg mt-1"
                   />
                 </div>
 
                 {/* Transparency / Opacity Control */}
                 <div>
-                  <div className="mb-2 flex items-center justify-between">
+                  <div className="mb-1.5 flex items-center justify-between">
                     <label className="text-xs font-semibold uppercase tracking-wider text-muted flex items-center gap-1.5">
                       <Sparkles className="h-3.5 w-3.5 text-brand-600" />
-                      <span>Transparency / Opacity {activeEditingItem ? `(${activeEditingItem.name})` : ""}</span>
+                      <span>Opacity</span>
                     </label>
                     <span className="text-xs font-mono font-medium text-ink">
                       {Math.round(((activeEditingItem?.opacity ?? wm.opacity ?? 0.40) > 1 ? (activeEditingItem?.opacity ?? wm.opacity ?? 0.40) / 100 : (activeEditingItem?.opacity ?? wm.opacity ?? 0.40)) * 100)}%
@@ -597,7 +691,7 @@ export default function NewEventPage() {
                       }
                       setWm((prev) => ({ ...prev, opacity: newOpacity }));
                     }}
-                    className="w-full accent-brand-500 cursor-pointer h-2 bg-line rounded-lg mt-2"
+                    className="w-full accent-brand-500 cursor-pointer h-1.5 bg-line rounded-lg mt-1"
                   />
                 </div>
               </div>

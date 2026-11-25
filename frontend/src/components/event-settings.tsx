@@ -1,7 +1,7 @@
 "use client";
 
 import { useRouter } from "next/navigation";
-import { Eye, EyeOff, ImagePlus, Move, Palette, RotateCcw, Sliders, Sparkles, Upload, X } from "lucide-react";
+import { Eye, EyeOff, ImagePlus, Move, Palette, RotateCcw, RotateCw, Sliders, Sparkles, Upload, X } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 import { adminApi, errorMessage } from "@/lib/api";
 import { ACCEPTED_IMAGE_TYPES, MAX_UPLOAD_MB } from "@/lib/config";
@@ -11,6 +11,7 @@ import type { EventOut } from "@/lib/types";
 import { CoverImage } from "./event-card";
 import { EventForm } from "./event-form";
 import { TemplateDesignerModal, type GeneratedTemplateResult } from "./template-designer-modal";
+import { WatermarkOverlayBox } from "./watermark-overlay-box";
 import { Button } from "./ui/button";
 import { ConfirmDialog } from "./ui/modal";
 import { Card, CardHeader, Field, Input } from "./ui/primitives";
@@ -295,7 +296,7 @@ export function EventSettings({ event, onSaved }: { event: EventOut; onSaved: (e
     setPosition(x, y);
   }
 
-  function startDrag(e: React.PointerEvent<HTMLDivElement>, targetId: string) {
+  function startDrag(e: React.PointerEvent, targetId: string) {
     e.stopPropagation();
     e.preventDefault();
     setDraggingId(targetId);
@@ -557,7 +558,7 @@ export function EventSettings({ event, onSaved }: { event: EventOut; onSaved: (e
                       onClick={() => setShowDesigner(true)}
                       icon={<Palette className="h-4 w-4 text-brand-600" />}
                     >
-                      Customize Template
+                      Customize Template / Watermark
                     </Button>
                     <Button
                       type="button"
@@ -567,7 +568,7 @@ export function EventSettings({ event, onSaved }: { event: EventOut; onSaved: (e
                       onClick={() => templateRef.current?.click()}
                       icon={<Upload className="h-4 w-4" />}
                     >
-                      + Upload custom
+                      + Upload Template / Watermark
                     </Button>
                   </div>
                 </div>
@@ -580,8 +581,8 @@ export function EventSettings({ event, onSaved }: { event: EventOut; onSaved: (e
                     onClick={() => setShowDesigner(true)}
                     icon={<Palette className="h-5 w-5 text-brand-600" />}
                   >
-                    <span className="font-bold text-sm">Customize Template</span>
-                    <span className="text-[11px] font-normal text-muted">Customize classic arched banner</span>
+                    <span className="font-bold text-sm">Customize Template / Watermark</span>
+                    <span className="text-[11px] font-normal text-muted">Create or edit banner watermark</span>
                   </Button>
                   <Button
                     type="button"
@@ -590,7 +591,7 @@ export function EventSettings({ event, onSaved }: { event: EventOut; onSaved: (e
                     onClick={() => templateRef.current?.click()}
                     icon={<ImagePlus className="h-5 w-5 text-brand-600" />}
                   >
-                    <span className="font-medium text-brand-700">Upload custom watermark</span>
+                    <span className="font-medium text-brand-700">Upload Template / Watermark</span>
                     <span className="text-[11px] text-muted">PNG, SVG with transparency</span>
                   </Button>
                 </div>
@@ -641,68 +642,66 @@ export function EventSettings({ event, onSaved }: { event: EventOut; onSaved: (e
                     const xPct = isEditing ? (wm.xPercent ?? t.xPercent ?? 88) : (t.xPercent ?? 88);
                     const yPct = isEditing ? (wm.yPercent ?? t.yPercent ?? 88) : (t.yPercent ?? 88);
                     const sizePct = isEditing ? (wm.sizePercent ?? t.sizePercent ?? 14) : (t.sizePercent ?? 14);
+                    const heightPct = isEditing ? (wm.heightPercent ?? t.heightPercent) : t.heightPercent;
+                    const rotDeg = isEditing ? (wm.rotation ?? t.rotation ?? 0) : (t.rotation ?? 0);
                     const opVal = isEditing ? (wm.opacity ?? t.opacity ?? 0.40) : (t.opacity ?? 0.40);
 
                     return (
-                      <div
+                      <WatermarkOverlayBox
                         key={t.id}
-                        onPointerDown={(e) => startDrag(e, t.id)}
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          selectTemplate(t);
+                        src={t.dataUrl}
+                        alt={t.name}
+                        isEditing={isEditing}
+                        isDragging={draggingId === t.id}
+                        xPercent={xPct}
+                        yPercent={yPct}
+                        sizePercent={sizePct}
+                        heightPercent={heightPct}
+                        rotation={rotDeg}
+                        opacity={opVal}
+                        previewRef={previewRef}
+                        onSelect={() => selectTemplate(t)}
+                        onStartDrag={(e) => startDrag(e, t.id)}
+                        onTransformChange={(patch) => {
+                          setWm((prev) => {
+                            const next = {
+                              ...prev,
+                              ...patch,
+                              templates: (prev.templates || []).map((item) =>
+                                item.id === t.id ? { ...item, ...patch } : item
+                              ),
+                            };
+                            saveEventWatermarkConfig(event.id, event.slug, next);
+                            return next;
+                          });
                         }}
-                        style={{
-                          position: "absolute",
-                          left: `${xPct}%`,
-                          top: `${yPct}%`,
-                          transform: `translate(-${xPct}%, -${yPct}%)`,
-                          width: `${sizePct}%`,
-                          opacity: opVal,
-                          cursor: draggingId === t.id ? "grabbing" : "grab",
-                          touchAction: "none",
-                          userSelect: "none",
-                        }}
-                        className={`transition-opacity duration-150 select-none ${
-                          isEditing ? "ring-2 ring-brand-500 rounded shadow-md" : ""
-                        }`}
-                        title={`Drag to reposition "${t.name}" or click to select`}
-                      >
-                        <img
-                          src={t.dataUrl}
-                          alt={t.name}
-                          draggable={false}
-                          style={{
-                            width: "100%",
-                            height: "auto",
-                            display: "block",
-                            pointerEvents: "none",
-                          }}
-                        />
-                      </div>
+                        title={`Drag to move "${t.name}", use arrows to resize width/height, or top handle to rotate`}
+                      />
                     );
                   })
                 ) : (
-                  <div
-                    style={{
-                      position: "absolute",
-                      left: `${wm.xPercent}%`,
-                      top: `${wm.yPercent}%`,
-                      transform: `translate(-${wm.xPercent}%, -${wm.yPercent}%)`,
-                      width: `${wm.sizePercent}%`,
-                      opacity: wm.opacity,
-                      pointerEvents: "none",
+                  <WatermarkOverlayBox
+                    src={wm.imageUrl || "/watermark.png"}
+                    alt="Watermark"
+                    isEditing={true}
+                    isDragging={draggingId === "default"}
+                    xPercent={wm.xPercent ?? 88}
+                    yPercent={wm.yPercent ?? 88}
+                    sizePercent={wm.sizePercent ?? 14}
+                    heightPercent={wm.heightPercent}
+                    rotation={wm.rotation ?? 0}
+                    opacity={wm.opacity ?? 0.40}
+                    previewRef={previewRef}
+                    onStartDrag={(e) => startDrag(e, "default")}
+                    onTransformChange={(patch) => {
+                      setWm((prev) => {
+                        const next = { ...prev, ...patch };
+                        saveEventWatermarkConfig(event.id, event.slug, next);
+                        return next;
+                      });
                     }}
-                  >
-                    <img
-                      src={wm.imageUrl || "/watermark.png"}
-                      alt="Watermark"
-                      style={{
-                        width: "100%",
-                        height: "auto",
-                        display: "block",
-                      }}
-                    />
-                  </div>
+                    title="Drag to move, use arrows to resize width/height, or top handle to rotate"
+                  />
                 )}
               </div>
             </div>
@@ -761,76 +760,198 @@ export function EventSettings({ event, onSaved }: { event: EventOut; onSaved: (e
               </div>
             </div>
 
-            {/* Size Slider */}
-            <div>
-              <div className="mb-1.5 flex items-center justify-between text-xs">
-                <span className="font-semibold uppercase tracking-wider text-muted flex items-center gap-1">
-                  <Sliders className="h-3 w-3 text-brand-600" /> Size{" "}
-                  {activeTemplateItem ? `(${activeTemplateItem.name})` : ""}
-                </span>
-                <span className="font-mono font-medium text-ink">
-                  {safeSize}%
-                </span>
+            {/* Width & Height Sliders */}
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              <div>
+                <div className="mb-1.5 flex items-center justify-between text-xs">
+                  <span className="font-semibold uppercase tracking-wider text-muted flex items-center gap-1">
+                    <Sliders className="h-3 w-3 text-brand-600" /> Width{" "}
+                    {activeTemplateItem ? `(${activeTemplateItem.name})` : ""}
+                  </span>
+                  <span className="font-mono font-medium text-ink">
+                    {safeSize}%
+                  </span>
+                </div>
+                <input
+                  type="range"
+                  min={5}
+                  max={100}
+                  step={1}
+                  value={safeSize}
+                  onChange={(e) => {
+                    const val = Number(e.target.value);
+                    const activeId = wm.activeTemplateId || wm.templates?.[0]?.id;
+                    setWm((prev) => {
+                      const next = {
+                        ...prev,
+                        sizePercent: val,
+                        templates: (prev.templates || []).map((t) =>
+                          t.id === activeId ? { ...t, sizePercent: val } : t
+                        ),
+                      };
+                      saveEventWatermarkConfig(event.id, event.slug, next);
+                      return next;
+                    });
+                  }}
+                  className="w-full accent-brand-500 cursor-pointer h-1.5 bg-line rounded-lg"
+                />
               </div>
-              <input
-                type="range"
-                min={5}
-                max={100}
-                step={1}
-                value={safeSize}
-                onChange={(e) => {
-                  const val = Number(e.target.value);
-                  const activeId = wm.activeTemplateId || wm.templates?.[0]?.id;
-                  setWm((prev) => {
-                    const next = {
-                      ...prev,
-                      sizePercent: val,
-                      templates: (prev.templates || []).map((t) =>
-                        t.id === activeId ? { ...t, sizePercent: val } : t
-                      ),
-                    };
-                    saveEventWatermarkConfig(event.id, event.slug, next);
-                    return next;
-                  });
-                }}
-                className="w-full accent-brand-500 cursor-pointer h-1.5 bg-line rounded-lg"
-              />
+
+              <div>
+                <div className="mb-1.5 flex items-center justify-between text-xs">
+                  <span className="font-semibold uppercase tracking-wider text-muted flex items-center gap-1">
+                    <Sliders className="h-3 w-3 text-brand-600" /> Height
+                  </span>
+                  <div className="flex items-center gap-2">
+                    <span className="font-mono font-medium text-ink">
+                      {(activeTemplateItem?.heightPercent ?? wm.heightPercent ?? 0) > 0
+                        ? `${activeTemplateItem?.heightPercent ?? wm.heightPercent}%`
+                        : "Auto"}
+                    </span>
+                    {(activeTemplateItem?.heightPercent ?? wm.heightPercent ?? 0) > 0 && (
+                      <button
+                        type="button"
+                        onClick={() => {
+                          const activeId = wm.activeTemplateId || wm.templates?.[0]?.id;
+                          setWm((prev) => {
+                            const next = {
+                              ...prev,
+                              heightPercent: undefined,
+                              templates: (prev.templates || []).map((t) =>
+                                t.id === activeId ? { ...t, heightPercent: undefined } : t
+                              ),
+                            };
+                            saveEventWatermarkConfig(event.id, event.slug, next);
+                            return next;
+                          });
+                        }}
+                        className="text-[10px] text-brand-600 hover:underline cursor-pointer"
+                      >
+                        Auto
+                      </button>
+                    )}
+                  </div>
+                </div>
+                <input
+                  type="range"
+                  min={5}
+                  max={100}
+                  step={1}
+                  value={activeTemplateItem?.heightPercent ?? wm.heightPercent ?? 20}
+                  onChange={(e) => {
+                    const val = Number(e.target.value);
+                    const activeId = wm.activeTemplateId || wm.templates?.[0]?.id;
+                    setWm((prev) => {
+                      const next = {
+                        ...prev,
+                        heightPercent: val,
+                        templates: (prev.templates || []).map((t) =>
+                          t.id === activeId ? { ...t, heightPercent: val } : t
+                        ),
+                      };
+                      saveEventWatermarkConfig(event.id, event.slug, next);
+                      return next;
+                    });
+                  }}
+                  className="w-full accent-brand-500 cursor-pointer h-1.5 bg-line rounded-lg"
+                />
+              </div>
             </div>
 
-            {/* Opacity Slider */}
-            <div>
-              <div className="mb-1.5 flex items-center justify-between text-xs">
-                <span className="font-semibold uppercase tracking-wider text-muted flex items-center gap-1">
-                  <Sparkles className="h-3 w-3 text-brand-600" /> Opacity{" "}
-                  {activeTemplateItem ? `(${activeTemplateItem.name})` : ""}
-                </span>
-                <span className="font-mono font-medium text-ink">
-                  {Math.round(safeOpacity * 100)}%
-                </span>
+            {/* Rotation & Opacity Sliders */}
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              <div>
+                <div className="mb-1.5 flex items-center justify-between text-xs">
+                  <span className="font-semibold uppercase tracking-wider text-muted flex items-center gap-1">
+                    <RotateCw className="h-3 w-3 text-brand-600" /> Rotate
+                  </span>
+                  <div className="flex items-center gap-2">
+                    <span className="font-mono font-medium text-ink">
+                      {activeTemplateItem?.rotation ?? wm.rotation ?? 0}°
+                    </span>
+                    {(activeTemplateItem?.rotation ?? wm.rotation ?? 0) !== 0 && (
+                      <button
+                        type="button"
+                        onClick={() => {
+                          const activeId = wm.activeTemplateId || wm.templates?.[0]?.id;
+                          setWm((prev) => {
+                            const next = {
+                              ...prev,
+                              rotation: 0,
+                              templates: (prev.templates || []).map((t) =>
+                                t.id === activeId ? { ...t, rotation: 0 } : t
+                              ),
+                            };
+                            saveEventWatermarkConfig(event.id, event.slug, next);
+                            return next;
+                          });
+                        }}
+                        className="text-[10px] text-brand-600 hover:underline cursor-pointer"
+                      >
+                        0°
+                      </button>
+                    )}
+                  </div>
+                </div>
+                <input
+                  type="range"
+                  min={-180}
+                  max={180}
+                  step={1}
+                  value={activeTemplateItem?.rotation ?? wm.rotation ?? 0}
+                  onChange={(e) => {
+                    const val = Number(e.target.value);
+                    const activeId = wm.activeTemplateId || wm.templates?.[0]?.id;
+                    setWm((prev) => {
+                      const next = {
+                        ...prev,
+                        rotation: val,
+                        templates: (prev.templates || []).map((t) =>
+                          t.id === activeId ? { ...t, rotation: val } : t
+                        ),
+                      };
+                      saveEventWatermarkConfig(event.id, event.slug, next);
+                      return next;
+                    });
+                  }}
+                  className="w-full accent-brand-500 cursor-pointer h-1.5 bg-line rounded-lg"
+                />
               </div>
-              <input
-                type="range"
-                min={0.1}
-                max={1.0}
-                step={0.05}
-                value={safeOpacity}
-                onChange={(e) => {
-                  const val = Number(e.target.value);
-                  const activeId = wm.activeTemplateId || wm.templates?.[0]?.id;
-                  setWm((prev) => {
-                    const next = {
-                      ...prev,
-                      opacity: val,
-                      templates: (prev.templates || []).map((t) =>
-                        t.id === activeId ? { ...t, opacity: val } : t
-                      ),
-                    };
-                    saveEventWatermarkConfig(event.id, event.slug, next);
-                    return next;
-                  });
-                }}
-                className="w-full accent-brand-500 cursor-pointer h-1.5 bg-line rounded-lg"
-              />
+
+              {/* Opacity Slider */}
+              <div>
+                <div className="mb-1.5 flex items-center justify-between text-xs">
+                  <span className="font-semibold uppercase tracking-wider text-muted flex items-center gap-1">
+                    <Sparkles className="h-3 w-3 text-brand-600" /> Opacity
+                  </span>
+                  <span className="font-mono font-medium text-ink">
+                    {Math.round(safeOpacity * 100)}%
+                  </span>
+                </div>
+                <input
+                  type="range"
+                  min={0.1}
+                  max={1.0}
+                  step={0.05}
+                  value={safeOpacity}
+                  onChange={(e) => {
+                    const val = Number(e.target.value);
+                    const activeId = wm.activeTemplateId || wm.templates?.[0]?.id;
+                    setWm((prev) => {
+                      const next = {
+                        ...prev,
+                        opacity: val,
+                        templates: (prev.templates || []).map((t) =>
+                          t.id === activeId ? { ...t, opacity: val } : t
+                        ),
+                      };
+                      saveEventWatermarkConfig(event.id, event.slug, next);
+                      return next;
+                    });
+                  }}
+                  className="w-full accent-brand-500 cursor-pointer h-1.5 bg-line rounded-lg"
+                />
+              </div>
             </div>
 
             {/* Save Watermark Settings Button */}

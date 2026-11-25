@@ -19,6 +19,8 @@ export interface TemplateItem {
   xPercent?: number;
   yPercent?: number;
   sizePercent?: number;
+  heightPercent?: number;
+  rotation?: number;
   opacity?: number;
   enabled?: boolean;
 }
@@ -415,7 +417,7 @@ export function EventForm({
                     className="flex items-center justify-center gap-2 rounded-xl border border-line bg-surface px-3 py-2.5 text-xs font-semibold text-ink hover:bg-canvas transition-colors shadow-xs cursor-pointer"
                   >
                     <Palette className="h-4 w-4 text-brand-600" />
-                    <span>Customize Template</span>
+                    <span>Customize Template / Watermark</span>
                   </button>
                   <button
                     type="button"
@@ -423,7 +425,7 @@ export function EventForm({
                     className="flex items-center justify-center gap-2 rounded-xl border border-dashed border-line bg-canvas/40 px-3 py-2.5 text-xs text-muted hover:border-brand-300 hover:bg-brand-50/30 transition-colors cursor-pointer"
                   >
                     <Upload className="h-4 w-4" />
-                    <span>+ Upload custom</span>
+                    <span>+ Upload Template / Watermark</span>
                   </button>
                 </div>
               </div>
@@ -435,8 +437,8 @@ export function EventForm({
                   className="flex flex-col items-center justify-center gap-1.5 rounded-xl border-2 border-brand-300 bg-brand-50/50 p-4 text-xs font-semibold text-brand-700 hover:bg-brand-100/70 transition-all cursor-pointer shadow-xs text-center"
                 >
                   <Palette className="h-5 w-5 text-brand-600" />
-                  <span className="font-bold text-sm">Customize Template</span>
-                  <span className="text-[11px] font-normal text-muted">Customize classic arched banner</span>
+                  <span className="font-bold text-sm">Customize Template / Watermark</span>
+                  <span className="text-[11px] font-normal text-muted">Create or edit banner watermark</span>
                 </button>
                 <button
                   type="button"
@@ -444,7 +446,7 @@ export function EventForm({
                   className="flex flex-col items-center justify-center gap-1.5 rounded-xl border-2 border-dashed border-line bg-canvas/40 p-4 text-xs text-muted hover:border-brand-300 hover:bg-brand-50/30 transition-all cursor-pointer text-center"
                 >
                   <ImagePlus className="h-5 w-5 text-brand-500" />
-                  <span className="font-medium text-brand-700">Upload custom watermark</span>
+                  <span className="font-medium text-brand-700">Upload Template / Watermark</span>
                   <span className="text-[11px] text-muted">PNG, SVG with transparency</span>
                 </button>
               </div>

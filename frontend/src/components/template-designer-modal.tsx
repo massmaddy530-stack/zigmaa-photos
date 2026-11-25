@@ -11,10 +11,6 @@ import {
   X,
   Minus,
   Plus,
-  Sparkles,
-  Upload,
-  Image as ImageIcon,
-  Trash2,
 } from "lucide-react";
 import { Button } from "./ui/button";
 import { Modal } from "./ui/modal";
@@ -67,159 +63,6 @@ const GOOGLE_FONTS_DEF = `
 @import url('https://fonts.googleapis.com/css2?family=Alex+Brush&family=Allura&family=Bodoni+Moda:ital,opsz,wght@0,6..96,400..700;1,6..96,400..700&family=Cinzel+Decorative:wght@700&family=Cinzel:wght@400;600;700&family=Cormorant+Garamond:ital,wght@0,500;0,600;0,700;1,400;1,600;1,700&family=Dancing+Script:wght@600;700&family=Great+Vibes&family=Italianno&family=Marcellus&family=Montserrat:wght@400;500;600;700&family=Parisienne&family=Pinyon+Script&family=Playfair+Display:ital,wght@0,400;0,600;0,700;1,400;1,600;1,700&family=Prata&display=swap');
 `;
 
-function getRenderedCustomSvg(
-  baseSvg: string,
-  params: {
-    names: string;
-    subtitle: string;
-    dateText: string;
-    fontFamily: string;
-    isItalic: boolean;
-    namesFontSize: number;
-    subtitleFontSize: number;
-    dateFontSize: number;
-    textColor: string;
-    bgColor: string;
-  }
-): string {
-  let svg = baseSvg;
-
-  // 1. Update Names
-  if (params.names) {
-    svg = svg.replace(
-      /(<text[^>]*id=["']svg-names["'][^>]*>)([\s\S]*?)(<\/text>)/i,
-      (_match, open, _oldText, close) => {
-        let updatedOpen = open;
-        const nameLen = params.names ? params.names.trim().length : 1;
-        const maxSafeWidth = 1060;
-        const requestedSize = params.namesFontSize || 72;
-        const estWidth = nameLen * (requestedSize * 0.58);
-        const safeFontSize = estWidth > maxSafeWidth
-          ? Math.max(24, Math.floor(requestedSize * (maxSafeWidth / estWidth)))
-          : requestedSize;
-
-        if (params.fontFamily) {
-          if (updatedOpen.includes("font-family:")) {
-            updatedOpen = updatedOpen.replace(
-              /font-family:\s*[^;"]+/i,
-              `font-family: '${params.fontFamily}', 'Playfair Display', Georgia, serif`
-            );
-          } else if (updatedOpen.includes("font-family=")) {
-            updatedOpen = updatedOpen.replace(
-              /font-family=["'][^"']*["']/i,
-              `font-family="'${params.fontFamily}', serif"`
-            );
-          } else {
-            updatedOpen = updatedOpen.replace(
-              /<text/i,
-              `<text font-family="'${params.fontFamily}', serif"`
-            );
-          }
-        }
-        if (safeFontSize) {
-          if (updatedOpen.includes("font-size:")) {
-            updatedOpen = updatedOpen.replace(
-              /font-size:\s*[^;"]+/i,
-              `font-size: ${safeFontSize}px`
-            );
-          } else if (updatedOpen.includes("font-size=")) {
-            updatedOpen = updatedOpen.replace(
-              /font-size=["'][^"']*["']/i,
-              `font-size="${safeFontSize}"`
-            );
-          } else {
-            updatedOpen = updatedOpen.replace(
-              /<text/i,
-              `<text font-size="${safeFontSize}"`
-            );
-          }
-        }
-        if (!updatedOpen.includes("dominant-baseline")) {
-          updatedOpen = updatedOpen.replace(/<text/i, '<text dominant-baseline="central"');
-        }
-        if (typeof params.isItalic === "boolean") {
-          if (updatedOpen.includes("font-style=")) {
-            updatedOpen = updatedOpen.replace(
-              /font-style=["'][^"']*["']/i,
-              `font-style="${params.isItalic ? "italic" : "normal"}"`
-            );
-          } else if (updatedOpen.includes("font-style:")) {
-            updatedOpen = updatedOpen.replace(
-              /font-style:\s*[^;"]+/i,
-              `font-style: ${params.isItalic ? "italic" : "normal"}`
-            );
-          } else {
-            updatedOpen = updatedOpen.replace(
-              /<text/i,
-              `<text font-style="${params.isItalic ? "italic" : "normal"}"`
-            );
-          }
-        }
-        return `${updatedOpen}${params.names}${close}`;
-      }
-    );
-  }
-
-  // 2. Update Subtitle
-  if (params.subtitle) {
-    svg = svg.replace(
-      /(<text[^>]*id=["']svg-subtitle["'][^>]*>)([\s\S]*?)(<\/text>)/i,
-      (_match, open, _oldText, close) => {
-        let updatedOpen = open;
-        if (params.subtitleFontSize) {
-          updatedOpen = updatedOpen.replace(
-            /font-size=["'][^"']*["']/i,
-            `font-size="${params.subtitleFontSize}"`
-          );
-        }
-        return `${updatedOpen}${params.subtitle}${close}`;
-      }
-    );
-  }
-
-  // 3. Update Date
-  if (params.dateText) {
-    svg = svg.replace(
-      /(<text[^>]*id=["']svg-date["'][^>]*>)([\s\S]*?)(<\/text>)/i,
-      (_match, open, _oldText, close) => {
-        let updatedOpen = open;
-        if (params.dateFontSize) {
-          updatedOpen = updatedOpen.replace(
-            /font-size=["'][^"']*["']/i,
-            `font-size="${params.dateFontSize}"`
-          );
-        }
-        return `${updatedOpen}${params.dateText}${close}`;
-      }
-    );
-  }
-
-  // 4. Update Background Color if set
-  if (params.bgColor) {
-    if (params.bgColor === "transparent") {
-      svg = svg.replace(/(<(?:rect|path)[^>]*id=["']svg-bg["'][^>]*)/i, `$1 opacity="0" `);
-    } else {
-      svg = svg.replace(
-        /(<(?:rect|path)[^>]*id=["']svg-bg["'][^>]*?)(fill=["'][^"']*["'])/i,
-        `$1fill="${params.bgColor}" opacity="1"`
-      );
-    }
-  }
-
-  // 5. Update Text Colors on text elements if not gradient
-  if (params.textColor) {
-    svg = svg.replace(
-      /(<text[^>]*id=["']svg-(?:names|subtitle|date|venue)["'][^>]*?)(fill=["'][^"']*["'])/gi,
-      (match, prefix, fillPart) => {
-        if (fillPart.includes("url(")) return match;
-        return `${prefix}fill="${params.textColor}"`;
-      }
-    );
-  }
-
-  return svg;
-}
-
 export function TemplateDesignerModal({
   isOpen,
   onClose,
@@ -254,19 +97,7 @@ export function TemplateDesignerModal({
   const [bgColor, setBgColor] = useState("#faf6ee");
   const [textColor, setTextColor] = useState("#581c25");
 
-  // User-uploaded custom background (from ChatGPT or other sources)
-  const [customBgImage, setCustomBgImage] = useState<string | null>(null);
-  const fileInputRef = useRef<HTMLInputElement>(null);
-
-  // Gemini AI Prompt Bar state
   const toast = useToast();
-  const [aiPrompt, setAiPrompt] = useState("");
-  const [isGenerating, setIsGenerating] = useState(false);
-
-  // AI Dynamic Custom SVG state (from route.ts)
-  const [isCustomAi, setIsCustomAi] = useState(false);
-  const [customSvgRaw, setCustomSvgRaw] = useState<string | null>(null);
-  const [themeName, setThemeName] = useState<string>("");
 
   // Refs for rendering
   const svgContainerRef = useRef<HTMLDivElement>(null);
@@ -297,78 +128,12 @@ export function TemplateDesignerModal({
 
   // When resetting or applying template attributes
   function handleSelectTemplate(tpl: EventTemplateItem) {
-    setIsCustomAi(false);
-    setCustomBgImage(null);
     setSubtitle(tpl.defaultSubtitle);
     setFontFamily(tpl.defaultFontFamily as SupportedFontFamily);
     if (typeof tpl.isItalic === "boolean") setIsItalic(tpl.isItalic);
     setBgColor(tpl.defaultBgColor);
     setTextColor(tpl.defaultTextColor);
     if (tpl.defaultVenue) setVenueText(tpl.defaultVenue);
-  }
-
-  // Handle User Uploading a custom background image (e.g. from ChatGPT)
-  function handleImageUpload(e: React.ChangeEvent<HTMLInputElement>) {
-    const file = e.target.files?.[0];
-    if (!file) return;
-    if (!file.type.startsWith("image/")) {
-      toast.error("Invalid file", "Please select a PNG or JPG image.");
-      return;
-    }
-    const reader = new FileReader();
-    reader.onload = () => {
-      setCustomBgImage(reader.result as string);
-      setIsCustomAi(false);
-      toast.success("Background Image Loaded!", "Custom image set. Customize your text and typography over it.");
-    };
-    reader.readAsDataURL(file);
-  }
-
-  // Handle AI Template Generation with Gemini / OpenAI
-  async function handleAiGenerate(promptToUse?: string) {
-    const text = (promptToUse ?? aiPrompt).trim();
-    if (!text) {
-      toast.error("Please enter a prompt for the template.");
-      return;
-    }
-    setIsGenerating(true);
-    try {
-      const res = await fetch("/api/template/ai-generate", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          prompt: text,
-          names: names.trim() || defaultEventName || "",
-          subtitle: subtitle.trim() || "",
-          dateText: dateText.trim() || defaultEventDate || "",
-          venueText: venueText.trim() || "",
-          textColor,
-          bgColor,
-          eventName: defaultEventName || "",
-        }),
-      });
-      const data = await res.json();
-      if (data.ok && data.isCustomSvg && data.svg) {
-        setIsCustomAi(true);
-        setCustomBgImage(null);
-        setCustomSvgRaw(data.svg);
-        if (data.themeName) setThemeName(data.themeName);
-        if (data.names) setNames(data.names);
-        if (data.subtitle) setSubtitle(data.subtitle);
-        if (data.dateText) setDateText(data.dateText);
-        if (data.venueText) setVenueText(data.venueText);
-        if (data.fontFamily) setFontFamily(data.fontFamily as SupportedFontFamily);
-        if (data.textColor) setTextColor(data.textColor);
-        if (data.bgColor) setBgColor(data.bgColor);
-        toast.success("AI Graphic Generated!", `Custom ${data.themeName || "template"} created for "${data.names || text}"`);
-      } else {
-        toast.error("Generation notice", data.error || "Please try again with a descriptive prompt.");
-      }
-    } catch {
-      toast.error("Network error", "Could not reach AI generation service.");
-    } finally {
-      setIsGenerating(false);
-    }
   }
 
   // Export SVG to high-res PNG and apply as watermark
@@ -427,11 +192,7 @@ export function TemplateDesignerModal({
 
             const result: GeneratedTemplateResult = {
               id: `tpl-${Date.now()}`,
-              name: customBgImage
-                ? "Custom Uploaded Graphic Watermark"
-                : isCustomAi
-                ? `AI Template (${themeName || "Custom"})`
-                : activeTemplate.name,
+              name: activeTemplate.name,
               preview: dataUrl,
               dataUrl,
               sizeBytes: blob.size,
@@ -482,45 +243,8 @@ export function TemplateDesignerModal({
       bgColor,
     };
 
-    if (customBgImage) {
-      // If user uploaded a custom background image (e.g. from ChatGPT DALL-E)
-      const subtitleY = 48;
-      const namesY = 118;
-      const dateY = 178;
-      const fontStack = `'${fontFamily}', 'Playfair Display', Georgia, serif`;
-
-      return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 240" width="1200" height="240">
-        <image href="${customBgImage}" x="0" y="0" width="1200" height="240" preserveAspectRatio="xMidYMid slice" />
-        <text id="svg-subtitle" x="600" y="${subtitleY}" text-anchor="middle" fill="${textColor}" style="font-family: 'Cinzel', serif; font-size: ${subtitleFontSize}px; letter-spacing: 4px; font-weight: 600; opacity: 0.95;">
-          ${subtitle.toUpperCase()}
-        </text>
-        <text id="svg-names" x="600" y="${namesY}" text-anchor="middle" dominant-baseline="central" fill="${textColor}" style="font-family: ${fontStack}; font-size: ${namesFontSize}px; font-style: ${isItalic ? "italic" : "normal"}; font-weight: ${isItalic ? 500 : 600};">
-          ${names}
-        </text>
-        <g fill="${textColor}">
-          <line x1="380" y1="${dateY - 5}" x2="475" y2="${dateY - 5}" stroke="${textColor}" stroke-width="1" opacity="0.5" />
-          <text id="svg-date" x="600" y="${dateY}" text-anchor="middle" fill="${textColor}" style="font-family: 'Cinzel', Georgia, serif; font-size: ${dateFontSize}px; letter-spacing: 3px; font-weight: 600;">
-            ${dateText.toUpperCase()}
-          </text>
-          <line x1="725" y1="${dateY - 5}" x2="820" y2="${dateY - 5}" stroke="${textColor}" stroke-width="1" opacity="0.5" />
-        </g>
-        ${venueText ? `
-          <text id="svg-venue" x="600" y="${dateY + 28}" text-anchor="middle" fill="${textColor}" style="font-family: 'Montserrat', sans-serif; font-size: 11px; letter-spacing: 2px; font-weight: 500; opacity: 0.8;">
-            ${venueText.toUpperCase()}
-          </text>
-        ` : ""}
-      </svg>`;
-    }
-
-    if (isCustomAi && customSvgRaw) {
-      return getRenderedCustomSvg(customSvgRaw, params);
-    }
-
     return activeTemplate.getSvg(params);
   }, [
-    customBgImage,
-    isCustomAi,
-    customSvgRaw,
     activeTemplate,
     names,
     subtitle,
@@ -547,7 +271,7 @@ export function TemplateDesignerModal({
             <div>
               <h2 className="text-base font-bold text-ink">Watermark Template Studio</h2>
               <p className="text-xs text-muted">
-                Straight Flat Ivory Banner default. Customize typography, colors, or generate custom designs with AI.
+                Straight Flat Ivory Banner default. Customize typography and colors.
               </p>
             </div>
           </div>
@@ -561,47 +285,6 @@ export function TemplateDesignerModal({
           </button>
         </div>
 
-        {/* AI Prompt Bar */}
-        <div className="border-b border-line bg-gradient-to-r from-brand-50/70 via-surface to-amber-50/50 px-6 py-2.5 space-y-2 shrink-0">
-          <div className="flex items-center gap-2">
-            <div className="relative flex-1">
-              <Sparkles className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-brand-500" />
-              <input
-                type="text"
-                value={aiPrompt}
-                onChange={(e) => setAiPrompt(e.target.value)}
-                onKeyDown={(e) => {
-                  if (e.key === "Enter" && !isGenerating) {
-                    e.preventDefault();
-                    handleAiGenerate();
-                  }
-                }}
-                placeholder="Ask AI to generate custom artwork (e.g. background bubble template, flowers, celebration balloons)..."
-                className="w-full rounded-xl border border-brand-200 bg-white pl-9 pr-3 py-1.5 text-xs text-ink placeholder:text-muted/65 focus:outline-none focus:ring-2 focus:ring-brand-500/20 focus:border-brand-500 shadow-2xs"
-              />
-            </div>
-
-            <button
-              type="button"
-              disabled={isGenerating}
-              onClick={() => handleAiGenerate()}
-              className="inline-flex items-center justify-center gap-1.5 rounded-xl bg-gradient-to-r from-brand-600 to-rose-600 px-4 py-1.5 text-xs font-bold text-white shadow-xs hover:from-brand-700 hover:to-rose-700 transition-all disabled:opacity-50 cursor-pointer shrink-0"
-            >
-              {isGenerating ? (
-                <>
-                  <span className="h-3.5 w-3.5 animate-spin rounded-full border-2 border-white/30 border-t-white" />
-                  <span>Generating...</span>
-                </>
-              ) : (
-                <>
-                  <Sparkles className="h-3.5 w-3.5" />
-                  <span>AI Generate</span>
-                </>
-              )}
-            </button>
-          </div>
-        </div>
-
         {/* Main Body: 2 Columns */}
         <div className="grid grid-cols-1 lg:grid-cols-12 min-h-0 flex-1 overflow-hidden">
           {/* Left Column: Live Preview Canvas (7 cols) */}
@@ -613,11 +296,7 @@ export function TemplateDesignerModal({
                 Live Preview (Transparent Grid)
               </span>
               <span className="text-[10px] text-muted bg-surface border border-line px-2 py-0.5 rounded-md font-medium">
-                {customBgImage
-                  ? "Custom Image Background"
-                  : isCustomAi
-                  ? "AI Vector Render"
-                  : `${activeTemplate.name} (Vector)`}
+                {`${activeTemplate.name} (Vector)`}
               </span>
             </div>
 
@@ -638,51 +317,8 @@ export function TemplateDesignerModal({
             </p>
           </div>
 
-          {/* Right Column: Event Categories, 10 Templates & Full Controls (5 cols) */}
+          {/* Right Column: Controls (5 cols) */}
           <div className="lg:col-span-5 p-5 space-y-4 overflow-y-auto max-h-[75vh]">
-            {/* Custom Background Image Active Notification */}
-            {customBgImage && (
-              <div className="rounded-xl border border-emerald-300 bg-emerald-50/80 p-2.5 flex items-center justify-between shadow-xs">
-                <div className="flex items-center gap-2">
-                  <ImageIcon className="h-4 w-4 text-emerald-600 shrink-0" />
-                  <div className="text-xs">
-                    <span className="font-bold text-emerald-950">Custom Image Active</span>
-                    <p className="text-[10px] text-emerald-700">Uploaded background image is set.</p>
-                  </div>
-                </div>
-                <button
-                  type="button"
-                  onClick={() => setCustomBgImage(null)}
-                  className="inline-flex items-center gap-1 text-[11px] font-semibold text-rose-700 hover:text-rose-900 bg-white border border-rose-200 px-2 py-0.5 rounded-lg transition-colors cursor-pointer"
-                >
-                  <Trash2 className="h-3 w-3" />
-                  <span>Remove</span>
-                </button>
-              </div>
-            )}
-
-            {/* Background Art / Custom Image Option */}
-            <div className="flex items-center justify-between pb-2 border-b border-line">
-              <div>
-                <span className="text-xs font-bold uppercase tracking-wider text-muted block">Background Art</span>
-                <span className="text-[10px] text-muted">Custom PNG / JPG image or AI artwork</span>
-              </div>
-              <button
-                type="button"
-                onClick={() => fileInputRef.current?.click()}
-                className="inline-flex items-center gap-1.5 text-xs font-semibold text-brand-700 hover:text-brand-900 bg-brand-50 hover:bg-brand-100 border border-brand-200 px-2.5 py-1 rounded-lg transition-colors cursor-pointer"
-              >
-                <Upload className="h-3.5 w-3.5" />
-                <span>Upload Image</span>
-              </button>
-              <input
-                ref={fileInputRef}
-                type="file"
-                accept="image/png,image/jpeg"
-                className="hidden"
-                onChange={handleImageUpload}
-              />
-            </div>
 
             {/* Text Content Fields */}
             <div className="space-y-2.5 pt-1">
@@ -965,8 +601,6 @@ export function TemplateDesignerModal({
             variant="outline"
             size="sm"
             onClick={() => {
-              setCustomBgImage(null);
-              setIsCustomAi(false);
               const defaultTpl = EVENT_TEMPLATES.find((t) => t.id === "wed-straight-flat") || EVENT_TEMPLATES[0];
               handleSelectTemplate(defaultTpl);
             }}

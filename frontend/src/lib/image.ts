@@ -110,7 +110,9 @@ export interface WatermarkTemplateItem {
   sizeBytes?: number;
   xPercent?: number; // 0 to 100
   yPercent?: number; // 0 to 100
-  sizePercent?: number; // 5 to 60 (relative to photo width)
+  sizePercent?: number; // 5 to 100 (relative to photo width)
+  heightPercent?: number; // optional explicit height (5 to 100% of photo height), undefined = auto aspect ratio
+  rotation?: number; // -180 to 180 degrees
   opacity?: number; // 0.1 to 1.0
   color?: "original" | "white" | "gold" | "dark" | string;
   enabled?: boolean; // default true
@@ -122,7 +124,9 @@ export interface WatermarkConfig {
   activeTemplateId?: string | null;
   xPercent?: number; // 0 to 100
   yPercent?: number; // 0 to 100
-  sizePercent?: number; // 5 to 60 (relative to photo width)
+  sizePercent?: number; // 5 to 100 (relative to photo width)
+  heightPercent?: number; // optional explicit height (5 to 100% of photo height)
+  rotation?: number; // -180 to 180 degrees
   opacity?: number; // 0.1 to 1.0
   color?: "original" | "white" | "gold" | "dark" | string;
 }
@@ -341,6 +345,8 @@ export async function applyWatermark(blob: Blob, customConfig?: WatermarkConfig)
           xPercent: number;
           yPercent: number;
           sizePercent: number;
+          heightPercent?: number;
+          rotation?: number;
           opacity: number;
           color: string;
         }> = [];
@@ -355,6 +361,8 @@ export async function applyWatermark(blob: Blob, customConfig?: WatermarkConfig)
                 xPercent: (isActive && config.xPercent !== undefined ? config.xPercent : t.xPercent) ?? 88,
                 yPercent: (isActive && config.yPercent !== undefined ? config.yPercent : t.yPercent) ?? 88,
                 sizePercent: (isActive && config.sizePercent !== undefined ? config.sizePercent : t.sizePercent) ?? 16,
+                heightPercent: isActive && config.heightPercent !== undefined ? config.heightPercent : t.heightPercent,
+                rotation: (isActive && config.rotation !== undefined ? config.rotation : t.rotation) ?? 0,
                 opacity: (isActive && config.opacity !== undefined ? config.opacity : t.opacity) ?? 0.70,
                 color: (isActive && config.color !== undefined ? config.color : t.color) ?? "original",
               });
@@ -370,6 +378,8 @@ export async function applyWatermark(blob: Blob, customConfig?: WatermarkConfig)
               xPercent: config.xPercent ?? 88,
               yPercent: config.yPercent ?? 88,
               sizePercent: config.sizePercent ?? 16,
+              heightPercent: config.heightPercent,
+              rotation: config.rotation ?? 0,
               opacity: config.opacity ?? 0.70,
               color: config.color ?? "original",
             });
@@ -379,13 +389,15 @@ export async function applyWatermark(blob: Blob, customConfig?: WatermarkConfig)
               xPercent: config?.xPercent ?? 88,
               yPercent: config?.yPercent ?? 88,
               sizePercent: config?.sizePercent ?? 14,
+              heightPercent: config?.heightPercent,
+              rotation: config?.rotation ?? 0,
               opacity: config?.opacity ?? 0.40,
               color: config?.color ?? "original",
             });
           }
         }
 
-        // Draw each template onto the canvas at its own position, size and opacity
+        // Draw each template onto the canvas at its own position, size, rotation and opacity
         const drawLayer = (layer: (typeof layersToDraw)[0]): Promise<void> => {
           return new Promise((layerResolve) => {
             const logo = new Image();
@@ -393,9 +405,12 @@ export async function applyWatermark(blob: Blob, customConfig?: WatermarkConfig)
             logo.onload = () => {
               try {
                 const sizePct = layer.sizePercent;
-                const targetWidth = Math.max(60, Math.round(width * (sizePct / 100)));
+                const targetWidth = Math.max(40, Math.round(width * (sizePct / 100)));
                 const aspect = (logo.naturalWidth || 736) / (logo.naturalHeight || 570);
-                const targetHeight = Math.max(20, Math.round(targetWidth / aspect));
+                const targetHeight =
+                  layer.heightPercent && layer.heightPercent > 0
+                    ? Math.max(20, Math.round(height * (layer.heightPercent / 100)))
+                    : Math.max(20, Math.round(targetWidth / aspect));
 
                 let x = Math.round((width - targetWidth) * (Math.max(0, Math.min(100, layer.xPercent)) / 100));
                 let y = Math.round((height - targetHeight) * (Math.max(0, Math.min(100, layer.yPercent)) / 100));
@@ -405,6 +420,19 @@ export async function applyWatermark(blob: Blob, customConfig?: WatermarkConfig)
 
                 ctx.save();
                 ctx.globalAlpha = Math.min(1, Math.max(0, layer.opacity > 1 ? layer.opacity / 100 : layer.opacity));
+
+                const rotDeg = layer.rotation ?? 0;
+                const drawTarget = (source: CanvasImageSource) => {
+                  if (rotDeg !== 0) {
+                    const cx = x + targetWidth / 2;
+                    const cy = y + targetHeight / 2;
+                    ctx.translate(cx, cy);
+                    ctx.rotate((rotDeg * Math.PI) / 180);
+                    ctx.drawImage(source, -targetWidth / 2, -targetHeight / 2, targetWidth, targetHeight);
+                  } else {
+                    ctx.drawImage(source, x, y, targetWidth, targetHeight);
+                  }
+                };
 
                 const color = layer.color || "original";
                 if (color !== "original") {
@@ -422,12 +450,12 @@ export async function applyWatermark(blob: Blob, customConfig?: WatermarkConfig)
                     offCtx.globalCompositeOperation = "source-in";
                     offCtx.fillStyle = fillColor;
                     offCtx.fillRect(0, 0, targetWidth, targetHeight);
-                    ctx.drawImage(offCanvas, x, y);
+                    drawTarget(offCanvas);
                   } else {
-                    ctx.drawImage(logo, x, y, targetWidth, targetHeight);
+                    drawTarget(logo);
                   }
                 } else {
-                  ctx.drawImage(logo, x, y, targetWidth, targetHeight);
+                  drawTarget(logo);
                 }
 
                 ctx.restore();
