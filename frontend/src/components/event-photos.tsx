@@ -46,6 +46,8 @@ export function EventPhotos({ eventId, refreshKey, pollWhileProcessing, onChange
   const [busyBatchDelete, setBusyBatchDelete] = useState(false);
   const [busyBatchRetry, setBusyBatchRetry] = useState(false);
   const [busyBatchDownload, setBusyBatchDownload] = useState(false);
+  const [busySelectAll, setBusySelectAll] = useState(false);
+  const [cachedPhotosMap, setCachedPhotosMap] = useState<Map<string, PhotoOut>>(() => new Map());
   const [downloadProgress, setDownloadProgress] = useState<{ done: number; total: number } | null>(null);
   const [eventWatermark, setEventWatermark] = useState<WatermarkConfig | undefined>(() => getSavedWatermarkConfig(eventId));
   const dq = useDebounced(q.trim(), 300);
@@ -101,6 +103,42 @@ export function EventPhotos({ eventId, refreshKey, pollWhileProcessing, onChange
     }
   };
 
+  const selectAllMatching = async () => {
+    if (!data || data.total === 0) return;
+    if (selectedIds.size >= data.total) {
+      setSelectedIds(new Set());
+      return;
+    }
+    setBusySelectAll(true);
+    try {
+      let curOffset = 0;
+      const fetchLimit = 200;
+      const fetched: PhotoOut[] = [];
+      while (curOffset < data.total) {
+        const res = await adminApi.listPhotos(eventId, {
+          status,
+          q: dq,
+          has_faces: faces === "" ? null : faces === "yes",
+          limit: fetchLimit,
+          offset: curOffset,
+        });
+        fetched.push(...res.items);
+        curOffset += res.items.length;
+        if (!res.items.length) break;
+      }
+      setCachedPhotosMap((prev) => {
+        const next = new Map(prev);
+        fetched.forEach((p) => next.set(p.id, p));
+        return next;
+      });
+      setSelectedIds(new Set(fetched.map((p) => p.id)));
+    } catch (err) {
+      toast.error("Could not select all photos", errorMessage(err));
+    } finally {
+      setBusySelectAll(false);
+    }
+  };
+
   const handleBatchRetry = async () => {
     if (selectedIds.size === 0) return;
     setBusyBatchRetry(true);
@@ -146,7 +184,12 @@ export function EventPhotos({ eventId, refreshKey, pollWhileProcessing, onChange
         wmConfig = await fetchEventWatermarkConfig(eventId);
         if (wmConfig) setEventWatermark(wmConfig);
       }
-      const selectedPhotos = data.items.filter((p) => selectedIds.has(p.id));
+      const pageMap = new Map(data.items.map((p) => [p.id, p]));
+      const selectedPhotos: PhotoOut[] = [];
+      selectedIds.forEach((id) => {
+        const item = pageMap.get(id) ?? cachedPhotosMap.get(id);
+        if (item) selectedPhotos.push(item);
+      });
       const targets = selectedPhotos.map((p) => ({
         url: p.preview_url || p.thumbnail_url || "",
         filename: p.original_filename || `photo-${p.id.slice(0, 8)}.jpg`,
@@ -213,27 +256,6 @@ export function EventPhotos({ eventId, refreshKey, pollWhileProcessing, onChange
           >
             {isSelecting ? "Cancel selection" : "Select photos"}
           </Button>
-          <Button
-            type="button"
-            variant="outline"
-            size="md"
-            disabled={!data || data.items.length === 0}
-            onClick={() => {
-              if (!isSelecting) setIsSelecting(true);
-              selectAllOnPage();
-            }}
-            icon={
-              isSelecting && data && data.items.length > 0 && data.items.every((p) => selectedIds.has(p.id)) ? (
-                <CheckSquare className="h-4 w-4 text-brand-600" />
-              ) : (
-                <Square className="h-4 w-4" />
-              )
-            }
-          >
-            {isSelecting && data && data.items.length > 0 && data.items.every((p) => selectedIds.has(p.id))
-              ? "Deselect page"
-              : "Select all on page"}
-          </Button>
         </div>
         {data && <p className="text-sm text-muted sm:ml-auto">{formatNumber(data.total)} photo{data.total === 1 ? "" : "s"}</p>}
       </div>
@@ -257,6 +279,26 @@ export function EventPhotos({ eventId, refreshKey, pollWhileProcessing, onChange
             >
               {data.items.every((p) => selectedIds.has(p.id)) ? "Deselect page" : "Select all on page"}
             </Button>
+            {data.total > data.items.length && (
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                loading={busySelectAll}
+                disabled={busySelectAll}
+                onClick={selectAllMatching}
+                icon={
+                  selectedIds.size >= data.total ? (
+                    <CheckSquare className="h-3.5 w-3.5 text-brand-600" />
+                  ) : (
+                    <Square className="h-3.5 w-3.5 text-muted" />
+                  )
+                }
+                className="text-xs font-semibold"
+              >
+                {selectedIds.size >= data.total ? "Deselect all" : `Select all (${formatNumber(data.total)})`}
+              </Button>
+            )}
             <Button
               size="sm"
               variant="outline"
