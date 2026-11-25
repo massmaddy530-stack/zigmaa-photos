@@ -600,8 +600,8 @@ export function EventSettings({ event, onSaved }: { event: EventOut; onSaved: (e
         </div>
 
         {/* Right Column: Live Watermark Studio & Customization Controls (6 cols) */}
-        <div className="space-y-6 lg:col-span-6 xl:col-span-6 flex flex-col">
-          <Card className="overflow-hidden h-full flex flex-col justify-between">
+        <div className="space-y-6 lg:col-span-6 xl:col-span-6 lg:sticky lg:top-6 self-start">
+          <Card className="overflow-hidden">
             <CardHeader
               title="Watermark & Template Studio"
               description="Live preview of how your watermark will appear on downloaded photos"
