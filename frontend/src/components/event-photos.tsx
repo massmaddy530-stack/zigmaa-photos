@@ -164,51 +164,6 @@ export function EventPhotos({ eventId, refreshKey, pollWhileProcessing, onChange
     }
   };
 
-  const handleDownloadAllPhotos = async () => {
-    if (!data || data.total === 0) return;
-    setBusyBatchDownload(true);
-    setDownloadProgress({ done: 0, total: data.total });
-    try {
-      let wmConfig = getSavedWatermarkConfig(eventId) || eventWatermark;
-      if (!wmConfig) {
-        wmConfig = await fetchEventWatermarkConfig(eventId);
-        if (wmConfig) setEventWatermark(wmConfig);
-      }
-
-      // Fetch all photos across all pages for this event
-      let allItems: PhotoOut[] = [];
-      let curOffset = 0;
-      const fetchLimit = 100;
-      while (curOffset < data.total) {
-        const res = await adminApi.listPhotos(eventId, {
-          status,
-          q: dq,
-          has_faces: faces === "" ? null : faces === "yes",
-          limit: fetchLimit,
-          offset: curOffset,
-        });
-        allItems = [...allItems, ...res.items];
-        curOffset += res.items.length;
-        if (!res.items.length) break;
-      }
-
-      const targets = allItems.map((p) => ({
-        url: p.preview_url || p.thumbnail_url || "",
-        filename: p.original_filename || `photo-${p.id.slice(0, 8)}.jpg`,
-      })).filter((x) => Boolean(x.url));
-
-      await downloadImagesInBatch(targets, wmConfig, (done, total) => {
-        setDownloadProgress({ done, total });
-      });
-      toast.success(`Successfully downloaded all ${targets.length} photos!`);
-    } catch (err) {
-      toast.error("Download all photos failed", errorMessage(err));
-    } finally {
-      setBusyBatchDownload(false);
-      setDownloadProgress(null);
-    }
-  };
-
   return (
     <div className="space-y-4">
       <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
@@ -262,33 +217,30 @@ export function EventPhotos({ eventId, refreshKey, pollWhileProcessing, onChange
             type="button"
             variant="outline"
             size="md"
-            disabled={!data || data.total === 0 || busyBatchDownload}
-            loading={busyBatchDownload}
-            onClick={handleDownloadAllPhotos}
-            icon={<Download className="h-4 w-4" />}
+            disabled={!data || data.items.length === 0}
+            onClick={() => {
+              if (!isSelecting) setIsSelecting(true);
+              selectAllOnPage();
+            }}
+            icon={
+              isSelecting && data && data.items.length > 0 && data.items.every((p) => selectedIds.has(p.id)) ? (
+                <CheckSquare className="h-4 w-4 text-brand-600" />
+              ) : (
+                <Square className="h-4 w-4" />
+              )
+            }
           >
-            {busyBatchDownload && downloadProgress
-              ? `Downloading (${downloadProgress.done}/${downloadProgress.total})…`
-              : `Download all (${data?.total ?? 0})`}
+            {isSelecting && data && data.items.length > 0 && data.items.every((p) => selectedIds.has(p.id))
+              ? "Deselect page"
+              : "Select all on page"}
           </Button>
-          {onGoUpload && (
-            <Button
-              type="button"
-              variant="outline"
-              size="md"
-              onClick={onGoUpload}
-              icon={<UploadCloud className="h-4 w-4" />}
-            >
-              Upload
-            </Button>
-          )}
         </div>
         {data && <p className="text-sm text-muted sm:ml-auto">{formatNumber(data.total)} photo{data.total === 1 ? "" : "s"}</p>}
       </div>
 
       {isSelecting && data && data.items.length > 0 && (
-        <div className="flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-brand-200 bg-brand-50/70 p-3 sm:px-5">
-          <div className="flex items-center gap-2">
+        <div className="flex flex-wrap items-center justify-between gap-2 rounded-2xl border border-brand-200 bg-brand-50/70 p-3 sm:px-5">
+          <div className="flex flex-wrap items-center gap-2">
             <Button
               type="button"
               variant="outline"
@@ -305,19 +257,6 @@ export function EventPhotos({ eventId, refreshKey, pollWhileProcessing, onChange
             >
               {data.items.every((p) => selectedIds.has(p.id)) ? "Deselect page" : "Select all on page"}
             </Button>
-            {selectedIds.size > 0 && (
-              <Button
-                type="button"
-                variant="ghost"
-                size="sm"
-                onClick={() => setSelectedIds(new Set())}
-                className="text-xs text-muted hover:text-ink"
-              >
-                Clear
-              </Button>
-            )}
-          </div>
-          <div className="flex items-center gap-2">
             <Button
               size="sm"
               variant="outline"
@@ -326,7 +265,9 @@ export function EventPhotos({ eventId, refreshKey, pollWhileProcessing, onChange
               onClick={handleDownloadSelected}
               icon={<Download className="h-4 w-4" />}
             >
-              Download selected ({selectedIds.size})
+              {busyBatchDownload && downloadProgress
+                ? `Downloading (${downloadProgress.done}/${downloadProgress.total})…`
+                : `Download selected (${selectedIds.size})`}
             </Button>
             <Button
               size="sm"
@@ -347,17 +288,28 @@ export function EventPhotos({ eventId, refreshKey, pollWhileProcessing, onChange
             >
               Delete selected ({selectedIds.size})
             </Button>
-            <Button
-              size="sm"
-              variant="ghost"
-              onClick={() => {
-                setIsSelecting(false);
-                setSelectedIds(new Set());
-              }}
-            >
-              Done
-            </Button>
+            {selectedIds.size > 0 && (
+              <Button
+                type="button"
+                variant="ghost"
+                size="sm"
+                onClick={() => setSelectedIds(new Set())}
+                className="text-xs text-muted hover:text-ink"
+              >
+                Clear
+              </Button>
+            )}
           </div>
+          <Button
+            size="sm"
+            variant="ghost"
+            onClick={() => {
+              setIsSelecting(false);
+              setSelectedIds(new Set());
+            }}
+          >
+            Done
+          </Button>
         </div>
       )}
 
