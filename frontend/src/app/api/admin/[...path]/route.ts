@@ -57,11 +57,15 @@ async function proxy(req: NextRequest, ctx: { params: Promise<{ path: string[] }
   const fwd = req.headers.get("x-forwarded-for");
   if (fwd) headers.set("x-forwarded-for", fwd);
 
-  // Identify current user email to ensure multi-tenant event isolation
+  // Identify current user email from the verified session token (never trust client-supplied x-user-email headers)
   let userEmail = "";
-  const headerEmail = req.headers.get("x-user-email");
-  if (headerEmail && headerEmail.includes("@")) {
-    userEmail = headerEmail.trim().toLowerCase();
+  if (token) {
+    try {
+      const p = await verifySessionToken(token, config, SESSION_MAX_AGE_S);
+      if (p?.sub && p.sub.includes("@")) {
+        userEmail = p.sub.trim().toLowerCase();
+      }
+    } catch {}
   }
   if (!userEmail) {
     const profileRaw = req.cookies.get("evp_profile")?.value;
@@ -78,14 +82,6 @@ async function proxy(req: NextRequest, ctx: { params: Promise<{ path: string[] }
         }
       } catch {}
     }
-  }
-  if (!userEmail && token) {
-    try {
-      const p = await verifySessionToken(token, config, SESSION_MAX_AGE_S);
-      if (p?.sub && p.sub.includes("@")) {
-        userEmail = p.sub.trim().toLowerCase();
-      }
-    } catch {}
   }
   if (userEmail) {
     headers.set("x-user-email", userEmail);

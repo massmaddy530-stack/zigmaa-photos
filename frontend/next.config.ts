@@ -2,10 +2,14 @@ import type { NextConfig } from "next";
 
 const securityHeaders = [
   { key: "X-Content-Type-Options", value: "nosniff" },
+  { key: "X-DNS-Prefetch-Control", value: "off" },
   { key: "Referrer-Policy", value: "strict-origin-when-cross-origin" },
   { key: "X-Frame-Options", value: "DENY" },
   // Camera is needed for selfie capture on our own origin only.
   { key: "Permissions-Policy", value: "camera=(self), microphone=(), geolocation=()" },
+  ...(process.env.NODE_ENV === "production"
+    ? [{ key: "Strict-Transport-Security", value: "max-age=31536000; includeSubDomains" }]
+    : []),
 ];
 
 // Backend address as seen from this server (same resolution as lib/server-config.ts). Guest API calls and

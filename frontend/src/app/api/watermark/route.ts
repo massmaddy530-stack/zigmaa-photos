@@ -1,5 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getPool } from "@/lib/auth/db";
+import { verifyMiddlewareSession, verifySessionToken } from "@/lib/auth/session";
+import { authConfig, SESSION_COOKIE, SESSION_MAX_AGE_S } from "@/lib/server-config";
 import { promises as fs } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
@@ -85,6 +87,18 @@ export async function GET(req: NextRequest) {
 }
 
 export async function POST(req: NextRequest) {
+  const token = req.cookies.get(SESSION_COOKIE)?.value;
+  const auth = authConfig();
+  const sessionValid = Boolean(
+    token && auth && (
+      (await verifySessionToken(token, auth, SESSION_MAX_AGE_S)) !== null ||
+      (await verifyMiddlewareSession(token, auth.sessionSecret, SESSION_MAX_AGE_S))
+    )
+  );
+  if (!sessionValid) {
+    return NextResponse.json({ ok: false, error: "unauthorized" }, { status: 401 });
+  }
+
   try {
     const body = await req.json();
     const eventId = body.eventId?.toString().trim();

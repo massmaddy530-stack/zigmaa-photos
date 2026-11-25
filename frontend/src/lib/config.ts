@@ -8,6 +8,8 @@ export const MAX_UPLOAD_MB = Number(process.env.NEXT_PUBLIC_MAX_UPLOAD_MB || 40)
 export const ACCEPTED_IMAGE_TYPES = ["image/jpeg", "image/png", "image/webp", "image/mpo"];
 // Used when the browser reports no MIME type (common for .mpo files).
 export const ACCEPTED_IMAGE_EXTENSIONS = [".jpg", ".jpeg", ".png", ".webp", ".mpo"];
-export const UPLOAD_BATCH_FILES = 4;
-export const UPLOAD_BATCH_BYTES = 3.8 * 1024 * 1024;
-export const UPLOAD_CONCURRENCY = 3;
+// Set NEXT_PUBLIC_SKIP_UPLOAD_COMPRESSION=true when hosted on a VPS (e.g. KVM2) without Vercel's 4.5 MB body limit.
+export const SKIP_UPLOAD_COMPRESSION = process.env.NEXT_PUBLIC_SKIP_UPLOAD_COMPRESSION === "true";
+export const UPLOAD_BATCH_FILES = 8;
+export const UPLOAD_BATCH_BYTES = (SKIP_UPLOAD_COMPRESSION ? 35 : 4.0) * 1024 * 1024;
+export const UPLOAD_CONCURRENCY = 5;

@@ -14,7 +14,7 @@
   "dependencies": {
     "@types/nodemailer": "^8.0.2",
     "lucide-react": "^1.57.0",
-    "next": "15.5.27",
+    "next": "15.5.29",
     "nodemailer": "^10.5.0",
     "pg": "^8.23.1",
     "react": "19.1.0",
@@ -28,7 +28,7 @@
     "@types/react": "^19",
     "@types/react-dom": "^19",
     "eslint": "^9",
-    "eslint-config-next": "15.5.27",
+    "eslint-config-next": "15.5.29",
     "fake-indexeddb": "^6.2.6",
     "tailwindcss": "^4",
     "typescript": "^5",

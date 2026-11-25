@@ -574,7 +574,7 @@ export async function downloadImagesInBatch(
       failed++;
     }
     if (i < items.length - 1) {
-      await new Promise((resolve) => setTimeout(resolve, 350));
+      await new Promise((resolve) => setTimeout(resolve, 120));
     }
   }
   return { successful, failed };

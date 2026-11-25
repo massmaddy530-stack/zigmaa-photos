@@ -1,6 +1,55 @@
 import { NextRequest, NextResponse } from "next/server";
+import { API_BASE_URL } from "@/lib/server-config";
 
 export const dynamic = "force-dynamic";
+
+const ALLOWED_HOST_SUFFIXES = [
+  ".r2.dev",
+  ".r2.cloudflarestorage.com",
+  ".storage.supabase.co",
+  ".supabase.co",
+  ".amazonaws.com",
+];
+
+function isPrivateOrLocalHost(hostname: string): boolean {
+  const h = hostname.toLowerCase().replace(/^\[|\]$/g, "");
+  if (h === "localhost" || h === "::1" || h === "0.0.0.0") return true;
+  if (h.startsWith("fe80:") || h.startsWith("fc00:") || h.startsWith("fd")) return true;
+  const ipv4 = h.match(/^(\d{1,3})\.(\d{1,3})\.(\d{1,3})\.(\d{1,3})$/);
+  if (ipv4) {
+    const [a, b] = [Number(ipv4[1]), Number(ipv4[2])];
+    if (a === 10 || a === 127 || a === 0) return true;
+    if (a === 169 && b === 254) return true; // Cloud metadata IP
+    if (a === 192 && b === 168) return true;
+    if (a === 172 && b >= 16 && b <= 31) return true;
+  }
+  return false;
+}
+
+function isAllowedTargetUrl(url: URL): boolean {
+  if (url.protocol !== "http:" && url.protocol !== "https:") return false;
+  const host = url.hostname.toLowerCase();
+
+  try {
+    const apiHost = new URL(API_BASE_URL).hostname.toLowerCase();
+    if (host === apiHost) return true;
+  } catch {
+    /* ignore */
+  }
+
+  const r2Public = process.env.R2_PUBLIC_URL?.trim();
+  if (r2Public) {
+    try {
+      const r2Host = new URL(r2Public.startsWith("http") ? r2Public : `https://${r2Public}`).hostname.toLowerCase();
+      if (host === r2Host) return true;
+    } catch {
+      /* ignore */
+    }
+  }
+
+  if (isPrivateOrLocalHost(host)) return false;
+  return ALLOWED_HOST_SUFFIXES.some((suffix) => host.endsWith(suffix));
+}
 
 /**
  * Proxies cross-origin image downloads (such as Cloudflare R2 / S3 storage URLs)
@@ -16,8 +65,8 @@ export async function GET(req: NextRequest) {
   let targetUrl: URL;
   try {
     targetUrl = new URL(urlParam);
-    if (targetUrl.protocol !== "http:" && targetUrl.protocol !== "https:") {
-      return new NextResponse("Invalid protocol", { status: 400 });
+    if (!isAllowedTargetUrl(targetUrl)) {
+      return new NextResponse("Forbidden download host", { status: 403 });
     }
   } catch {
     return new NextResponse("Invalid URL", { status: 400 });
@@ -28,6 +77,7 @@ export async function GET(req: NextRequest) {
       headers: {
         "User-Agent": "Zigmaa-Moments-Downloader/1.0",
       },
+      signal: AbortSignal.timeout(15_000),
     });
 
     if (!res.ok) {
@@ -35,14 +85,17 @@ export async function GET(req: NextRequest) {
     }
 
     const contentType = res.headers.get("content-type") || "image/jpeg";
+    if (!contentType.startsWith("image/") && contentType !== "application/octet-stream") {
+      return new NextResponse("Unsupported content type", { status: 415 });
+    }
     const buffer = await res.arrayBuffer();
 
     return new NextResponse(buffer, {
       status: 200,
       headers: {
         "Content-Type": contentType,
-        "Cache-Control": "public, max-age=86400, s-maxage=86400",
-        "Access-Control-Allow-Origin": "*",
+        "Cache-Control": "private, max-age=3600",
+        "X-Content-Type-Options": "nosniff",
       },
     });
   } catch (err) {

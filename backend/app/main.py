@@ -236,6 +236,7 @@ def create_app() -> FastAPI:
     settings = get_settings()
     configure_logging(settings.log_level, settings.log_json)
 
+    is_prod = settings.environment == "production"
     app = FastAPI(
         title=f"{settings.app_name} API",
         version=__version__,
@@ -244,9 +245,9 @@ def create_app() -> FastAPI:
             "face indexing and guest selfie matching."
         ),
         lifespan=lifespan,
-        docs_url="/docs",
-        redoc_url="/redoc",
-        openapi_url="/openapi.json",
+        docs_url=None if is_prod else "/docs",
+        redoc_url=None if is_prod else "/redoc",
+        openapi_url=None if is_prod else "/openapi.json",
     )
 
     install_error_handlers(app)

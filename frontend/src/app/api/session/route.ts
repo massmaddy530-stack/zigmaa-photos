@@ -5,7 +5,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { checkCredentials, MAX_PASSWORD_LENGTH, PasswordHashFormatError } from "@/lib/auth/password";
 import { loginLimiter } from "@/lib/auth/rate-limit";
 import { clientIp, hasCsrfHeader, isSameOrigin } from "@/lib/auth/request";
-import { createSessionToken } from "@/lib/auth/session";
+import { createSessionToken, verifyMiddlewareSession, verifySessionToken } from "@/lib/auth/session";
 import { findUserAsync, findUserByEmail } from "@/lib/auth/user-store";
 import {
   authConfig,
@@ -121,7 +121,13 @@ export async function POST(req: NextRequest) {
 export async function GET(req: NextRequest) {
   const token = req.cookies.get(SESSION_COOKIE)?.value;
   const config = authConfig();
-  if (!token || !config) {
+  const valid = Boolean(
+    token && config && (
+      (await verifySessionToken(token, config, SESSION_MAX_AGE_S)) !== null ||
+      (await verifyMiddlewareSession(token, config.sessionSecret, SESSION_MAX_AGE_S))
+    )
+  );
+  if (!valid) {
     return NextResponse.json({ authenticated: false, user: null }, { headers: { "Cache-Control": "no-store" } });
   }
 

@@ -8,6 +8,7 @@ import {
   ACCEPTED_IMAGE_EXTENSIONS,
   ACCEPTED_IMAGE_TYPES,
   MAX_UPLOAD_MB,
+  SKIP_UPLOAD_COMPRESSION,
   UPLOAD_BATCH_BYTES,
   UPLOAD_BATCH_FILES,
   UPLOAD_CONCURRENCY,
@@ -168,19 +169,25 @@ export function UploadPanel({ eventId, disabled, onUploaded }: {
   async function addFiles(list: FileList | File[] | null) {
     if (!list || disabled) return;
     const rawFiles = Array.from(list);
-    // Optimize photos larger than 3.5MB using a worker pool to prevent browser memory spikes
-    const optimizedFiles = await poolMap(rawFiles, (file) => optimizePhotoForUpload(file), 4);
-    const added: UploadItem[] = optimizedFiles.map((file) => {
-      const problem = preValidate(file);
-      return { id: nextId++, file, status: problem ? "rejected" : "queued", progress: 0, message: problem ?? undefined };
-    });
-    if (!added.length) return;
-    setItems((prev) => {
-      const next = [...prev, ...added];
-      itemsRef.current = next;
-      return next;
-    });
-    if (added.some((a) => a.status === "queued")) void run();
+    // Process in chunks so uploads start immediately instead of blocking on all files
+    const CHUNK_SIZE = 12;
+    for (let i = 0; i < rawFiles.length; i += CHUNK_SIZE) {
+      const chunk = rawFiles.slice(i, i + CHUNK_SIZE);
+      const processed = SKIP_UPLOAD_COMPRESSION
+        ? chunk
+        : await poolMap(chunk, (file) => optimizePhotoForUpload(file), 4);
+      const added: UploadItem[] = processed.map((file) => {
+        const problem = preValidate(file);
+        return { id: nextId++, file, status: problem ? "rejected" : "queued", progress: 0, message: problem ?? undefined };
+      });
+      if (!added.length) continue;
+      setItems((prev) => {
+        const next = [...prev, ...added];
+        itemsRef.current = next;
+        return next;
+      });
+      if (added.some((a) => a.status === "queued")) void run();
+    }
   }
 
   function onDrop(e: DragEvent) {
