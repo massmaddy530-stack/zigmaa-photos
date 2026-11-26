@@ -18,7 +18,7 @@ from app.api.deps import SessionDep, SettingsDep, StorageDep
 from app.core.config import Settings
 from app.core.errors import AppError, NotFoundError, PayloadTooLargeError
 from app.core.ratelimit import RateLimiter
-from app.core.security import require_admin
+from app.core.security import require_admin, require_uploader
 from app.models import Event, Photo, PhotoStatus
 from app.schemas import ErrorResponse, MatchPage, MatchResponse, MatchTimings, PublicEventOut, PublicPhotoItem, PublicPhotosPage
 from app.services.events import get_event_or_404, get_public_event_or_404, public_url
@@ -260,7 +260,7 @@ async def public_event_photos(
     )
 
 
-match_selfie_router = APIRouter(tags=["selfie-matching"])
+match_selfie_router = APIRouter(tags=["selfie-matching"], dependencies=[Depends(require_uploader)])
 
 
 async def _process_match_selfie(

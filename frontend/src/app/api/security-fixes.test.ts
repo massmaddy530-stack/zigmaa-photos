@@ -1,5 +1,7 @@
 import { NextRequest } from "next/server";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { POST as otpSendPOST } from "@/app/api/auth/otp/send/route";
+import { POST as otpVerifyPOST } from "@/app/api/auth/otp/verify/route";
 import { GET as downloadGET } from "@/app/api/download/route";
 import { GET as sessionGET } from "@/app/api/session/route";
 import { POST as watermarkPOST } from "@/app/api/watermark/route";
@@ -49,5 +51,25 @@ describe("Security hardening regression tests", () => {
     const body = await res.json();
     expect(body.authenticated).toBe(false);
     expect(body.user).toBeNull();
+  });
+
+  it("POST /api/auth/otp/send blocks cross-site requests missing the CSRF header", async () => {
+    const req = new NextRequest("http://localhost:3000/api/auth/otp/send", {
+      method: "POST",
+      headers: { "content-type": "application/json", origin: "https://evil.example.com" },
+      body: JSON.stringify({ email: "victim@example.com" }),
+    });
+    const res = await otpSendPOST(req);
+    expect(res.status).toBe(403);
+  });
+
+  it("POST /api/auth/otp/verify blocks cross-site requests missing the CSRF header", async () => {
+    const req = new NextRequest("http://localhost:3000/api/auth/otp/verify", {
+      method: "POST",
+      headers: { "content-type": "application/json", origin: "https://evil.example.com" },
+      body: JSON.stringify({ email: "victim@example.com", otp: "123456" }),
+    });
+    const res = await otpVerifyPOST(req);
+    expect(res.status).toBe(403);
   });
 });

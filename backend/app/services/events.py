@@ -33,6 +33,18 @@ async def get_event_or_404(session: AsyncSession, event_id: uuid.UUID) -> Event:
     return event
 
 
+async def get_owned_event_or_404(
+    session: AsyncSession, event_id: uuid.UUID, owner_email: str | None
+) -> Event:
+    """Like get_event_or_404, but also enforces per-account isolation: if the caller identifies itself
+    with X-User-Email and the event has a recorded owner, the owner must match. Events with no recorded
+    owner_email (legacy/unattributed) are left accessible, matching the existing list/overview behaviour."""
+    event = await get_event_or_404(session, event_id)
+    if owner_email and event.owner_email and event.owner_email.strip().lower() != owner_email.strip().lower():
+        raise NotFoundError("Event not found")
+    return event
+
+
 def link_expired(event: Event, now: datetime | None = None) -> bool:
     expires = event.guest_link_expires_at
     if expires is None:

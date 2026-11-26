@@ -5,6 +5,7 @@ from httpx import AsyncClient
 from PIL import Image
 from app.services.storage import generate_variants
 from app.models import Event, EventPhoto, FaceEmbedding, utcnow
+from tests.conftest import ADMIN
 import numpy as np
 
 
@@ -111,7 +112,7 @@ async def test_match_selfie_endpoint(client: AsyncClient):
     files = {"file": ("selfie.jpg", buf, "image/jpeg")}
     data = {"event_id": str(ev_id)}
 
-    resp = await client.post("/match-selfie", data=data, files=files)
+    resp = await client.post("/match-selfie", data=data, files=files, headers=ADMIN)
     assert resp.status_code == 200
     res_data = resp.json()
     assert res_data["status"] == "ok"

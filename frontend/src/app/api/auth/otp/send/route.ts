@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { generateOtp } from "@/lib/auth/otp-store";
+import { hasCsrfHeader, isSameOrigin } from "@/lib/auth/request";
 import { isEmailRegistered } from "@/lib/auth/user-store";
 import { sendOtpEmail } from "@/lib/email/mailer";
 
@@ -7,6 +8,9 @@ export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
 export async function POST(req: NextRequest) {
+  if (!hasCsrfHeader(req) || !isSameOrigin(req)) {
+    return NextResponse.json({ ok: false, error: "Cross-site request blocked." }, { status: 403 });
+  }
   try {
     const body = await req.json().catch(() => null);
     const email = typeof body?.email === "string" ? body.email.trim().toLowerCase() : "";

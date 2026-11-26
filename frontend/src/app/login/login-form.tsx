@@ -207,7 +207,7 @@ export function LoginForm() {
     try {
       const res = await fetch("/api/auth/otp/send", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: { "Content-Type": "application/json", "x-requested-with": "evp" },
         body: JSON.stringify({ email: forgotEmail }),
       });
       const data = await res.json();
@@ -234,7 +234,7 @@ export function LoginForm() {
     try {
       const res = await fetch("/api/auth/otp/send", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: { "Content-Type": "application/json", "x-requested-with": "evp" },
         body: JSON.stringify({ email: forgotEmail }),
       });
       const data = await res.json();
@@ -264,7 +264,7 @@ export function LoginForm() {
     try {
       const res = await fetch("/api/auth/otp/verify", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: { "Content-Type": "application/json", "x-requested-with": "evp" },
         body: JSON.stringify({ email: forgotEmail, otp: code }),
       });
       const data = await res.json();
@@ -302,7 +302,7 @@ export function LoginForm() {
       const code = otpDigits.join("");
       const res = await fetch("/api/auth/otp/verify", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: { "Content-Type": "application/json", "x-requested-with": "evp" },
         body: JSON.stringify({ email: forgotEmail, otp: code, newPassword }),
       });
       const data = await res.json();

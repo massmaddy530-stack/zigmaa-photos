@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { verifyOtp } from "@/lib/auth/otp-store";
 import { hashPassword, saveDynamicPasswordHash } from "@/lib/auth/password";
+import { hasCsrfHeader, isSameOrigin } from "@/lib/auth/request";
 import { updateUserPasswordAsync } from "@/lib/auth/user-store";
 import { promises as fs } from "node:fs";
 import path from "node:path";
@@ -9,6 +10,9 @@ export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
 export async function POST(req: NextRequest) {
+  if (!hasCsrfHeader(req) || !isSameOrigin(req)) {
+    return NextResponse.json({ ok: false, error: "Cross-site request blocked." }, { status: 403 });
+  }
   try {
     const body = await req.json().catch(() => null);
     const email = typeof body?.email === "string" ? body.email.trim().toLowerCase() : "";

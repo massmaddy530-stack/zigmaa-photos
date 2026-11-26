@@ -24,7 +24,7 @@ from app.schemas import (
     Page,
     StorageOverviewOut,
 )
-from app.services.events import event_out, get_event_or_404, new_slug, photo_counts, photo_out
+from app.services.events import event_out, get_owned_event_or_404, new_slug, photo_counts, photo_out
 from app.services.images import InvalidImageError, fit_within, load_rgb, to_webp
 from app.services.ingest import hash_stream
 from app.services.storage import StorageError
@@ -86,16 +86,18 @@ async def list_events(
 
 
 @router.get("/events/{event_id}", response_model=EventOut, responses={404: {"model": ErrorResponse}})
-async def get_event(event_id: uuid.UUID, session: SessionDep, storage: StorageDep) -> EventOut:
-    event = await get_event_or_404(session, event_id)
+async def get_event(event_id: uuid.UUID, session: SessionDep, storage: StorageDep,
+                    x_user_email: Annotated[str | None, Header()] = None) -> EventOut:
+    event = await get_owned_event_or_404(session, event_id, x_user_email)
     counts = await photo_counts(session, [event.id])
     return event_out(event, storage, counts[event.id])
 
 
 @router.patch("/events/{event_id}", response_model=EventOut, responses={404: {"model": ErrorResponse}})
 async def update_event(event_id: uuid.UUID, body: EventUpdate, session: SessionDep,
-                       storage: StorageDep) -> EventOut:
-    event = await get_event_or_404(session, event_id)
+                       storage: StorageDep,
+                       x_user_email: Annotated[str | None, Header()] = None) -> EventOut:
+    event = await get_owned_event_or_404(session, event_id, x_user_email)
     data = body.model_dump(exclude_unset=True)
     if "name" in data and data["name"] is None:
         raise UnprocessableError("Name cannot be null", code="validation_error")
@@ -110,10 +112,11 @@ async def update_event(event_id: uuid.UUID, body: EventUpdate, session: SessionD
 
 
 @router.post("/events/{event_id}/rotate-link", response_model=EventOut, responses={404: {"model": ErrorResponse}})
-async def rotate_guest_link(event_id: uuid.UUID, session: SessionDep, storage: StorageDep) -> EventOut:
+async def rotate_guest_link(event_id: uuid.UUID, session: SessionDep, storage: StorageDep,
+                            x_user_email: Annotated[str | None, Header()] = None) -> EventOut:
     """Replace the event's guest code. The old link and QR code stop working immediately (use if they leaked);
     photos, faces and the event itself are unchanged."""
-    event = await get_event_or_404(session, event_id)
+    event = await get_owned_event_or_404(session, event_id, x_user_email)
     event.slug = new_slug()
     await session.commit()
     await session.refresh(event)
@@ -125,8 +128,9 @@ async def rotate_guest_link(event_id: uuid.UUID, session: SessionDep, storage: S
 @router.put("/events/{event_id}/cover", response_model=EventOut,
             responses={404: {"model": ErrorResponse}, 422: {"model": ErrorResponse}})
 async def upload_cover(event_id: uuid.UUID, session: SessionDep, storage: StorageDep, settings: SettingsDep,
-                       file: Annotated[UploadFile, File(description="Cover image (JPEG/PNG/WebP)")]) -> EventOut:
-    event = await get_event_or_404(session, event_id)
+                       file: Annotated[UploadFile, File(description="Cover image (JPEG/PNG/WebP)")],
+                       x_user_email: Annotated[str | None, Header()] = None) -> EventOut:
+    event = await get_owned_event_or_404(session, event_id, x_user_email)
 
     def _process() -> bytes:
         hash_stream(file.file, settings.max_upload_bytes)
@@ -161,9 +165,10 @@ async def upload_cover(event_id: uuid.UUID, session: SessionDep, storage: Storag
 
 @router.delete("/events/{event_id}", status_code=status.HTTP_204_NO_CONTENT,
                responses={404: {"model": ErrorResponse}})
-async def delete_event(event_id: uuid.UUID, session: SessionDep, storage: StorageDep) -> Response:
+async def delete_event(event_id: uuid.UUID, session: SessionDep, storage: StorageDep,
+                       x_user_email: Annotated[str | None, Header()] = None) -> Response:
     """Permanently delete an event, its photos (originals and derivatives) and all face embeddings."""
-    event = await get_event_or_404(session, event_id)
+    event = await get_owned_event_or_404(session, event_id, x_user_email)
     keys = [k for row in (await session.execute(
         select(Photo.original_key, Photo.thumbnail_key, Photo.preview_key).where(Photo.event_id == event.id)
     )).all() for k in row if k]
@@ -192,9 +197,10 @@ async def delete_event(event_id: uuid.UUID, session: SessionDep, storage: Storag
 
 @router.delete("/events/{event_id}/faces", status_code=status.HTTP_200_OK,
                responses={404: {"model": ErrorResponse}})
-async def purge_event_faces(event_id: uuid.UUID, session: SessionDep) -> dict[str, int]:
+async def purge_event_faces(event_id: uuid.UUID, session: SessionDep,
+                            x_user_email: Annotated[str | None, Header()] = None) -> dict[str, int]:
     """Delete all biometric face embeddings for an event (photos are kept). Used by the retention policy."""
-    event = await get_event_or_404(session, event_id)
+    event = await get_owned_event_or_404(session, event_id, x_user_email)
     result = await session.execute(delete(FaceEmbedding).where(FaceEmbedding.event_id == event.id))
     photos = (await session.execute(select(Photo).where(Photo.event_id == event.id))).scalars().all()
     for p in photos:
@@ -204,8 +210,9 @@ async def purge_event_faces(event_id: uuid.UUID, session: SessionDep) -> dict[st
 
 
 @router.get("/events/{event_id}/status", response_model=EventStatusOut, responses={404: {"model": ErrorResponse}})
-async def event_status(event_id: uuid.UUID, session: SessionDep, storage: StorageDep) -> EventStatusOut:
-    event = await get_event_or_404(session, event_id)
+async def event_status(event_id: uuid.UUID, session: SessionDep, storage: StorageDep,
+                       x_user_email: Annotated[str | None, Header()] = None) -> EventStatusOut:
+    event = await get_owned_event_or_404(session, event_id, x_user_email)
     counts = (await photo_counts(session, [event.id]))[event.id]
     done = counts.indexed + counts.failed
     failures = (await session.execute(

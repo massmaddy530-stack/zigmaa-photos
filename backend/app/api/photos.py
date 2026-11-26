@@ -7,7 +7,7 @@ import re
 import uuid
 from typing import Annotated
 
-from fastapi import APIRouter, Depends, File, Form, Query, Response, UploadFile, status
+from fastapi import APIRouter, Depends, File, Form, Header, Query, Response, UploadFile, status
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel, Field
 from sqlalchemy import and_, delete, func, or_, select
@@ -29,7 +29,7 @@ from app.schemas import (
     UploadResponse,
 )
 from app.services.dispatch import QueueUnavailableError, enqueue_index
-from app.services.events import get_event_or_404, photo_out
+from app.services.events import get_event_or_404, get_owned_event_or_404, photo_out
 from app.services.indexing import reset_for_retry
 from app.services.ingest import ingest_upload
 from app.services.storage import StorageError
@@ -167,8 +167,9 @@ async def list_photos(
     has_faces: Annotated[str | None, Query()] = None,
     limit: Annotated[int, Query(ge=1, le=200)] = 48,
     offset: Annotated[int, Query(ge=0)] = 0,
+    x_user_email: Annotated[str | None, Header()] = None,
 ) -> Page[PhotoOut]:
-    await get_event_or_404(session, event_id)
+    await get_owned_event_or_404(session, event_id, x_user_email)
     stmt = select(Photo).where(Photo.event_id == event_id)
     if status_filter and status_filter.strip():
         val = status_filter.strip().lower()
@@ -203,7 +204,9 @@ async def list_photos(
     return Page(items=items, total=total, limit=limit, offset=offset)
 
 
-async def _get_photo(session, event_id: uuid.UUID, photo_id: uuid.UUID) -> Photo:
+async def _get_photo(session, event_id: uuid.UUID, photo_id: uuid.UUID,
+                     owner_email: str | None = None) -> Photo:
+    await get_owned_event_or_404(session, event_id, owner_email)
     photo = await session.get(Photo, photo_id)
     # Event-scoped lookup: a photo id from another event is reported as not found.
     if photo is None or photo.event_id != event_id:
@@ -213,8 +216,9 @@ async def _get_photo(session, event_id: uuid.UUID, photo_id: uuid.UUID) -> Photo
 
 @router.get("/{photo_id}", response_model=PhotoDetailOut, dependencies=[Depends(require_admin)])
 async def get_photo(event_id: uuid.UUID, photo_id: uuid.UUID, session: SessionDep,
-                    storage: StorageDep) -> PhotoDetailOut:
-    photo = await _get_photo(session, event_id, photo_id)
+                    storage: StorageDep,
+                    x_user_email: Annotated[str | None, Header()] = None) -> PhotoDetailOut:
+    photo = await _get_photo(session, event_id, photo_id, x_user_email)
     faces = (await session.execute(
         select(FaceEmbedding.face_index, FaceEmbedding.bbox_x1, FaceEmbedding.bbox_y1, FaceEmbedding.bbox_x2,
                FaceEmbedding.bbox_y2, FaceEmbedding.det_score)
@@ -243,8 +247,9 @@ async def retry_photo(
     photo_id: uuid.UUID,
     session: SessionDep,
     force: Annotated[bool, Query()] = False,
+    x_user_email: Annotated[str | None, Header()] = None,
 ) -> RetryResponse:
-    photo = await _get_photo(session, event_id, photo_id)
+    photo = await _get_photo(session, event_id, photo_id, x_user_email)
     if photo.status == PhotoStatus.indexed and not force:
         raise ConflictError("Photo is already indexed", code="already_indexed")
     ids = await reset_for_retry(session, [photo.id], force=force)
@@ -256,8 +261,9 @@ async def retry_photo(
              dependencies=[Depends(require_admin)],
              summary="Re-queue all failed (and stuck pending) photos of the event")
 async def retry_failed(event_id: uuid.UUID, session: SessionDep,
-                       include_pending: Annotated[bool, Query()] = True) -> RetryResponse:
-    await get_event_or_404(session, event_id)
+                       include_pending: Annotated[bool, Query()] = True,
+                       x_user_email: Annotated[str | None, Header()] = None) -> RetryResponse:
+    await get_owned_event_or_404(session, event_id, x_user_email)
     statuses = [PhotoStatus.failed] + ([PhotoStatus.pending, PhotoStatus.processing] if include_pending else [])
     ids = list((await session.execute(
         select(Photo.id).where(Photo.event_id == event_id, Photo.status.in_(statuses)))).scalars())
@@ -278,8 +284,9 @@ async def batch_retry_photos(
     event_id: uuid.UUID,
     body: BatchRetryPhotosRequest,
     session: SessionDep,
+    x_user_email: Annotated[str | None, Header()] = None,
 ) -> RetryResponse:
-    await get_event_or_404(session, event_id)
+    await get_owned_event_or_404(session, event_id, x_user_email)
     if not body.photo_ids:
         return RetryResponse(queued=0, photo_ids=[])
 
@@ -301,8 +308,9 @@ async def reindex_event_faces(
     event_id: uuid.UUID,
     session: SessionDep,
     only_zero_faces: Annotated[bool, Query()] = True,
+    x_user_email: Annotated[str | None, Header()] = None,
 ) -> RetryResponse:
-    await get_event_or_404(session, event_id)
+    await get_owned_event_or_404(session, event_id, x_user_email)
     q = select(Photo.id).where(Photo.event_id == event_id)
     if only_zero_faces:
         q = q.where(Photo.face_count == 0)
@@ -324,8 +332,9 @@ async def _enqueue_or_503(ids: list[uuid.UUID]) -> None:
 
 @router.delete("/{photo_id}", status_code=status.HTTP_204_NO_CONTENT, dependencies=[Depends(require_admin)])
 async def delete_photo(event_id: uuid.UUID, photo_id: uuid.UUID, session: SessionDep,
-                       storage: StorageDep) -> Response:
-    photo = await _get_photo(session, event_id, photo_id)
+                       storage: StorageDep,
+                       x_user_email: Annotated[str | None, Header()] = None) -> Response:
+    photo = await _get_photo(session, event_id, photo_id, x_user_email)
     keys = [k for k in (photo.original_key, photo.thumbnail_key, photo.preview_key) if k]
     await session.delete(photo)
     await session.commit()
@@ -352,8 +361,9 @@ async def batch_delete_photos(
     body: BatchDeletePhotosRequest,
     session: SessionDep,
     storage: StorageDep,
+    x_user_email: Annotated[str | None, Header()] = None,
 ) -> BatchDeletePhotosResponse:
-    await get_event_or_404(session, event_id)
+    await get_owned_event_or_404(session, event_id, x_user_email)
     if not body.photo_ids:
         return BatchDeletePhotosResponse(deleted=0)
 

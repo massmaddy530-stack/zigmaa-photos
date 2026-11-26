@@ -73,12 +73,32 @@ export async function GET(req: NextRequest) {
   }
 
   try {
-    const res = await fetch(targetUrl.toString(), {
-      headers: {
-        "User-Agent": "Zigmaa-Moments-Downloader/1.0",
-      },
-      signal: AbortSignal.timeout(15_000),
-    });
+    let res: Response;
+    let hops = 0;
+    for (;;) {
+      res = await fetch(targetUrl.toString(), {
+        headers: {
+          "User-Agent": "Zigmaa-Moments-Downloader/1.0",
+        },
+        redirect: "manual",
+        signal: AbortSignal.timeout(15_000),
+      });
+
+      if (res.status < 300 || res.status >= 400 || !res.headers.get("location")) break;
+      if (++hops > 5) {
+        return new NextResponse("Too many redirects", { status: 502 });
+      }
+      let nextUrl: URL;
+      try {
+        nextUrl = new URL(res.headers.get("location")!, targetUrl);
+      } catch {
+        return new NextResponse("Invalid redirect target", { status: 502 });
+      }
+      if (!isAllowedTargetUrl(nextUrl)) {
+        return new NextResponse("Forbidden redirect host", { status: 403 });
+      }
+      targetUrl = nextUrl;
+    }
 
     if (!res.ok) {
       return new NextResponse(`Failed to fetch image: ${res.statusText}`, { status: res.status });
