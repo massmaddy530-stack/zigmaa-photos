@@ -4,6 +4,7 @@ import { useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { useRouter } from "next/navigation";
 import {
+  Camera,
   Check,
   ChevronDown,
   Clock,
@@ -289,6 +290,19 @@ export function ProfileMenu() {
             >
               <User className="h-4 w-4 text-[#e50914]" />
               <span>Profile Settings</span>
+            </button>
+
+            {/* Redirect to Camera Settings Page */}
+            <button
+              type="button"
+              onClick={() => {
+                setDropdownOpen(false);
+                router.push("/dashboard/camera-settings");
+              }}
+              className="flex w-full items-center gap-2.5 rounded-xl px-3 py-2 text-xs font-semibold text-[#334155] transition-colors hover:bg-slate-100 hover:text-[#0f172a]"
+            >
+              <Camera className="h-4 w-4 text-[#e50914]" />
+              <span>Camera Settings</span>
             </button>
 
             {/* Help & Support stays as a modal in center */}
