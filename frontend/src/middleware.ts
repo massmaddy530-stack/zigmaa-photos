@@ -18,6 +18,13 @@ export async function middleware(req: NextRequest) {
     res = NextResponse.next();
   } else {
     const url = req.nextUrl.clone();
+    const fwdHost = req.headers.get("x-forwarded-host")?.split(",")[0]?.trim() || req.headers.get("host")?.trim();
+    const fwdProto = req.headers.get("x-forwarded-proto")?.split(",")[0]?.trim();
+    if (fwdHost && !fwdHost.startsWith("127.0.0.1") && !fwdHost.startsWith("localhost")) {
+      url.host = fwdHost;
+      url.port = "";
+      if (fwdProto === "https" || fwdProto === "http") url.protocol = `${fwdProto}:`;
+    }
     url.pathname = "/login";
     url.search = `?next=${encodeURIComponent(req.nextUrl.pathname + req.nextUrl.search)}`;
     res = NextResponse.redirect(url);
