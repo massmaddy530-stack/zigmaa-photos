@@ -20,12 +20,9 @@ export function processingSummary(e: EventOut) {
 
 export function CoverImage({ src, name, className }: { src: string | null; name: string; className?: string }) {
   return src ? (
-    <div className={cn("relative h-full w-full overflow-hidden bg-zinc-900/5", className)}>
-      <img src={src} alt="" className="absolute inset-0 h-full w-full scale-110 object-cover opacity-30 blur-xl" aria-hidden loading="lazy" />
-      <img src={src} alt="" className="relative z-10 h-full w-full object-contain" loading="lazy" />
-    </div>
+    <img src={src} alt="" className={cn("block h-auto w-full", className)} loading="lazy" />
   ) : (
-    <div className={cn("grid h-full w-full place-items-center bg-gradient-to-br from-brand-100 via-brand-50 to-white", className)}>
+    <div className={cn("grid aspect-[16/9] h-full w-full place-items-center bg-gradient-to-br from-brand-100 via-brand-50 to-white", className)}>
       <span className="font-display text-4xl font-medium text-brand-400" aria-hidden>{name.trim().charAt(0).toUpperCase()}</span>
     </div>
   );
@@ -68,7 +65,7 @@ export function EventCard({
       <div className="relative group/card">
         <Link href={`/dashboard/events/${event.id}`} className="group block focus-visible:outline-none">
           <Card className="overflow-hidden transition-[box-shadow,border-color] group-hover:border-brand-200 group-hover:shadow-[var(--shadow-pop)] group-focus-visible:ring-2 group-focus-visible:ring-brand-500">
-            <div className={cn("relative aspect-[16/9] overflow-hidden bg-canvas", compact && "min-[1180px]:aspect-[3/1]")}>
+            <div className={cn("relative overflow-hidden bg-canvas", !event.cover_url && "aspect-[16/9]", compact && !event.cover_url && "min-[1180px]:aspect-[3/1]")}>
               <CoverImage src={event.cover_url} name={event.name} />
             </div>
             <div className={cn("space-y-3 p-4",

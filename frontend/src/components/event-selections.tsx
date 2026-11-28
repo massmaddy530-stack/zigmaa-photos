@@ -1,12 +1,12 @@
 "use client";
 
+import JSZip from "jszip";
 import { useState } from "react";
 import {
   Check,
   Copy,
-  Download,
   ExternalLink,
-  FileText,
+  FolderDown,
   Heart,
   Loader2,
   RefreshCw,
@@ -20,15 +20,28 @@ import { useToast } from "@/components/ui/toast";
 import { adminApi, errorMessage } from "@/lib/api";
 import { formatDate } from "@/lib/format";
 import { useQuery } from "@/lib/hooks";
-import { downloadImagesInBatch, fetchEventWatermarkConfig, getSavedWatermarkConfig } from "@/lib/image";
 import type { ClientSelectionOut } from "@/lib/types";
+
+async function fetchPhotoBlob(url: string): Promise<Blob> {
+  const isCrossOrigin =
+    url.includes("r2.dev") ||
+    url.includes("amazonaws.com") ||
+    url.includes("cloudflarestorage.com") ||
+    (typeof window !== "undefined" && !url.startsWith(window.location.origin) && !url.startsWith("/"));
+
+  const target = isCrossOrigin ? `/api/download?url=${encodeURIComponent(url)}` : url;
+  const res = await fetch(target);
+  if (!res.ok) {
+    throw new Error(`Failed to fetch photo (${res.status})`);
+  }
+  return await res.blob();
+}
 
 export function EventSelections({ eventId, eventName }: { eventId: string; eventName: string }) {
   const toast = useToast();
   const { data, error, loading, reload } = useQuery(() => adminApi.listSelections(eventId), [eventId]);
 
   const [copiedLink, setCopiedLink] = useState(false);
-  const [copiedNamesId, setCopiedNamesId] = useState<string | null>(null);
   const [regenerating, setRegenerating] = useState(false);
   const [deletingId, setDeletingId] = useState<string | null>(null);
   const [downloadingId, setDownloadingId] = useState<string | null>(null);
@@ -76,59 +89,62 @@ export function EventSelections({ eventId, eventName }: { eventId: string; event
     }
   };
 
-  const handleCopyFilenames = async (sel: ClientSelectionOut) => {
-    const names = sel.photos.map((p) => p.original_filename).join(", ");
-    try {
-      await navigator.clipboard.writeText(names);
-      setCopiedNamesId(sel.id);
-      toast.success("Filenames copied", "Paste into Lightroom Classic or Windows Search to filter.");
-      setTimeout(() => setCopiedNamesId(null), 2000);
-    } catch {
-      toast.error("Could not copy filenames");
-    }
-  };
-
-  const handleDownloadTxt = (sel: ClientSelectionOut) => {
-    const content = [
-      `Event: ${eventName}`,
-      `Client: ${sel.client_name}`,
-      `Selected: ${sel.photo_count} photos`,
-      sel.note ? `Note: ${sel.note}` : "",
-      "",
-      ...sel.photos.map((p) => p.original_filename),
-    ]
-      .filter(Boolean)
-      .join("\n");
-
-    const blob = new Blob([content], { type: "text/plain;charset=utf-8" });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement("a");
-    a.href = url;
-    a.download = `${sel.client_name.replace(/[^\w-]+/g, "_")}-selected-photos.txt`;
-    document.body.appendChild(a);
-    a.click();
-    a.remove();
-    setTimeout(() => URL.revokeObjectURL(url), 5000);
-  };
-
-  const handleDownloadSelected = async (sel: ClientSelectionOut) => {
+  const handleDownloadFolder = async (sel: ClientSelectionOut) => {
+    if (sel.photos.length === 0) return;
     setDownloadingId(sel.id);
     setDlProgress({ done: 0, total: sel.photos.length });
+
     try {
-      let wmConfig = getSavedWatermarkConfig(eventId);
-      if (!wmConfig) wmConfig = await fetchEventWatermarkConfig(eventId);
-      const targets = sel.photos
-        .map((p) => ({
-          url: p.download_url || p.preview_url || p.thumbnail_url || "",
-          filename: p.original_filename,
-        }))
-        .filter((x) => Boolean(x.url));
-      await downloadImagesInBatch(targets, wmConfig ?? undefined, (done, total) => {
-        setDlProgress({ done, total });
-      });
-      toast.success(`Downloaded ${targets.length} selected photo${targets.length === 1 ? "" : "s"}`);
+      const zip = new JSZip();
+      const safeEvent = eventName.replace(/[^\w-]+/g, "_").replace(/^_+|_+$/g, "") || "event";
+      const safeClient = sel.client_name.replace(/[^\w-]+/g, "_").replace(/^_+|_+$/g, "") || "client";
+      const folderName = `${safeEvent}-${safeClient}-selected`;
+      const folder = zip.folder(folderName) ?? zip;
+
+      const usedNames = new Map<string, number>();
+      let added = 0;
+
+      for (let i = 0; i < sel.photos.length; i++) {
+        const p = sel.photos[i];
+        const url = p.download_url || p.preview_url || p.thumbnail_url || "";
+        setDlProgress({ done: i + 1, total: sel.photos.length });
+        if (!url) continue;
+
+        try {
+          const blob = await fetchPhotoBlob(url);
+          let filename = p.original_filename || `photo-${p.photo_id.slice(0, 8)}.jpg`;
+          const count = usedNames.get(filename) ?? 0;
+          usedNames.set(filename, count + 1);
+          if (count > 0) {
+            const dot = filename.lastIndexOf(".");
+            filename = dot > 0
+              ? `${filename.slice(0, dot)}_${count}${filename.slice(dot)}`
+              : `${filename}_${count}`;
+          }
+          folder.file(filename, blob);
+          added++;
+        } catch {
+          // Continue packing remaining photos if one fails
+        }
+      }
+
+      if (added === 0) {
+        throw new Error("Could not download any of the selected photos.");
+      }
+
+      const zipBlob = await zip.generateAsync({ type: "blob" });
+      const href = URL.createObjectURL(zipBlob);
+      const a = document.createElement("a");
+      a.href = href;
+      a.download = `${folderName}.zip`;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      setTimeout(() => URL.revokeObjectURL(href), 10_000);
+
+      toast.success(`Downloaded folder (${added} photo${added === 1 ? "" : "s"})`);
     } catch (err) {
-      toast.error("Download failed", errorMessage(err));
+      toast.error("Folder download failed", errorMessage(err));
     } finally {
       setDownloadingId(null);
       setDlProgress(null);
@@ -233,41 +249,19 @@ export function EventSelections({ eventId, eventName }: { eventId: string; event
                     <div className="flex flex-wrap items-center gap-2">
                       <Button
                         size="sm"
-                        variant="outline"
-                        onClick={() => handleCopyFilenames(sel)}
-                        icon={
-                          copiedNamesId === sel.id ? (
-                            <Check className="h-3.5 w-3.5 text-emerald-600" />
-                          ) : (
-                            <Copy className="h-3.5 w-3.5" />
-                          )
-                        }
-                      >
-                        {copiedNamesId === sel.id ? "Copied Names" : "Copy Filenames"}
-                      </Button>
-                      <Button
-                        size="sm"
-                        variant="outline"
-                        onClick={() => handleDownloadTxt(sel)}
-                        icon={<FileText className="h-3.5 w-3.5" />}
-                      >
-                        Export .TXT
-                      </Button>
-                      <Button
-                        size="sm"
-                        onClick={() => void handleDownloadSelected(sel)}
+                        onClick={() => void handleDownloadFolder(sel)}
                         disabled={isDownloading || sel.photos.length === 0}
                         icon={
                           isDownloading ? (
                             <Loader2 className="h-3.5 w-3.5 animate-spin" />
                           ) : (
-                            <Download className="h-3.5 w-3.5" />
+                            <FolderDown className="h-3.5 w-3.5" />
                           )
                         }
                       >
                         {isDownloading && dlProgress
-                          ? `Downloading (${dlProgress.done}/${dlProgress.total})…`
-                          : `Download (${sel.photo_count})`}
+                          ? `Packing (${dlProgress.done}/${dlProgress.total})…`
+                          : `Download Folder (${sel.photo_count})`}
                       </Button>
                       <Button
                         size="sm"
