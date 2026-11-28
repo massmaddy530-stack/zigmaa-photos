@@ -7,18 +7,23 @@ import uuid
 from datetime import datetime
 from typing import Annotated
 
-from fastapi import APIRouter, Header, HTTPException, Query
+from fastapi import APIRouter, Depends, Header, HTTPException, Query
 from pydantic import BaseModel, Field
 from sqlalchemy import delete, func, select
 from sqlalchemy.orm import selectinload
 
-from app.core.deps import AdminDep, SessionDep, StorageDep
+from app.api.deps import SessionDep, StorageDep
+from app.core.security import require_admin
 from app.models import ClientSelection, ClientSelectionItem, Event, Photo, PhotoStatus
 from app.schemas import PublicEventOut, PublicPhotoItem, PublicPhotosPage
 from app.services.events import get_owned_event_or_404
 from app.services.storage import Storage
 
-admin_router = APIRouter(prefix="/api/v1/events", tags=["selections"])
+admin_router = APIRouter(
+    prefix="/api/v1/events",
+    tags=["selections"],
+    dependencies=[Depends(require_admin)],
+)
 public_router = APIRouter(prefix="/api/v1/public/select", tags=["public-selections"])
 
 
@@ -115,7 +120,6 @@ async def list_event_selections(
     event_id: uuid.UUID,
     session: SessionDep,
     storage: StorageDep,
-    _: AdminDep,
     x_user_email: Annotated[str | None, Header(alias="X-User-Email")] = None,
 ) -> EventSelectionsResponse:
     event = await get_owned_event_or_404(session, event_id, x_user_email)
@@ -156,7 +160,6 @@ async def list_event_selections(
 async def regenerate_selection_link(
     event_id: uuid.UUID,
     session: SessionDep,
-    _: AdminDep,
     x_user_email: Annotated[str | None, Header(alias="X-User-Email")] = None,
 ) -> dict[str, str]:
     event = await get_owned_event_or_404(session, event_id, x_user_email)
@@ -173,7 +176,6 @@ async def delete_event_selection(
     event_id: uuid.UUID,
     selection_id: uuid.UUID,
     session: SessionDep,
-    _: AdminDep,
     x_user_email: Annotated[str | None, Header(alias="X-User-Email")] = None,
 ) -> None:
     event = await get_owned_event_or_404(session, event_id, x_user_email)
