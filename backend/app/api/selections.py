@@ -210,15 +210,14 @@ async def get_public_selection_event(
     cover_url = storage.signed_url(ev.cover_key) if ev.cover_key else None
     return PublicSelectionInfo(
         event=PublicEventOut(
-            id=ev.id,
             slug=ev.slug,
             name=ev.name,
             event_date=ev.event_date,
             venue=ev.venue,
             description=ev.description,
             cover_url=cover_url,
-            status=ev.status,
             photo_count=total,
+            matching_available=False,
         ),
         total_photos=total,
     )
