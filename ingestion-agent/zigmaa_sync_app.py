@@ -139,7 +139,7 @@ def main():
 
     default_event = os.environ.get("EVENT_ID", "100b1ef3-ccf3-4c24-8aca-16df4f6f6a63")
     default_folder = os.environ.get("WATCH_FOLDER", r"C:\EventPhotos")
-    default_api = os.environ.get("API_BASE_URL", "https://zigmaa-photos-backend.onrender.com")
+    default_api = os.environ.get("API_BASE_URL", "https://zigmaamoments.com")
     ingest_key = os.environ.get("INGEST_API_KEY", "HbwzKQUT3Jeg63DZz6xwsc9NkJ8SAOSH9KOP_e8AJIk")
 
     # If run interactively in a console:
