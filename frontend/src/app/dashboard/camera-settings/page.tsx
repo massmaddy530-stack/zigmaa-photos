@@ -30,6 +30,7 @@ import type { EventOut } from "@/lib/types";
 
 interface CameraSettingsState {
   cloudOnlyMode: boolean;
+  allowGuestBrowseAll: boolean;
   ftpEnabled: boolean;
   ftpHost: string;
   ftpPort: number;
@@ -198,6 +199,7 @@ export default function CameraSettingsPage() {
 
   const [settings, setSettings] = React.useState<CameraSettingsState>({
     cloudOnlyMode: false,
+    allowGuestBrowseAll: true,
     ftpEnabled: true,
     ftpHost: "ftp.zigmaamoments.com",
     ftpPort: 2121,
@@ -319,6 +321,12 @@ export default function CameraSettingsPage() {
 
   const toggleCloudMode = () => {
     const next = { ...settings, cloudOnlyMode: !settings.cloudOnlyMode };
+    setSettings(next);
+    void handleSave(next);
+  };
+
+  const toggleBrowseAll = () => {
+    const next = { ...settings, allowGuestBrowseAll: !settings.allowGuestBrowseAll };
     setSettings(next);
     void handleSave(next);
   };
@@ -497,6 +505,47 @@ export default function CameraSettingsPage() {
                   />
                 </button>
               </div>
+              </div>
+            </Card>
+
+            {/* Guest Gallery Access Card */}
+            <Card>
+              <CardHeader
+                title="Guest Gallery Access"
+                description="Control whether guests can browse all event photos or only find their own via Face Selfie."
+              />
+              <div className="p-5">
+                <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between rounded-xl border border-line bg-canvas/60 p-4">
+                  <div>
+                    <div className="text-sm font-semibold">
+                      {settings.allowGuestBrowseAll
+                        ? "Browse All Photos: ON"
+                        : "Face Selfie Only (Browse All OFF)"}
+                    </div>
+                    <p className="mt-0.5 text-xs text-[var(--muted-foreground)]">
+                      {settings.allowGuestBrowseAll
+                        ? "Guests see both Find My Face (Selfie) and Browse All Photos tabs."
+                        : "Guests can only use Find My Face (Selfie) to view their matched photos."}
+                    </p>
+                  </div>
+
+                  <button
+                    type="button"
+                    role="switch"
+                    aria-checked={settings.allowGuestBrowseAll}
+                    onClick={toggleBrowseAll}
+                    disabled={saving}
+                    className={`relative inline-flex h-7 w-12 shrink-0 cursor-pointer items-center self-end sm:self-center rounded-full transition-colors ${
+                      settings.allowGuestBrowseAll ? "bg-emerald-600" : "bg-slate-300"
+                    }`}
+                  >
+                    <span
+                      className={`inline-block h-5 w-5 transform rounded-full bg-white shadow transition-transform ${
+                        settings.allowGuestBrowseAll ? "translate-x-6" : "translate-x-1"
+                      }`}
+                    />
+                  </button>
+                </div>
               </div>
             </Card>
 

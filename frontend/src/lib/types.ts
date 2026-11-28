@@ -158,6 +158,7 @@ export interface PublicEventOut {
   cover_url: string | null;
   photo_count: number;
   matching_available: boolean;
+  browse_all_enabled?: boolean;
 }
 
 export interface MatchItem {

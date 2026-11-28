@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import io
+import json
 import logging
 import time
 import uuid
@@ -10,8 +11,8 @@ from typing import Annotated
 
 import qrcode
 import qrcode.image.svg
-from fastapi import APIRouter, Depends, File, Form, Query, Request, Response, UploadFile
-from sqlalchemy import func, select
+from fastapi import APIRouter, Depends, File, Form, HTTPException, Query, Request, Response, UploadFile
+from sqlalchemy import func, select, text
 from starlette.concurrency import run_in_threadpool
 
 from app.api.deps import SessionDep, SettingsDep, StorageDep
@@ -121,16 +122,49 @@ async def _page(session, event: Event, token: str, cursor: int, limit: int, stor
 # --------------------------------------------------------------------------- public
 
 
+async def _is_browse_all_enabled(session: SessionDep, event: Event) -> bool:
+    """Read allowGuestBrowseAll from public.camera_settings (defaults to True)."""
+    try:
+        row = None
+        if event.owner_email:
+            row = (
+                await session.execute(
+                    text(
+                        "SELECT config_json FROM public.camera_settings "
+                        "WHERE lower(user_key) = lower(:email) LIMIT 1"
+                    ),
+                    {"email": event.owner_email.strip()},
+                )
+            ).first()
+        if row is None:
+            row = (
+                await session.execute(
+                    text(
+                        "SELECT config_json FROM public.camera_settings "
+                        "ORDER BY updated_at DESC LIMIT 1"
+                    )
+                )
+            ).first()
+        if row and row[0]:
+            cfg = json.loads(row[0])
+            return bool(cfg.get("allowGuestBrowseAll", True))
+    except Exception:
+        pass
+    return True
+
+
 @public_router.get("/{slug}", response_model=PublicEventOut, responses={404: {"model": ErrorResponse}})
 async def public_event(slug: str, session: SessionDep, storage: StorageDep) -> PublicEventOut:
     event = await get_public_event_or_404(session, slug)
     count = (await session.execute(select(func.count()).select_from(Photo).where(
         Photo.event_id == event.id, Photo.status == PhotoStatus.indexed))).scalar_one()
+    browse_all = await _is_browse_all_enabled(session, event)
     return PublicEventOut(
         slug=event.slug, name=event.name, event_date=event.event_date, venue=event.venue,
         description=event.description,
         cover_url=storage.signed_url(event.cover_key) if event.cover_key else None,
         photo_count=count, matching_available=analyzer_available(),
+        browse_all_enabled=browse_all,
     )
 
 
@@ -191,6 +225,8 @@ async def public_event_photos(
     limit: Annotated[int, Query(ge=1, le=100)] = 48,
 ) -> PublicPhotosPage:
     event = await get_public_event_or_404(session, slug)
+    if not await _is_browse_all_enabled(session, event):
+        raise HTTPException(status_code=403, detail="Browse All Photos is disabled for this event")
     stmt = select(Photo).where(Photo.event_id == event.id, Photo.status == PhotoStatus.indexed)
     if q:
         stmt = stmt.where(func.lower(Photo.original_filename).like(f"%{q.strip().lower()}%"))

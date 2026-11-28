@@ -12,6 +12,7 @@ export const dynamic = "force-dynamic";
 
 export interface CameraSettingsPayload {
   cloudOnlyMode: boolean;
+  allowGuestBrowseAll?: boolean;
   ftpEnabled: boolean;
   ftpHost: string;
   ftpPort: number;
@@ -25,6 +26,7 @@ export interface CameraSettingsPayload {
 
 const DEFAULT_SETTINGS: CameraSettingsPayload = {
   cloudOnlyMode: false,
+  allowGuestBrowseAll: true,
   ftpEnabled: true,
   ftpHost: "ftp.zigmaamoments.com",
   ftpPort: 2121,

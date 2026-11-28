@@ -134,6 +134,7 @@ class PublicEventOut(BaseModel):
     cover_url: str | None
     photo_count: int
     matching_available: bool
+    browse_all_enabled: bool = True
 
 
 class PublicPhotoItem(BaseModel):
