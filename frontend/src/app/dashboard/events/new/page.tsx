@@ -305,7 +305,7 @@ export default function NewEventPage() {
                   }
 
                   toast.success("Event created", "Now upload your photos.");
-                  router.replace(`/dashboard/events/${ev.id}`);
+                  window.location.assign(`/dashboard/events/${ev.id}`);
                 }}
               />
             </div>

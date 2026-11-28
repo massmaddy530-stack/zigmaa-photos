@@ -176,6 +176,7 @@ class PhotoOut(BaseModel):
     processed_at: datetime | None
     thumbnail_url: str | None = None
     preview_url: str | None = None
+    download_url: str | None = None
 
 
 class FaceOut(BaseModel):

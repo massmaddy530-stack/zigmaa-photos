@@ -70,6 +70,7 @@ export interface PhotoOut {
   processed_at: string | null;
   thumbnail_url: string | null;
   preview_url: string | null;
+  download_url?: string | null;
 }
 
 export interface FaceOut {

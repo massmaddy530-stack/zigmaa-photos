@@ -123,9 +123,16 @@ def photo_out(photo: Photo, storage: Storage, *, with_preview: bool = True) -> P
         if not prev and photo.preview_key:
             prev = storage.signed_url(photo.preview_key)
 
+    orig = getattr(photo, "r2_original_url", None)
+    if orig and "localhost" in orig:
+        orig = None
+    if not orig and photo.original_key:
+        orig = storage.signed_url(photo.original_key)
+
     return PhotoOut.model_validate(photo, from_attributes=True).model_copy(
         update={
             "thumbnail_url": thumb,
             "preview_url": prev,
+            "download_url": orig or prev,
         }
     )

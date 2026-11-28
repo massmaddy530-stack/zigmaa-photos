@@ -191,7 +191,7 @@ export function EventPhotos({ eventId, refreshKey, pollWhileProcessing, onChange
         if (item) selectedPhotos.push(item);
       });
       const targets = selectedPhotos.map((p) => ({
-        url: p.preview_url || p.thumbnail_url || "",
+        url: p.download_url || p.preview_url || p.thumbnail_url || "",
         filename: p.original_filename || `photo-${p.id.slice(0, 8)}.jpg`,
       })).filter((x) => Boolean(x.url));
 
@@ -563,7 +563,7 @@ function PhotoDetailPanel({ eventId, photoId, initialPhoto, onLoaded, onDeleted,
     return <div className="space-y-3 p-5"><Skeleton className="h-5 w-3/4" /><Skeleton className="h-4 w-1/2" /><Skeleton className="h-20 w-full" /></div>;
   }
 
-  const downloadUrl = detailData?.original_url || p.preview_url || p.thumbnail_url;
+  const downloadUrl = detailData?.original_url || p.download_url || p.preview_url || p.thumbnail_url;
 
   return (
     <div className="space-y-5 p-5 text-sm">
