@@ -2,10 +2,11 @@
 
 import Link from "next/link";
 import { useParams, usePathname, useRouter, useSearchParams } from "next/navigation";
-import { CalendarDays, Camera, ChevronLeft, ExternalLink, Images, MapPin, RotateCcw, Settings, Share2, UploadCloud } from "lucide-react";
+import { CalendarDays, Camera, ChevronLeft, ExternalLink, Heart, Images, MapPin, RotateCcw, Settings, Share2, UploadCloud } from "lucide-react";
 import { Suspense, useCallback, useEffect, useState } from "react";
 import { PageHeader } from "@/components/app-shell";
 import { EventPhotos } from "@/components/event-photos";
+import { EventSelections } from "@/components/event-selections";
 import { EventSettings } from "@/components/event-settings";
 import { EventShare } from "@/components/event-share";
 import { ProcessingPanel } from "@/components/processing-panel";
@@ -20,6 +21,7 @@ import { useQuery } from "@/lib/hooks";
 
 const TABS = [
   { id: "photos", label: "Photos", icon: Images },
+  { id: "selections", label: "Selections", icon: Heart },
   { id: "share", label: "Share", icon: Share2 },
   { id: "settings", label: "Settings", icon: Settings },
 ] as const;
@@ -165,6 +167,7 @@ function EventDetailInner() {
             onGoUpload={() => setShowUploadModal(true)}
           />
         )}
+        {tab === "selections" && <EventSelections eventId={id} eventName={ev.name} />}
         {tab === "share" && <EventShare event={ev} onChanged={(e) => event.setData(e)} />}
         {tab === "settings" && <EventSettings event={ev} onSaved={(e) => { event.setData(e); void status.reload(); }} />}
       </div>

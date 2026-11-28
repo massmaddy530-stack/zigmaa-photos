@@ -5,6 +5,7 @@ import type {
   BatchDeletePhotosResponse,
   EventCreate,
   EventOut,
+  EventSelectionsResponse,
   EventStatus,
   EventStatusOut,
   EventUpdate,
@@ -19,7 +20,9 @@ import type {
   PhotoStatus,
   PublicEventOut,
   PublicPhotosPage,
+  PublicSelectionInfo,
   RetryResponse,
+  SelectionSubmitResponse,
   StorageOverviewOut,
   UploadResponse,
 } from "./types";
@@ -244,6 +247,15 @@ export const adminApi = {
   },
   matchPage: (eventId: string, token: string, cursor: number, limit = 48) =>
     admin<MatchPage>(`events/${eventId}/matches/${encodeURIComponent(token)}`, { query: { cursor, limit } }),
+
+  listSelections: (eventId: string) =>
+    admin<EventSelectionsResponse>(`events/${eventId}/selections`),
+  regenerateSelectionLink: (eventId: string) =>
+    admin<{ selection_token: string; selection_url_path: string }>(`events/${eventId}/selections/regenerate-link`, {
+      method: "POST",
+    }),
+  deleteSelection: (eventId: string, selectionId: string) =>
+    admin<void>(`events/${eventId}/selections/${selectionId}`, { method: "DELETE" }),
 };
 
 /** Upload a batch of photos through the proxy with progress events (fetch has no upload progress). */
@@ -364,6 +376,43 @@ export const publicApi = {
         download_url: browserMediaUrl(m.download_url),
       })),
     })),
+};
+
+export const publicSelectApi = {
+  getEvent: (slug: string, token: string) =>
+    request<PublicSelectionInfo>(
+      `${PUBLIC_API_BASE_URL}/api/v1/public/select/${encodeURIComponent(slug)}`,
+      { query: { t: token } },
+    ).then((res) => ({
+      ...res,
+      event: { ...res.event, cover_url: browserMediaUrl(res.event.cover_url) },
+    })),
+  listPhotos: (
+    slug: string,
+    token: string,
+    params: { q?: string; cursor?: number; limit?: number } = {},
+  ) =>
+    request<PublicPhotosPage>(
+      `${PUBLIC_API_BASE_URL}/api/v1/public/select/${encodeURIComponent(slug)}/photos`,
+      { query: { t: token, ...params } },
+    ).then((page) => ({
+      ...page,
+      items: page.items.map((m) => ({
+        ...m,
+        thumbnail_url: browserMediaUrl(m.thumbnail_url),
+        preview_url: browserMediaUrl(m.preview_url),
+        download_url: browserMediaUrl(m.download_url),
+      })),
+    })),
+  submitSelection: (
+    slug: string,
+    token: string,
+    body: { client_name: string; note?: string | null; photo_ids: string[]; selection_id?: string | null },
+  ) =>
+    request<SelectionSubmitResponse>(
+      `${PUBLIC_API_BASE_URL}/api/v1/public/select/${encodeURIComponent(slug)}`,
+      { method: "POST", query: { t: token }, json: body },
+    ),
 };
 
 /** Fetch backend health through the signed-in admin route; returns the body even when "degraded" (HTTP 503). */

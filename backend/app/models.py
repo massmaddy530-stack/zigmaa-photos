@@ -83,6 +83,7 @@ class Event(TimestampMixin, Base):
     # Optional: the guest link / QR code stops working at this time. NULL = no expiry.
     guest_link_expires_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     owner_email: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    selection_token: Mapped[str | None] = mapped_column(String(64), nullable=True)
 
     photos: Mapped[list[Photo]] = relationship(back_populates="event", passive_deletes=True)
     event_photos: Mapped[list[EventPhoto]] = relationship(back_populates="event", passive_deletes=True)
@@ -394,4 +395,45 @@ class PhotoWatermarkDerivative(TimestampMixin, Base):
             "variant IN ('guest_preview', 'guest_download')",
             name="ck_photo_watermark_derivatives_variant",
         ),
+    )
+
+
+class ClientSelection(TimestampMixin, Base):
+    """A customer's curated photo selection (album proofing) for an event."""
+
+    __tablename__ = "client_selections"
+
+    id: Mapped[uuid.UUID] = mapped_column(Uuid, primary_key=True, default=uuid.uuid4)
+    event_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("events.id", ondelete="CASCADE"), nullable=False)
+    client_name: Mapped[str] = mapped_column(String(200), nullable=False)
+    note: Mapped[str | None] = mapped_column(Text)
+    status: Mapped[str] = mapped_column(String(20), default="submitted", nullable=False)
+
+    items: Mapped[list["ClientSelectionItem"]] = relationship(
+        back_populates="selection",
+        cascade="all, delete-orphan",
+        passive_deletes=True,
+    )
+
+    __table_args__ = (
+        Index("ix_client_selections_event_created", "event_id", "created_at"),
+    )
+
+
+class ClientSelectionItem(Base):
+    """One selected photo inside a ClientSelection."""
+
+    __tablename__ = "client_selection_items"
+
+    id: Mapped[uuid.UUID] = mapped_column(Uuid, primary_key=True, default=uuid.uuid4)
+    selection_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("client_selections.id", ondelete="CASCADE"), nullable=False)
+    photo_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("photos.id", ondelete="CASCADE"), nullable=False)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow, nullable=False)
+
+    selection: Mapped[ClientSelection] = relationship(back_populates="items")
+    photo: Mapped[Photo] = relationship()
+
+    __table_args__ = (
+        UniqueConstraint("selection_id", "photo_id", name="uq_client_selection_item"),
+        Index("ix_client_selection_items_selection", "selection_id"),
     )

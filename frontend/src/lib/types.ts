@@ -221,3 +221,33 @@ export interface HealthOut {
   version: string;
   checks: Record<string, string>;
 }
+
+export interface ClientSelectionOut {
+  id: string;
+  client_name: string;
+  note: string | null;
+  status: string;
+  photo_count: number;
+  created_at: string;
+  updated_at: string;
+  photos: PublicPhotoItem[];
+}
+
+export interface EventSelectionsResponse {
+  selection_token: string;
+  selection_url_path: string;
+  selections: ClientSelectionOut[];
+}
+
+export interface PublicSelectionInfo {
+  event: PublicEventOut;
+  total_photos: number;
+}
+
+export interface SelectionSubmitResponse {
+  id: string;
+  client_name: string;
+  note: string | null;
+  photo_count: number;
+  updated_at: string;
+}

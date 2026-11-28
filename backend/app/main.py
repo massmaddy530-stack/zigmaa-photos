@@ -15,7 +15,7 @@ from sqlalchemy import text
 from starlette.concurrency import run_in_threadpool
 
 from app import __version__
-from app.api import events, match, photos
+from app.api import events, match, photos, selections
 from app.core.config import get_settings
 from app.core.errors import error_body, install_error_handlers
 from app.core.logging import configure_logging
@@ -169,6 +169,8 @@ async def lifespan(app: FastAPI):
                     await session.execute(text("ALTER TABLE event_photos ADD COLUMN IF NOT EXISTS r2_thumbnail_url VARCHAR(1000)"))
                     await session.execute(text("ALTER TABLE event_photos ADD COLUMN IF NOT EXISTS r2_original_url VARCHAR(1000)"))
                     await session.execute(text("ALTER TABLE events ADD COLUMN IF NOT EXISTS title VARCHAR(200)"))
+                    await session.execute(text("ALTER TABLE events ADD COLUMN IF NOT EXISTS owner_email VARCHAR(255)"))
+                    await session.execute(text("ALTER TABLE events ADD COLUMN IF NOT EXISTS selection_token VARCHAR(64)"))
                     await session.execute(text("ALTER TABLE photos ADD COLUMN IF NOT EXISTS r2_preview_url VARCHAR(1000)"))
                     await session.execute(text("ALTER TABLE photos ADD COLUMN IF NOT EXISTS r2_thumbnail_url VARCHAR(1000)"))
                     await session.execute(text("ALTER TABLE photos ADD COLUMN IF NOT EXISTS r2_original_url VARCHAR(1000)"))
@@ -284,6 +286,8 @@ def create_app() -> FastAPI:
     app.include_router(match.admin_router)
     app.include_router(match.public_router)
     app.include_router(match.match_selfie_router)
+    app.include_router(selections.admin_router)
+    app.include_router(selections.public_router)
 
     @app.get("/", tags=["health"])
     async def root_health() -> dict[str, str]:
