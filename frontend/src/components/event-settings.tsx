@@ -413,13 +413,21 @@ export function EventSettings({ event, onSaved }: { event: EventOut; onSaved: (e
           {/* 2. Cover Image Card */}
           <Card>
             <CardHeader title="Cover image" description="Event cover photo shown on guest gallery and watermark preview" />
-            <div className="space-y-3 p-5">
-              <div className="overflow-hidden rounded-xl border border-line bg-canvas/60 p-2 flex items-center justify-center min-h-[160px] max-h-[300px]">
-                <CoverImage
-                  src={event.cover_url}
-                  name={event.name}
-                  className="max-h-[280px] w-auto max-w-full object-contain block mx-auto shadow-sm"
-                />
+            <div className="flex flex-col gap-3 p-5 sm:flex-row sm:items-center sm:justify-between">
+              <div className="flex items-center gap-3 min-w-0">
+                <div className="h-14 w-20 shrink-0 overflow-hidden rounded-lg border border-line bg-canvas">
+                  <CoverImage
+                    src={event.cover_url}
+                    name={event.name}
+                    className="h-full w-full"
+                  />
+                </div>
+                <div className="min-w-0">
+                  <p className="text-sm font-medium text-ink">
+                    {event.cover_url ? "Cover photo uploaded" : "No cover photo yet"}
+                  </p>
+                  <p className="text-xs text-muted">Shown at the top of the guest page</p>
+                </div>
               </div>
               <input
                 ref={coverRef}
@@ -434,7 +442,8 @@ export function EventSettings({ event, onSaved }: { event: EventOut; onSaved: (e
               />
               <Button
                 variant="outline"
-                className="w-full"
+                size="sm"
+                className="shrink-0"
                 loading={coverBusy}
                 onClick={() => coverRef.current?.click()}
                 icon={<ImagePlus className="h-4 w-4" />}

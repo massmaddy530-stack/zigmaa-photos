@@ -537,20 +537,70 @@ function AllPhotosView({ slug, event: _event, watermarkConfig }: { slug: string;
   return (
     <section className="mt-6 space-y-4" aria-label="All event photos">
       {/* Folder Chips & Search Bar */}
-      <div className="flex flex-col gap-3 rounded-2xl border border-line bg-surface p-4 shadow-sm sm:flex-row sm:items-center sm:justify-between">
-        <div className="relative flex-1 sm:max-w-xs">
-          <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-zinc-400" aria-hidden />
-          <Input
-            type="search"
-            placeholder="Search by filename"
-            value={searchQuery}
-            onChange={(e) => setSearchQuery(e.target.value)}
-            className="pl-9 text-xs"
-          />
+      {/* Unified Search, Folder Filter, Selection & Download Toolbar */}
+      <div className="sticky top-2 z-30 space-y-3 rounded-2xl border border-line bg-surface/95 p-3.5 shadow-sm backdrop-blur-md sm:px-4">
+        <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+          <div className="relative flex-1 sm:max-w-xs">
+            <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-zinc-400" aria-hidden />
+            <Input
+              type="search"
+              placeholder="Search by filename"
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              className="pl-9 text-xs"
+            />
+          </div>
+
+          {photos.length > 0 && (
+            <div className="flex flex-wrap items-center justify-between gap-2.5 sm:justify-end">
+              <div className="flex items-center gap-2.5">
+                <label className="flex cursor-pointer items-center gap-2 text-xs font-semibold text-ink select-none">
+                  <input
+                    type="checkbox"
+                    checked={allSelected}
+                    onChange={selectAll}
+                    className="h-4 w-4 rounded border-zinc-300 text-brand-600 accent-brand-600 focus:ring-brand-500"
+                  />
+                  <span>{allSelected ? "Deselect all" : "Select all photos"}</span>
+                </label>
+                {selectedIds.size > 0 && (
+                  <span className="inline-flex items-center rounded-full bg-brand-100 px-2.5 py-0.5 text-xs font-medium text-brand-800">
+                    {selectedIds.size} selected
+                  </span>
+                )}
+              </div>
+
+              <div className="flex flex-wrap items-center gap-2">
+                {selectedIds.size > 0 && (
+                  <Button
+                    size="sm"
+                    onClick={() => void downloadBatch(photos.filter((p) => selectedIds.has(p.photo_id)))}
+                    disabled={batchDownloading}
+                    icon={batchDownloading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Download className="h-4 w-4" />}
+                  >
+                    {batchDownloading && batchProgress
+                      ? `Downloading (${batchProgress.done}/${batchProgress.total})…`
+                      : `Download selected (${selectedIds.size})`}
+                  </Button>
+                )}
+                <Button
+                  size="sm"
+                  variant="outline"
+                  onClick={() => void downloadAllEventPhotos()}
+                  disabled={batchDownloading}
+                  icon={batchDownloading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Download className="h-4 w-4" />}
+                >
+                  {batchDownloading && batchProgress
+                    ? `Downloading (${batchProgress.done}/${batchProgress.total})…`
+                    : `Download all (${total || photos.length})`}
+                </Button>
+              </div>
+            </div>
+          )}
         </div>
 
         {folders.length > 0 && (
-          <div className="flex flex-wrap items-center gap-1.5 overflow-x-auto pb-1 sm:pb-0">
+          <div className="flex flex-wrap items-center gap-1.5 border-t border-line pt-2.5 overflow-x-auto">
             <button
               type="button"
               onClick={() => setSelectedFolder("all")}
@@ -581,54 +631,6 @@ function AllPhotosView({ slug, event: _event, watermarkConfig }: { slug: string;
           </div>
         )}
       </div>
-
-      {/* Selection & Download Actions */}
-      {photos.length > 0 && (
-        <div className="sticky top-2 z-30 flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-line bg-surface/95 p-3.5 shadow-md backdrop-blur-md sm:px-4">
-          <div className="flex items-center gap-3">
-            <label className="flex cursor-pointer items-center gap-2 text-xs font-semibold text-ink select-none">
-              <input
-                type="checkbox"
-                checked={allSelected}
-                onChange={selectAll}
-                className="h-4 w-4 rounded border-zinc-300 text-brand-600 accent-brand-600 focus:ring-brand-500"
-              />
-              <span>{allSelected ? "Deselect all" : "Select all photos"}</span>
-            </label>
-            {selectedIds.size > 0 && (
-              <span className="inline-flex items-center rounded-full bg-brand-100 px-2.5 py-0.5 text-xs font-medium text-brand-800">
-                {selectedIds.size} of {photos.length} selected
-              </span>
-            )}
-          </div>
-
-          <div className="flex flex-wrap items-center gap-2">
-            {selectedIds.size > 0 && (
-              <Button
-                size="sm"
-                onClick={() => void downloadBatch(photos.filter((p) => selectedIds.has(p.photo_id)))}
-                disabled={batchDownloading}
-                icon={batchDownloading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Download className="h-4 w-4" />}
-              >
-                {batchDownloading && batchProgress
-                  ? `Downloading (${batchProgress.done}/${batchProgress.total})…`
-                  : `Download selected (${selectedIds.size})`}
-              </Button>
-            )}
-            <Button
-              size="sm"
-              variant="outline"
-              onClick={() => void downloadAllEventPhotos()}
-              disabled={batchDownloading}
-              icon={batchDownloading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Download className="h-4 w-4" />}
-            >
-              {batchDownloading && batchProgress
-                ? `Downloading (${batchProgress.done}/${batchProgress.total})…`
-                : `Download all (${total || photos.length})`}
-            </Button>
-          </div>
-        </div>
-      )}
 
       {error ? (
         <Alert tone="error" title="Couldn't load photos">

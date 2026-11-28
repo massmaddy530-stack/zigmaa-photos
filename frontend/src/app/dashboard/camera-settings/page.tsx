@@ -441,16 +441,17 @@ export default function CameraSettingsPage() {
           Loading camera configuration...
         </Card>
       ) : (
-        <div className="grid gap-5 lg:grid-cols-12">
+        <div className="grid items-start gap-5 lg:grid-cols-12">
           {/* Left Column */}
-          <div className="space-y-5 lg:col-span-7">
+          <div className="min-w-0 space-y-5 lg:col-span-7">
             {/* Storage Behavior Card */}
             <Card>
               <CardHeader
                 title="Local Storage Mode"
                 description="Choose whether photos stay on your device after uploading."
               />
-              <div className="mt-4 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between rounded-xl border border-[var(--border)] bg-[var(--surface-2)]/60 p-4">
+              <div className="p-5">
+              <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between rounded-xl border border-line bg-canvas/60 p-4">
                 <div className="flex items-start gap-3">
                   <div
                     className={`mt-0.5 flex h-10 w-10 shrink-0 items-center justify-center rounded-xl border ${
@@ -496,6 +497,7 @@ export default function CameraSettingsPage() {
                   />
                 </button>
               </div>
+              </div>
             </Card>
 
             {/* Camera Connection & FTP Settings */}
@@ -518,7 +520,8 @@ export default function CameraSettingsPage() {
                 }
               />
 
-              <div className="mt-5 grid gap-4 sm:grid-cols-2">
+              <div className="p-5">
+              <div className="grid gap-4 sm:grid-cols-2">
                 <Field label="Target Event" htmlFor="target-event">
                   <Select
                     id="target-event"
@@ -691,11 +694,12 @@ export default function CameraSettingsPage() {
                   </Button>
                 </div>
               )}
+              </div>
             </Card>
           </div>
 
           {/* Right Column */}
-          <div className="space-y-5 lg:col-span-5">
+          <div className="min-w-0 space-y-5 lg:col-span-5">
             {/* Live Folder Auto-Sync */}
             <Card>
               <CardHeader
@@ -711,7 +715,7 @@ export default function CameraSettingsPage() {
                 }
               />
 
-              <div className="mt-4 space-y-3">
+              <div className="space-y-3 p-5">
                 {!watching ? (
                   <Button
                     type="button"
@@ -782,7 +786,8 @@ export default function CameraSettingsPage() {
                     : "Follow these steps to sync photos from any camera without FTP."
                 }
               />
-              <ol className="mt-4 space-y-2.5 text-xs text-[var(--foreground)]">
+              <div className="space-y-4 p-5">
+              <ol className="space-y-2.5 text-xs text-[var(--foreground)]">
                 {guide.steps.map((step, index) => (
                   <li key={index} className="flex gap-2.5 leading-relaxed">
                     <span className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-[var(--brand-soft)] text-[11px] font-semibold text-[var(--brand)]">
@@ -793,9 +798,10 @@ export default function CameraSettingsPage() {
                 ))}
               </ol>
 
-              <Alert tone="info" className="mt-4" icon={<Info className="h-4 w-4" />}>
+              <Alert tone="info" icon={<Info className="h-4 w-4" />}>
                 <span className="text-xs leading-relaxed">{guide.note}</span>
               </Alert>
+              </div>
             </Card>
           </div>
         </div>

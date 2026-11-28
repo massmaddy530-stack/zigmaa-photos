@@ -20,7 +20,10 @@ export function processingSummary(e: EventOut) {
 
 export function CoverImage({ src, name, className }: { src: string | null; name: string; className?: string }) {
   return src ? (
-    <img src={src} alt="" className={cn("h-full w-full object-cover", className)} loading="lazy" />
+    <div className={cn("relative h-full w-full overflow-hidden bg-zinc-900/5", className)}>
+      <img src={src} alt="" className="absolute inset-0 h-full w-full scale-110 object-cover opacity-30 blur-xl" aria-hidden loading="lazy" />
+      <img src={src} alt="" className="relative z-10 h-full w-full object-contain" loading="lazy" />
+    </div>
   ) : (
     <div className={cn("grid h-full w-full place-items-center bg-gradient-to-br from-brand-100 via-brand-50 to-white", className)}>
       <span className="font-display text-4xl font-medium text-brand-400" aria-hidden>{name.trim().charAt(0).toUpperCase()}</span>

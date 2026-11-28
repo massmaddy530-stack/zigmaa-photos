@@ -308,18 +308,37 @@ export function EventForm({
             <input ref={fileRef} id="ev-cover" type="file" accept={ACCEPTED_IMAGE_TYPES.join(",")} className="sr-only"
                    onChange={(e) => { pickCover(e.target.files?.[0]); e.target.value = ""; }} />
             {preview ? (
-              <div className="relative overflow-hidden rounded-xl border border-line bg-canvas/60 p-2 flex items-center justify-center min-h-[160px] max-h-[380px]">
-                <img src={preview} alt="Cover preview" className="max-h-[360px] w-auto max-w-full rounded-lg object-contain block mx-auto shadow-sm" />
-                <button type="button" onClick={() => setCover(null)} aria-label="Remove cover"
-                        className="absolute right-3 top-3 grid h-8 w-8 place-items-center rounded-full bg-black/65 text-white hover:bg-black/85 backdrop-blur-sm transition-colors shadow-md">
-                  <X className="h-4 w-4" />
-                </button>
+              <div className="flex items-center justify-between gap-3 rounded-xl border border-line bg-canvas/50 p-2.5">
+                <div className="flex min-w-0 items-center gap-3">
+                  <img src={preview} alt="Cover preview" className="h-12 w-16 shrink-0 rounded-lg object-cover border border-line" />
+                  <div className="min-w-0">
+                    <p className="truncate text-xs font-medium text-ink">{cover?.name || "Cover image selected"}</p>
+                    <p className="text-[11px] text-muted">Ready to upload</p>
+                  </div>
+                </div>
+                <div className="flex shrink-0 items-center gap-1.5">
+                  <button
+                    type="button"
+                    onClick={() => fileRef.current?.click()}
+                    className="rounded-lg border border-line bg-surface px-2.5 py-1.5 text-xs font-medium text-ink hover:bg-canvas"
+                  >
+                    Change
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setCover(null)}
+                    aria-label="Remove cover"
+                    className="grid h-8 w-8 place-items-center rounded-lg border border-line bg-surface text-muted hover:text-ink"
+                  >
+                    <X className="h-4 w-4" />
+                  </button>
+                </div>
               </div>
             ) : (
               <button type="button" onClick={() => fileRef.current?.click()}
-                      className="flex w-full flex-col items-center justify-center gap-2 rounded-xl border-2 border-dashed border-line bg-canvas/50 px-4 py-8 text-sm text-muted transition hover:border-brand-300 hover:bg-brand-50/40">
-                <ImagePlus className="h-6 w-6 text-brand-500" aria-hidden />
-                <span><span className="font-medium text-brand-700">Choose an image</span> (JPEG, PNG or WebP)</span>
+                      className="flex w-full items-center justify-center gap-2 rounded-xl border-2 border-dashed border-line bg-canvas/50 px-4 py-4 text-sm text-muted transition hover:border-brand-300 hover:bg-brand-50/40">
+                <ImagePlus className="h-5 w-5 text-brand-500" aria-hidden />
+                <span><span className="font-medium text-brand-700">Choose cover image</span> (JPEG, PNG or WebP)</span>
               </button>
             )}
           </Field>
