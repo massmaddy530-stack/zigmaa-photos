@@ -202,14 +202,17 @@ function Portal({ event, slug }: { event: PublicEventOut; slug: string }) {
     <Shell>
       {/* Hero */}
       <header className="relative">
-        <div className="relative h-64 overflow-hidden bg-brand-950 sm:h-80">
+        <div className="relative overflow-hidden bg-brand-950 min-h-[260px] flex items-end">
           {event.cover_url ? (
-            <img src={event.cover_url} alt="" className="h-full w-full object-cover opacity-90" />
+            <>
+              <img src={event.cover_url} alt="" aria-hidden className="absolute inset-0 h-full w-full object-cover blur-2xl scale-110 opacity-45" />
+              <img src={event.cover_url} alt={event.name} className="relative z-0 mx-auto block w-full h-auto max-h-[75vh] object-contain" />
+            </>
           ) : (
             <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_top_right,_var(--color-brand-500)_0%,_transparent_60%),radial-gradient(ellipse_at_bottom_left,_var(--color-brand-700)_0%,_transparent_55%)]" />
           )}
-          <div className="absolute inset-0 bg-gradient-to-t from-black/75 via-black/20 to-transparent" />
-          <div className="absolute inset-x-0 bottom-0 mx-auto max-w-2xl px-4 pb-6 text-white">
+          <div className="pointer-events-none absolute inset-0 z-10 bg-gradient-to-t from-black/80 via-black/25 to-transparent" />
+          <div className="absolute inset-x-0 bottom-0 z-20 mx-auto max-w-2xl px-4 pb-6 text-white">
             <p className="mb-2 inline-flex items-center gap-1.5 rounded-full bg-white/15 px-2.5 py-1 text-xs font-medium backdrop-blur">
               <ImageIcon className="h-3.5 w-3.5" />{formatNumber(event.photo_count)} photos
             </p>

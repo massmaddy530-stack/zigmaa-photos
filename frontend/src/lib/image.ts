@@ -478,7 +478,7 @@ export async function applyWatermark(blob: Blob, customConfig?: WatermarkConfig)
             resolve(watermarkedBlob || blob);
           },
           "image/jpeg",
-          0.95
+          0.99
         );
       } catch {
         resolve(blob);

@@ -1,32 +1,30 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
-import Link from "next/link";
+import * as React from "react";
 import {
   Camera,
   Check,
-  ChevronLeft,
   Cloud,
   Copy,
   Eye,
   EyeOff,
   FolderSync,
   HardDrive,
-  Laptop,
-  Loader2,
+  Info,
   Play,
   RefreshCw,
   Save,
   Square,
   Wifi,
 } from "lucide-react";
+
 import { PageHeader } from "@/components/app-shell";
 import { Button } from "@/components/ui/button";
 import { Card, CardHeader, Field, Input, Select } from "@/components/ui/primitives";
 import { Alert } from "@/components/ui/states";
 import { useToast } from "@/components/ui/toast";
 import { adminApi, CSRF_HEADER, errorMessage, uploadPhotos } from "@/lib/api";
-import { ACCEPTED_IMAGE_EXTENSIONS, SKIP_UPLOAD_COMPRESSION } from "@/lib/config";
+import { ACCEPTED_IMAGE_EXTENSIONS, shouldSkipUploadCompression } from "@/lib/config";
 import { optimizePhotoForUpload } from "@/lib/image";
 import type { EventOut } from "@/lib/types";
 
@@ -42,633 +40,762 @@ interface CameraSettingsState {
   cameraModel: string;
 }
 
-const DEFAULT_STATE: CameraSettingsState = {
-  cloudOnlyMode: false,
-  ftpEnabled: true,
-  ftpHost: "ftp.zigmaamoments.com",
-  ftpPort: 2121,
-  ftpPassiveMode: true,
-  ftpUsername: "",
-  ftpPassword: "",
-  targetEventId: "",
-  cameraModel: "Canon EOS R",
-};
+interface CameraGuideInfo {
+  isFtp: boolean;
+  label: string;
+  steps: string[];
+  note: string;
+}
 
-const STORAGE_KEY = "zigmaa_camera_settings";
+const CAMERA_OPTIONS = [
+  { value: "canon_ftp", label: "Canon (EOS R / R5 / R6 / 5D IV / 1DX)" },
+  { value: "sony_ftp", label: "Sony Alpha (FX3 / A7 IV / A7S III / A7R V / A9)" },
+  { value: "nikon_ftp", label: "Nikon (Z6 III / Z8 / Z9 / D6)" },
+  { value: "fujifilm_ftp", label: "Fujifilm (X-H2 / X-H2S / GFX)" },
+  { value: "panasonic_ftp", label: "Panasonic Lumix (S5 II / GH6 / S1H)" },
+  { value: "other_ftp", label: "Other FTP-Supported Camera" },
+  { value: "non_ftp", label: "Non-FTP Cameras (USB / Camera App / SD Card)" },
+] as const;
 
-function randomPasscode(length = 12): string {
-  const chars = "ABCDEFGHJKLMNPQRSTUVWXYZabcdefghjkmnpqrstuvwxyz23456789";
-  const bytes = new Uint8Array(length);
-  if (typeof crypto !== "undefined" && crypto.getRandomValues) {
-    crypto.getRandomValues(bytes);
+function getCameraGuide(
+  model: string,
+  host: string,
+  port: number,
+  username: string,
+): CameraGuideInfo {
+  switch (model) {
+    case "canon_ftp":
+      return {
+        isFtp: true,
+        label: "Canon Wireless FTP Setup",
+        steps: [
+          "Connect camera to Venue Wi-Fi or Phone Hotspot.",
+          "Open Menu → Network / Wi-Fi → Transfer images to FTP server.",
+          `Select FTP Mode, set Passive Mode to Enable, and enter Server: ${host} (Port ${port}).`,
+          `Choose Login Method: Normal, then enter Username (${username || "from left"}) & Password.`,
+          "Enable Automatic Transfer so every shot uploads immediately in full original quality.",
+        ],
+        note: "Direct FTP works on port 2121 over Wi-Fi or mobile hotspot.",
+      };
+    case "sony_ftp":
+      return {
+        isFtp: true,
+        label: "Sony Alpha / FX3 FTP Setup",
+        steps: [
+          "Connect camera to Venue Wi-Fi or Phone Hotspot via Network → Wi-Fi Connect.",
+          "Open Network → Transfer/Remote → FTP Transfer Func → FTP Server Settings.",
+          `Enter Host Name: ${host}, Port: ${port}, and Passive Mode: On.`,
+          `Enter User (${username || "from left"}) & Password under User Info Settings.`,
+          "Turn On Auto FTP Transfer — photos upload automatically after each shutter click.",
+        ],
+        note: "Tip: Set File Format to JPEG (or RAW+JPEG with JPEG transfer) for instant guest matching.",
+      };
+    case "nikon_ftp":
+      return {
+        isFtp: true,
+        label: "Nikon Wireless FTP Setup",
+        steps: [
+          "Connect camera to Venue Wi-Fi or Phone Hotspot under Network Menu → Connect to FTP server.",
+          `Choose FTP as Server Type and enter Address: ${host}, Port: ${port}.`,
+          "Enable Passive (PASV) Mode in TCP/IP / FTP options.",
+          `Enter User ID (${username || "from left"}) and Password.`,
+          "Turn On Auto Send so new photos sync live to your event.",
+        ],
+        note: "Works on Nikon Z series with built-in Wi-Fi or WT transmitters.",
+      };
+    case "fujifilm_ftp":
+      return {
+        isFtp: true,
+        label: "Fujifilm FTP Setup",
+        steps: [
+          "Connect camera to Venue Wi-Fi or Phone Hotspot in Connection Setting.",
+          "Open Network/USB Setting → FTP Transfer Setting.",
+          `Set Server Address: ${host}, Port: ${port}, Passive Mode: ON.`,
+          `Enter Login ID (${username || "from left"}) and Password.`,
+          "Enable Auto Image Transfer to upload shots live.",
+        ],
+        note: "Supported on X-H2, X-H2S, X-T5 (with FT-XH), and GFX series.",
+      };
+    case "panasonic_ftp":
+      return {
+        isFtp: true,
+        label: "Panasonic Lumix FTP Setup",
+        steps: [
+          "Connect camera to Venue Wi-Fi or Phone Hotspot via Setup → Wi-Fi.",
+          "Select Image Transfer → FTP Transfer.",
+          `Enter Host: ${host}, Port: ${port}, and enable Passive Mode.`,
+          `Enter Account (${username || "from left"}) and Password.`,
+          "Enable Auto Transfer after shooting.",
+        ],
+        note: "Available on Lumix S5 II, S5 IIX, GH6, and S1 series.",
+      };
+    case "other_ftp":
+      return {
+        isFtp: true,
+        label: "Universal Camera FTP Setup",
+        steps: [
+          "Connect your camera (or Wi-Fi adapter) to Venue Wi-Fi or Phone Hotspot.",
+          "Open Camera Network / FTP Transfer settings.",
+          `Enter Server Host: ${host}, Port: ${port}, and set Passive Mode (PASV) ON.`,
+          `Enter Username (${username || "from left"}) and Password.`,
+          "Turn On Auto Transfer — photos go straight to your selected event.",
+        ],
+        note: "Compatible with any camera supporting standard FTP / PASV.",
+      };
+    case "non_ftp":
+    default:
+      return {
+        isFtp: false,
+        label: "Non-FTP Camera Setup (All Other Cameras)",
+        steps: [
+          "Connect your camera to your laptop, tablet, or phone using a USB cable, SD card reader, or your camera's Wi-Fi app.",
+          "Save incoming photos into any folder on your device (for example, Desktop/EventPhotos or Pictures).",
+          "Select your Target Event on the left and click 'Select Camera Folder & Start Live Sync' above.",
+          "Pick that same folder once — every new photo landing there uploads automatically in original quality.",
+        ],
+        note: "Works with any DSLR, mirrorless, or phone camera even without built-in FTP.",
+      };
   }
-  return Array.from(bytes, (b) => chars[b % chars.length]).join("");
+}
+
+function generatePassword(length = 12): string {
+  const chars = "abcdefghijkmnpqrstuvwxyzABCDEFGHJKLMNPQRSTUVWXYZ23456789";
+  let out = "";
+  for (let i = 0; i < length; i++) {
+    out += chars[Math.floor(Math.random() * chars.length)];
+  }
+  return out;
+}
+
+function CopyButton({ value, label }: { value: string; label: string }) {
+  const [copied, setCopied] = React.useState(false);
+  return (
+    <Button
+      type="button"
+      variant="outline"
+      size="sm"
+      className="h-9 shrink-0 px-2.5 text-xs"
+      onClick={() => {
+        navigator.clipboard.writeText(value);
+        setCopied(true);
+        setTimeout(() => setCopied(false), 1800);
+      }}
+      aria-label={`Copy ${label}`}
+    >
+      {copied ? <Check className="h-3.5 w-3.5 text-emerald-600" /> : <Copy className="h-3.5 w-3.5" />}
+      <span className="hidden sm:inline">{copied ? "Copied" : "Copy"}</span>
+    </Button>
+  );
 }
 
 export default function CameraSettingsPage() {
   const toast = useToast();
-  const [settings, setSettings] = useState<CameraSettingsState>(DEFAULT_STATE);
-  const [events, setEvents] = useState<EventOut[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [saving, setSaving] = useState(false);
-  const [showPassword, setShowPassword] = useState(false);
-  const [copiedKey, setCopiedKey] = useState<string | null>(null);
 
-  // Browser Live Folder Auto-Sync state (Chrome/Edge File System Access API)
-  const [syncRunning, setSyncRunning] = useState(false);
-  const [syncFolderName, setSyncFolderName] = useState<string | null>(null);
-  const [syncStats, setSyncStats] = useState({ uploaded: 0, duplicates: 0, deletedLocal: 0, lastFile: "" });
-  const dirHandleRef = useRef<FileSystemDirectoryHandle | null>(null);
-  const seenFilesRef = useRef<Set<string>>(new Set());
-  const syncTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
-  const settingsRef = useRef(settings);
+  const [events, setEvents] = React.useState<EventOut[]>([]);
+  const [loading, setLoading] = React.useState(true);
+  const [saving, setSaving] = React.useState(false);
+  const [showPassword, setShowPassword] = React.useState(false);
 
-  useEffect(() => {
-    settingsRef.current = settings;
-  }, [settings]);
+  const [settings, setSettings] = React.useState<CameraSettingsState>({
+    cloudOnlyMode: false,
+    ftpEnabled: true,
+    ftpHost: "ftp.zigmaamoments.com",
+    ftpPort: 2121,
+    ftpPassiveMode: true,
+    ftpUsername: "",
+    ftpPassword: generatePassword(),
+    targetEventId: "",
+    cameraModel: "canon_ftp",
+  });
 
-  useEffect(() => {
+  // Live Folder Auto-Sync state
+  const [watching, setWatching] = React.useState(false);
+  const [watchFolderName, setWatchFolderName] = React.useState<string>("");
+  const [watchStats, setWatchStats] = React.useState({ synced: 0, deletedLocal: 0, errors: 0 });
+  const [lastSyncedFile, setLastSyncedFile] = React.useState<string>("");
+  const watchTimerRef = React.useRef<ReturnType<typeof setInterval> | null>(null);
+  const dirHandleRef = React.useRef<FileSystemDirectoryHandle | null>(null);
+  const processedFilesRef = React.useRef<Set<string>>(new Set());
+  const isScanningRef = React.useRef(false);
+
+  React.useEffect(() => {
     let active = true;
-    async function load() {
+    async function loadData() {
       try {
-        const cached = localStorage.getItem(STORAGE_KEY);
-        if (cached && active) {
-          setSettings((prev) => ({ ...prev, ...JSON.parse(cached) }));
-        }
-      } catch {
-        /* ignore */
-      }
-
-      try {
-        const [camRes, evRes] = await Promise.all([
-          fetch("/api/camera-settings", { headers: { Accept: "application/json" } }),
-          adminApi.listEvents({ limit: 100 }).catch(() => ({ items: [] as EventOut[] })),
+        const [evRes, cfgRes] = await Promise.all([
+          adminApi.listEvents({ limit: 50 }),
+          fetch("/api/camera-settings").then((r) => (r.ok ? r.json() : null)),
         ]);
         if (!active) return;
 
-        const eventItems = evRes.items || [];
-        setEvents(eventItems);
+        setEvents(evRes.items);
 
-        if (camRes.ok) {
-          const data = await camRes.json();
-          if (data?.settings) {
-            setSettings((prev) => {
-              const merged = { ...prev, ...data.settings };
-              if (!merged.targetEventId && eventItems.length > 0) {
-                merged.targetEventId = eventItems[0].id;
-              }
-              if (!merged.ftpUsername && merged.targetEventId) {
-                const ev = eventItems.find((e) => e.id === merged.targetEventId);
-                if (ev) merged.ftpUsername = `ev_${ev.slug}`;
-              }
-              if (!merged.ftpPassword) {
-                merged.ftpPassword = randomPasscode(12);
-              }
-              return merged;
-            });
+        const defaultEvent = evRes.items[0];
+        setSettings((prev) => {
+          const merged: CameraSettingsState = {
+            ...prev,
+            ...(cfgRes || {}),
+          };
+          if (!merged.targetEventId && defaultEvent) {
+            merged.targetEventId = defaultEvent.id;
+            merged.ftpUsername = `ev_${defaultEvent.slug}`;
+          } else if (merged.targetEventId && !merged.ftpUsername) {
+            const matched = evRes.items.find((e) => e.id === merged.targetEventId);
+            if (matched) merged.ftpUsername = `ev_${matched.slug}`;
           }
+          if (!CAMERA_OPTIONS.some((o) => o.value === merged.cameraModel)) {
+            merged.cameraModel = "canon_ftp";
+          }
+          return merged;
+        });
+      } catch (err) {
+        if (active) {
+          toast.error("Failed to load camera settings", errorMessage(err));
         }
-      } catch {
-        /* fallback to cached */
       } finally {
         if (active) setLoading(false);
       }
     }
-    void load();
+    loadData();
     return () => {
       active = false;
+      if (watchTimerRef.current) clearInterval(watchTimerRef.current);
     };
-  }, []);
+  }, [toast]);
 
-  useEffect(() => {
-    return () => {
-      if (syncTimerRef.current) clearInterval(syncTimerRef.current);
-    };
-  }, []);
+  const selectedEvent = React.useMemo(
+    () => events.find((e) => e.id === settings.targetEventId) ?? events[0],
+    [events, settings.targetEventId],
+  );
 
-  function copyValue(val: string, key: string) {
-    if (!val || typeof navigator === "undefined" || !navigator.clipboard) return;
-    void navigator.clipboard.writeText(val);
-    setCopiedKey(key);
-    setTimeout(() => setCopiedKey(null), 1800);
-  }
+  const guide = React.useMemo(
+    () =>
+      getCameraGuide(
+        settings.cameraModel,
+        settings.ftpHost,
+        settings.ftpPort,
+        settings.ftpUsername,
+      ),
+    [settings.cameraModel, settings.ftpHost, settings.ftpPort, settings.ftpUsername],
+  );
 
-  async function saveSettings(nextSettings: CameraSettingsState, showToast = true) {
-    setSaving(true);
-    try {
-      try {
-        localStorage.setItem(STORAGE_KEY, JSON.stringify(nextSettings));
-      } catch {
-        /* ignore */
-      }
-      const res = await fetch("/api/camera-settings", {
-        method: "POST",
-        headers: { "Content-Type": "application/json", ...CSRF_HEADER },
-        body: JSON.stringify(nextSettings),
-      });
-      if (!res.ok) {
-        throw new Error("Could not save camera settings");
-      }
-      if (showToast) {
-        toast.success("Camera settings saved", "Your Cloud-Only & FTP preferences are updated.");
-      }
-    } catch (err) {
-      toast.error("Save failed", errorMessage(err));
-    } finally {
-      setSaving(false);
-    }
-  }
-
-  function handleToggleCloudOnly() {
-    const updated = { ...settings, cloudOnlyMode: !settings.cloudOnlyMode };
-    setSettings(updated);
-    void saveSettings(updated, false);
-    toast.success(
-      updated.cloudOnlyMode ? "Cloud-Only Mode ON" : "Cloud-Only Mode OFF",
-      updated.cloudOnlyMode
-        ? "Photos go directly to cloud and local copies are auto-removed after upload."
-        : "Photos sync to cloud while keeping local copies as backup.",
-    );
-  }
-
-  function handleEventChange(eventId: string) {
+  const handleEventChange = (eventId: string) => {
     const ev = events.find((e) => e.id === eventId);
     setSettings((prev) => ({
       ...prev,
       targetEventId: eventId,
       ftpUsername: ev ? `ev_${ev.slug}` : prev.ftpUsername,
     }));
-  }
+  };
 
-  async function scanAndUploadFolder() {
-    const dirHandle = dirHandleRef.current;
-    const current = settingsRef.current;
-    if (!dirHandle || !current.targetEventId) return;
-
+  const handleSave = async (nextState?: CameraSettingsState) => {
+    const payload = nextState ?? settings;
+    setSaving(true);
     try {
-      // @ts-expect-error File System Access API entries iterator in Chromium
-      for await (const [name, handle] of dirHandle.entries()) {
-        if (handle.kind !== "file") continue;
-        const lower = name.toLowerCase();
-        if (!ACCEPTED_IMAGE_EXTENSIONS.some((ext) => lower.endsWith(ext))) continue;
+      const res = await fetch("/api/camera-settings", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          ...CSRF_HEADER,
+        },
+        body: JSON.stringify(payload),
+      });
+      if (!res.ok) {
+        const data = await res.json().catch(() => ({}));
+        throw new Error(data.error || "Could not save camera settings");
+      }
+      toast.success(
+        "Camera settings saved",
+        payload.cloudOnlyMode
+          ? "Local cleanup after upload is enabled."
+          : "Local backup copy will be kept.",
+      );
+    } catch (err) {
+      toast.error("Save failed", errorMessage(err));
+    } finally {
+      setSaving(false);
+    }
+  };
 
-        const file = await handle.getFile();
-        if (file.size === 0) continue;
-        const fingerprint = `${name}:${file.size}:${file.lastModified}`;
-        if (seenFilesRef.current.has(fingerprint)) continue;
+  const toggleCloudMode = () => {
+    const next = { ...settings, cloudOnlyMode: !settings.cloudOnlyMode };
+    setSettings(next);
+    void handleSave(next);
+  };
 
-        seenFilesRef.current.add(fingerprint);
-        const prepared = SKIP_UPLOAD_COMPRESSION ? file : await optimizePhotoForUpload(file);
+  const scanAndUploadFolder = React.useCallback(async () => {
+    const dirHandle = dirHandleRef.current;
+    if (!dirHandle || !selectedEvent || isScanningRef.current) return;
+    isScanningRef.current = true;
+    try {
+      const pendingFiles: { file: File; name: string }[] = [];
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      for await (const entry of (dirHandle as any).values()) {
+        if (entry.kind !== "file") continue;
+        const lower = entry.name.toLowerCase();
+        const isImg = ACCEPTED_IMAGE_EXTENSIONS.some((ext) => lower.endsWith(ext));
+        if (!isImg) continue;
+
+        const file: File = await entry.getFile();
+        if (file.size < 10_000) continue; // skip half-written files
+        const sig = `${entry.name}:${file.size}:${file.lastModified}`;
+        if (processedFilesRef.current.has(sig)) continue;
+
+        pendingFiles.push({ file, name: entry.name });
+        processedFilesRef.current.add(sig);
+      }
+
+      if (pendingFiles.length === 0) return;
+
+      const skipOpt = shouldSkipUploadCompression();
+      for (const item of pendingFiles) {
         try {
-          const { body } = await uploadPhotos(current.targetEventId, [prepared], () => {});
-          const item = body.items[0];
-          const isOk = item && (item.status === "created" || item.status === "duplicate");
-          if (isOk) {
-            let deletedLocal = 0;
-            if (current.cloudOnlyMode) {
-              try {
-                await dirHandle.removeEntry(name);
-                deletedLocal = 1;
-              } catch {
-                /* ignore if folder is read-only */
-              }
+          const readyFile = skipOpt
+            ? item.file
+            : await optimizePhotoForUpload(item.file);
+          await uploadPhotos(selectedEvent.id, [readyFile], () => {});
+          setLastSyncedFile(item.name);
+
+          let deleted = false;
+          if (settings.cloudOnlyMode) {
+            try {
+              // eslint-disable-next-line @typescript-eslint/no-explicit-any
+              await (dirHandle as any).removeEntry(item.name);
+              deleted = true;
+            } catch {
+              // User did not grant readwrite or OS locked the file
             }
-            setSyncStats((prev) => ({
-              uploaded: prev.uploaded + (item.status === "created" ? 1 : 0),
-              duplicates: prev.duplicates + (item.status === "duplicate" ? 1 : 0),
-              deletedLocal: prev.deletedLocal + deletedLocal,
-              lastFile: name,
-            }));
-          } else {
-            seenFilesRef.current.delete(fingerprint);
           }
+          setWatchStats((s) => ({
+            ...s,
+            synced: s.synced + 1,
+            deletedLocal: s.deletedLocal + (deleted ? 1 : 0),
+          }));
         } catch {
-          seenFilesRef.current.delete(fingerprint);
+          setWatchStats((s) => ({ ...s, errors: s.errors + 1 }));
         }
       }
-    } catch (err) {
-      toast.error("Folder sync error", errorMessage(err));
-      stopFolderSync();
+    } finally {
+      isScanningRef.current = false;
     }
-  }
+  }, [selectedEvent, settings.cloudOnlyMode]);
 
-  async function startFolderSync() {
-    if (!settings.targetEventId) {
-      toast.error("Select an event", "Choose a Target Event before starting Live Folder Sync.");
+  const startFolderWatch = async () => {
+    if (!selectedEvent) {
+      toast.error("Select a target event first");
       return;
     }
-    const picker = (window as unknown as {
-      showDirectoryPicker?: (opts?: { mode?: "read" | "readwrite" }) => Promise<FileSystemDirectoryHandle>;
-    }).showDirectoryPicker;
-
-    if (!picker) {
+    if (typeof window === "undefined" || !("showDirectoryPicker" in window)) {
       toast.error(
-        "Browser not supported",
-        "Live Folder Sync requires Chrome or Edge on desktop. Use Bulk Upload or Zigmaa-Camera-Sync.exe instead.",
+        "Folder sync not supported here",
+        "Please open this page in Chrome or Edge on desktop/Android to pick a camera folder.",
       );
       return;
     }
-
     try {
-      const handle = await picker({ mode: settings.cloudOnlyMode ? "readwrite" : "read" });
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const handle: FileSystemDirectoryHandle = await (window as any).showDirectoryPicker({
+        mode: settings.cloudOnlyMode ? "readwrite" : "read",
+      });
       dirHandleRef.current = handle;
-      seenFilesRef.current.clear();
-      setSyncFolderName(handle.name);
-      setSyncStats({ uploaded: 0, duplicates: 0, deletedLocal: 0, lastFile: "" });
-      setSyncRunning(true);
+      processedFilesRef.current.clear();
+      setWatchFolderName(handle.name);
+      setWatchStats({ synced: 0, deletedLocal: 0, errors: 0 });
+      setWatching(true);
 
       await scanAndUploadFolder();
-      if (syncTimerRef.current) clearInterval(syncTimerRef.current);
-      syncTimerRef.current = setInterval(() => {
+      watchTimerRef.current = setInterval(() => {
         void scanAndUploadFolder();
-      }, 2500);
-      toast.success("Live Folder Sync started", `Watching "${handle.name}" every 2.5 seconds.`);
-    } catch (err) {
-      if ((err as Error)?.name !== "AbortError") {
-        toast.error("Could not open folder", errorMessage(err));
-      }
-    }
-  }
+      }, 3000);
 
-  function stopFolderSync() {
-    if (syncTimerRef.current) {
-      clearInterval(syncTimerRef.current);
-      syncTimerRef.current = null;
+      toast.success(
+        `Watching folder "${handle.name}"`,
+        `Auto-uploading new photos to ${selectedEvent.name}`,
+      );
+    } catch (err) {
+      if ((err as Error)?.name === "AbortError") return;
+      toast.error("Could not open folder", errorMessage(err));
+    }
+  };
+
+  const stopFolderWatch = () => {
+    if (watchTimerRef.current) {
+      clearInterval(watchTimerRef.current);
+      watchTimerRef.current = null;
     }
     dirHandleRef.current = null;
-    setSyncRunning(false);
-  }
-
-  const selectedEvent = events.find((e) => e.id === settings.targetEventId);
+    setWatching(false);
+    toast.info("Folder sync stopped");
+  };
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-5">
       <PageHeader
-        breadcrumb={
-          <Link href="/dashboard" className="inline-flex items-center gap-1 hover:text-ink">
-            <ChevronLeft className="h-4 w-4" />
-            Dashboard
-          </Link>
-        }
-        title="Camera Settings"
-        description="Configure Cloud-Only storage, direct Camera FTP connection (Canon EOS R / Sony / Nikon), and live folder auto-sync."
+        breadcrumb="Dashboard / Camera Settings"
+        title="Camera & Live Sync"
+        description="Connect your camera via Wi-Fi FTP or watch a local folder for automatic original-quality uploads."
       />
 
       {loading ? (
-        <div className="flex items-center justify-center py-16">
-          <Loader2 className="h-6 w-6 animate-spin text-brand-600" />
-        </div>
+        <Card className="p-8 text-center text-sm text-[var(--muted-foreground)]">
+          Loading camera configuration...
+        </Card>
       ) : (
-        <div className="grid gap-6 lg:grid-cols-12">
-          {/* Left Column (7 cols): Cloud-Only Toggle + FTP Settings */}
-          <div className="space-y-6 lg:col-span-7">
-            {/* 1. Cloud-Only Storage Toggle */}
-            <Card className="overflow-hidden">
+        <div className="grid gap-5 lg:grid-cols-12">
+          {/* Left Column */}
+          <div className="space-y-5 lg:col-span-7">
+            {/* Storage Behavior Card */}
+            <Card>
               <CardHeader
-                title="Cloud-Only Storage Mode"
-                description="Control whether photos save only to Cloud (R2) or keep a local device copy"
+                title="Local Storage Mode"
+                description="Choose whether photos stay on your device after uploading."
               />
-              <div className="p-5 space-y-4">
-                <div className="flex items-center justify-between gap-4 rounded-2xl border border-line bg-canvas/50 p-4">
-                  <div className="flex items-start gap-3">
-                    <div
-                      className={`grid h-10 w-10 shrink-0 place-items-center rounded-xl ${
-                        settings.cloudOnlyMode
-                          ? "bg-brand-600 text-white"
-                          : "bg-slate-200 text-slate-700"
-                      }`}
-                    >
-                      {settings.cloudOnlyMode ? <Cloud className="h-5 w-5" /> : <HardDrive className="h-5 w-5" />}
-                    </div>
-                    <div>
-                      <p className="text-sm font-bold text-ink">
-                        Cloud-Only Mode: {settings.cloudOnlyMode ? "ON" : "OFF"}
-                      </p>
-                      <p className="text-xs text-muted mt-0.5">
-                        {settings.cloudOnlyMode
-                          ? "Photos upload directly to Cloudflare R2 and local temporary files are automatically removed after confirmation."
-                          : "Photos upload to Cloudflare R2 while keeping original copies in your local camera/watch folder as backup."}
-                      </p>
-                    </div>
-                  </div>
-
-                  <button
-                    type="button"
-                    role="switch"
-                    aria-checked={settings.cloudOnlyMode}
-                    onClick={handleToggleCloudOnly}
-                    className={`relative inline-flex h-7 w-13 shrink-0 cursor-pointer items-center rounded-full transition-colors ${
-                      settings.cloudOnlyMode ? "bg-brand-600" : "bg-slate-300"
-                    }`}
-                  >
-                    <span
-                      className={`inline-block h-5 w-5 transform rounded-full bg-white shadow transition-transform ${
-                        settings.cloudOnlyMode ? "translate-x-7" : "translate-x-1"
-                      }`}
-                    />
-                  </button>
-                </div>
-
-                <div className="grid gap-3 sm:grid-cols-2 text-xs">
+              <div className="mt-4 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between rounded-xl border border-[var(--border)] bg-[var(--surface-2)]/60 p-4">
+                <div className="flex items-start gap-3">
                   <div
-                    className={`rounded-xl border p-3 ${
-                      settings.cloudOnlyMode ? "border-brand-300 bg-brand-50/60" : "border-line bg-surface"
+                    className={`mt-0.5 flex h-10 w-10 shrink-0 items-center justify-center rounded-xl border ${
+                      settings.cloudOnlyMode
+                        ? "border-emerald-200 bg-emerald-50 text-emerald-700"
+                        : "border-[var(--border)] bg-white text-[var(--muted-foreground)]"
                     }`}
                   >
-                    <p className="font-semibold text-ink">When ON (Cloud-Only)</p>
-                    <p className="mt-1 text-muted">
-                      Saves zero permanent photos on laptop/phone/tab. Best when storage space is limited.
-                    </p>
+                    {settings.cloudOnlyMode ? (
+                      <Cloud className="h-5 w-5" />
+                    ) : (
+                      <HardDrive className="h-5 w-5" />
+                    )}
                   </div>
-                  <div
-                    className={`rounded-xl border p-3 ${
-                      !settings.cloudOnlyMode ? "border-brand-300 bg-brand-50/60" : "border-line bg-surface"
-                    }`}
-                  >
-                    <p className="font-semibold text-ink">When OFF (Cloud + Local Backup)</p>
-                    <p className="mt-1 text-muted">
-                      Keeps local files safe in your folder even if venue Wi-Fi drops temporarily.
+                  <div>
+                    <div className="text-sm font-semibold">
+                      {settings.cloudOnlyMode
+                        ? "Delete Local Copy After Upload"
+                        : "Keep Local Backup Copy"}
+                    </div>
+                    <p className="mt-0.5 text-xs text-[var(--muted-foreground)]">
+                      {settings.cloudOnlyMode
+                        ? "Frees space on your laptop or phone once each photo is safely uploaded."
+                        : "Uploads full-resolution photos and keeps your original folder files untouched."}
                     </p>
                   </div>
                 </div>
+
+                <button
+                  type="button"
+                  role="switch"
+                  aria-checked={settings.cloudOnlyMode}
+                  onClick={toggleCloudMode}
+                  disabled={saving}
+                  className={`relative inline-flex h-7 w-12 shrink-0 cursor-pointer items-center self-end sm:self-center rounded-full transition-colors ${
+                    settings.cloudOnlyMode ? "bg-emerald-600" : "bg-slate-300"
+                  }`}
+                >
+                  <span
+                    className={`inline-block h-5 w-5 transform rounded-full bg-white shadow transition-transform ${
+                      settings.cloudOnlyMode ? "translate-x-6" : "translate-x-1"
+                    }`}
+                  />
+                </button>
               </div>
             </Card>
 
-            {/* 2. Direct Camera FTP Connection Settings */}
-            <Card className="overflow-hidden">
+            {/* Camera Connection & FTP Settings */}
+            <Card>
               <CardHeader
-                title="Direct Camera FTP Connection"
-                description="Connect Canon EOS R / Sony / Nikon Wi-Fi FTP straight to your Zigmaa Moments cloud"
+                title="Camera Connection"
+                description="Pick your target event and camera model to configure live transfer."
                 action={
-                  <span
-                    className={`inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-[11px] font-semibold ${
-                      settings.ftpEnabled
-                        ? "bg-emerald-50 text-emerald-700 border border-emerald-200"
-                        : "bg-slate-100 text-slate-600 border border-slate-200"
-                    }`}
-                  >
-                    <Wifi className="h-3 w-3" />
-                    {settings.ftpEnabled ? "FTP Enabled" : "FTP Paused"}
-                  </span>
+                  guide.isFtp ? (
+                    <span className="inline-flex items-center gap-1.5 rounded-full bg-emerald-50 px-2.5 py-1 text-xs font-medium text-emerald-700">
+                      <Wifi className="h-3.5 w-3.5" />
+                      FTP Ready
+                    </span>
+                  ) : (
+                    <span className="inline-flex items-center gap-1.5 rounded-full bg-slate-100 px-2.5 py-1 text-xs font-medium text-slate-700">
+                      <Camera className="h-3.5 w-3.5" />
+                      Folder Sync
+                    </span>
+                  )
                 }
               />
-              <form
-                onSubmit={(e) => {
-                  e.preventDefault();
-                  void saveSettings(settings);
-                }}
-                className="p-5 space-y-4"
-              >
-                <div className="grid gap-4 sm:grid-cols-2">
-                  <Field label="Target Event" htmlFor="cam-event">
-                    <Select
-                      id="cam-event"
-                      value={settings.targetEventId}
-                      onChange={(e) => handleEventChange(e.target.value)}
-                    >
-                      {events.length === 0 && <option value="">No active events</option>}
-                      {events.map((ev) => (
+
+              <div className="mt-5 grid gap-4 sm:grid-cols-2">
+                <Field label="Target Event" htmlFor="target-event">
+                  <Select
+                    id="target-event"
+                    value={settings.targetEventId}
+                    onChange={(e) => handleEventChange(e.target.value)}
+                  >
+                    {events.length === 0 ? (
+                      <option value="">No events found — create one first</option>
+                    ) : (
+                      events.map((ev) => (
                         <option key={ev.id} value={ev.id}>
                           {ev.name} ({ev.slug})
                         </option>
-                      ))}
-                    </Select>
-                  </Field>
+                      ))
+                    )}
+                  </Select>
+                </Field>
 
-                  <Field label="Camera Model" htmlFor="cam-model">
-                    <Select
-                      id="cam-model"
-                      value={settings.cameraModel}
-                      onChange={(e) => setSettings((p) => ({ ...p, cameraModel: e.target.value }))}
-                    >
-                      <option value="Canon EOS R">Canon EOS R / R5 / R6</option>
-                      <option value="Sony Alpha">Sony Alpha (a7 / a6400 / a7IV)</option>
-                      <option value="Nikon Z">Nikon Z Series</option>
-                      <option value="Other">Other FTP Camera</option>
-                    </Select>
-                  </Field>
-                </div>
+                <Field label="Camera Model" htmlFor="camera-model">
+                  <Select
+                    id="camera-model"
+                    value={settings.cameraModel}
+                    onChange={(e) =>
+                      setSettings((s) => ({ ...s, cameraModel: e.target.value }))
+                    }
+                  >
+                    {CAMERA_OPTIONS.map((opt) => (
+                      <option key={opt.value} value={opt.value}>
+                        {opt.label}
+                      </option>
+                    ))}
+                  </Select>
+                </Field>
+              </div>
 
-                <div className="grid gap-4 sm:grid-cols-3">
-                  <div className="sm:col-span-2">
-                    <Field label="FTP Server Host (KVM2 / Domain)" htmlFor="cam-host">
-                      <div className="flex gap-1.5">
+              {guide.isFtp ? (
+                <>
+                  <div className="mt-4 grid gap-4 sm:grid-cols-3">
+                    <div className="sm:col-span-2">
+                      <Field label="FTP Server Host" htmlFor="ftp-host">
+                        <div className="flex items-center gap-2">
+                          <Input
+                            id="ftp-host"
+                            value={settings.ftpHost}
+                            onChange={(e) =>
+                              setSettings((s) => ({ ...s, ftpHost: e.target.value }))
+                            }
+                            placeholder="ftp.zigmaamoments.com"
+                          />
+                          <CopyButton value={settings.ftpHost} label="FTP Host" />
+                        </div>
+                      </Field>
+                    </div>
+
+                    <Field label="FTP Port" htmlFor="ftp-port">
+                      <div className="flex items-center gap-2">
                         <Input
-                          id="cam-host"
-                          value={settings.ftpHost}
-                          onChange={(e) => setSettings((p) => ({ ...p, ftpHost: e.target.value }))}
-                          placeholder="ftp.zigmaamoments.com"
+                          id="ftp-port"
+                          type="number"
+                          value={settings.ftpPort}
+                          onChange={(e) =>
+                            setSettings((s) => ({
+                              ...s,
+                              ftpPort: Number(e.target.value) || 2121,
+                            }))
+                          }
                         />
-                        <Button
-                          type="button"
-                          variant="outline"
-                          size="sm"
-                          onClick={() => copyValue(settings.ftpHost, "host")}
-                          icon={copiedKey === "host" ? <Check className="h-3.5 w-3.5 text-emerald-600" /> : <Copy className="h-3.5 w-3.5" />}
-                        >
-                          Copy
-                        </Button>
+                        <CopyButton value={String(settings.ftpPort)} label="FTP Port" />
                       </div>
                     </Field>
                   </div>
 
-                  <Field label="FTP Port" htmlFor="cam-port">
-                    <div className="flex gap-1.5">
-                      <Input
-                        id="cam-port"
-                        type="number"
-                        min={1}
-                        max={65535}
-                        value={settings.ftpPort}
-                        onChange={(e) => setSettings((p) => ({ ...p, ftpPort: Number(e.target.value) || 2121 }))}
-                      />
-                      <Button
-                        type="button"
-                        variant="outline"
-                        size="sm"
-                        onClick={() => copyValue(String(settings.ftpPort), "port")}
-                        icon={copiedKey === "port" ? <Check className="h-3.5 w-3.5 text-emerald-600" /> : <Copy className="h-3.5 w-3.5" />}
-                      />
-                    </div>
-                  </Field>
-                </div>
-
-                <div className="grid gap-4 sm:grid-cols-2">
-                  <Field label="FTP Username (Event Route)" htmlFor="cam-user">
-                    <div className="flex gap-1.5">
-                      <Input
-                        id="cam-user"
-                        value={settings.ftpUsername}
-                        onChange={(e) => setSettings((p) => ({ ...p, ftpUsername: e.target.value }))}
-                        placeholder={selectedEvent ? `ev_${selectedEvent.slug}` : "ev_wedding2026"}
-                      />
-                      <Button
-                        type="button"
-                        variant="outline"
-                        size="sm"
-                        onClick={() => copyValue(settings.ftpUsername, "user")}
-                        icon={copiedKey === "user" ? <Check className="h-3.5 w-3.5 text-emerald-600" /> : <Copy className="h-3.5 w-3.5" />}
-                      />
-                    </div>
-                  </Field>
-
-                  <Field label="FTP Password" htmlFor="cam-pass">
-                    <div className="flex gap-1.5">
-                      <div className="relative flex-1">
+                  <div className="mt-4 grid gap-4 sm:grid-cols-2">
+                    <Field label="FTP Username (Event Route)" htmlFor="ftp-user">
+                      <div className="flex items-center gap-2">
                         <Input
-                          id="cam-pass"
-                          type={showPassword ? "text" : "password"}
-                          value={settings.ftpPassword}
-                          onChange={(e) => setSettings((p) => ({ ...p, ftpPassword: e.target.value }))}
-                          className="pr-9"
+                          id="ftp-user"
+                          value={settings.ftpUsername}
+                          onChange={(e) =>
+                            setSettings((s) => ({ ...s, ftpUsername: e.target.value }))
+                          }
+                          placeholder="ev_event_slug"
                         />
-                        <button
-                          type="button"
-                          onClick={() => setShowPassword((v) => !v)}
-                          className="absolute right-2.5 top-1/2 -translate-y-1/2 text-muted hover:text-ink cursor-pointer"
-                          aria-label={showPassword ? "Hide password" : "Show password"}
-                        >
-                          {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
-                        </button>
+                        <CopyButton value={settings.ftpUsername} label="FTP Username" />
                       </div>
-                      <Button
-                        type="button"
-                        variant="outline"
-                        size="sm"
-                        onClick={() => setSettings((p) => ({ ...p, ftpPassword: randomPasscode(12) }))}
-                        title="Generate new passcode"
-                        icon={<RefreshCw className="h-3.5 w-3.5" />}
-                      />
-                      <Button
-                        type="button"
-                        variant="outline"
-                        size="sm"
-                        onClick={() => copyValue(settings.ftpPassword, "pass")}
-                        icon={copiedKey === "pass" ? <Check className="h-3.5 w-3.5 text-emerald-600" /> : <Copy className="h-3.5 w-3.5" />}
-                      />
-                    </div>
-                  </Field>
-                </div>
+                    </Field>
 
-                <div className="flex flex-wrap items-center justify-between gap-3 pt-2 border-t border-line">
-                  <label className="inline-flex items-center gap-2 text-xs font-medium text-ink cursor-pointer">
-                    <input
-                      type="checkbox"
-                      checked={settings.ftpPassiveMode}
-                      onChange={(e) => setSettings((p) => ({ ...p, ftpPassiveMode: e.target.checked }))}
-                      className="rounded border-line accent-brand-600"
-                    />
-                    <span>Enable Passive Mode (PASV) — Recommended for Canon EOS R Wi-Fi</span>
-                  </label>
+                    <Field label="FTP Password" htmlFor="ftp-pass">
+                      <div className="flex items-center gap-1.5">
+                        <div className="relative flex-1">
+                          <Input
+                            id="ftp-pass"
+                            type={showPassword ? "text" : "password"}
+                            value={settings.ftpPassword}
+                            onChange={(e) =>
+                              setSettings((s) => ({ ...s, ftpPassword: e.target.value }))
+                            }
+                            className="pr-9"
+                          />
+                          <button
+                            type="button"
+                            onClick={() => setShowPassword((v) => !v)}
+                            className="absolute right-2.5 top-1/2 -translate-y-1/2 text-[var(--muted-foreground)] hover:text-[var(--foreground)]"
+                            aria-label={showPassword ? "Hide password" : "Show password"}
+                          >
+                            {showPassword ? (
+                              <EyeOff className="h-4 w-4" />
+                            ) : (
+                              <Eye className="h-4 w-4" />
+                            )}
+                          </button>
+                        </div>
+                        <Button
+                          type="button"
+                          variant="outline"
+                          size="sm"
+                          className="h-9 shrink-0 px-2.5"
+                          onClick={() =>
+                            setSettings((s) => ({
+                              ...s,
+                              ftpPassword: generatePassword(),
+                            }))
+                          }
+                          title="Generate new password"
+                        >
+                          <RefreshCw className="h-3.5 w-3.5" />
+                        </Button>
+                        <CopyButton value={settings.ftpPassword} label="FTP Password" />
+                      </div>
+                    </Field>
+                  </div>
 
-                  <Button type="submit" loading={saving} icon={<Save className="h-4 w-4" />}>
-                    Save Camera Settings
+                  <div className="mt-5 flex flex-col gap-3 border-t border-[var(--border)] pt-4 sm:flex-row sm:items-center sm:justify-between">
+                    <label className="flex cursor-pointer items-center gap-2 text-xs text-[var(--foreground)]">
+                      <input
+                        type="checkbox"
+                        checked={settings.ftpPassiveMode}
+                        onChange={(e) =>
+                          setSettings((s) => ({ ...s, ftpPassiveMode: e.target.checked }))
+                        }
+                        className="h-4 w-4 rounded accent-[var(--brand)]"
+                      />
+                      Enable Passive Mode (PASV) — recommended for camera Wi-Fi
+                    </label>
+
+                    <Button
+                      type="button"
+                      onClick={() => handleSave()}
+                      disabled={saving}
+                      className="w-full sm:w-auto"
+                    >
+                      <Save className="h-4 w-4" />
+                      {saving ? "Saving..." : "Save Settings"}
+                    </Button>
+                  </div>
+                </>
+              ) : (
+                <div className="mt-5 flex flex-col gap-3 border-t border-[var(--border)] pt-4 sm:flex-row sm:items-center sm:justify-between">
+                  <p className="text-xs text-[var(--muted-foreground)]">
+                    No FTP server credentials needed — use Live Folder Auto-Sync on the right.
+                  </p>
+                  <Button
+                    type="button"
+                    onClick={() => handleSave()}
+                    disabled={saving}
+                    className="w-full sm:w-auto"
+                  >
+                    <Save className="h-4 w-4" />
+                    {saving ? "Saving..." : "Save Event Selection"}
                   </Button>
                 </div>
-              </form>
+              )}
             </Card>
           </div>
 
-          {/* Right Column (5 cols): Browser Live Folder Sync + Canon EOS R Setup + .exe Option */}
-          <div className="space-y-6 lg:col-span-5">
-            {/* 3. Live Folder Auto-Sync (No .exe needed) */}
-            <Card className="overflow-hidden">
+          {/* Right Column */}
+          <div className="space-y-5 lg:col-span-5">
+            {/* Live Folder Auto-Sync */}
+            <Card>
               <CardHeader
-                title="Live Folder Auto-Sync (No .exe)"
-                description="Watch a tether/Canon Utility folder directly from Chrome or Edge"
+                title="Live Folder Auto-Sync"
+                description="Pick any camera or tether folder — new photos upload automatically in full quality."
+                action={
+                  watching ? (
+                    <span className="inline-flex items-center gap-1.5 rounded-full bg-emerald-50 px-2.5 py-1 text-xs font-medium text-emerald-700">
+                      <span className="h-2 w-2 animate-pulse rounded-full bg-emerald-600" />
+                      Watching
+                    </span>
+                  ) : null
+                }
               />
-              <div className="p-5 space-y-4">
-                <p className="text-xs text-muted">
-                  Works on Phone/Tab/Laptop when photos land in a folder. Honors your{" "}
-                  <strong className="text-ink">Cloud-Only ({settings.cloudOnlyMode ? "ON" : "OFF"})</strong> toggle automatically.
-                </p>
 
-                {syncRunning ? (
-                  <div className="rounded-xl border border-emerald-200 bg-emerald-50/70 p-3.5 space-y-2">
-                    <div className="flex items-center justify-between">
-                      <span className="inline-flex items-center gap-1.5 text-xs font-bold text-emerald-800">
-                        <FolderSync className="h-4 w-4 animate-spin" />
-                        Watching: {syncFolderName}
-                      </span>
-                      <Button size="sm" variant="danger" onClick={stopFolderSync} icon={<Square className="h-3 w-3" />}>
-                        Stop Sync
-                      </Button>
-                    </div>
-                    <div className="grid grid-cols-3 gap-2 text-center text-xs pt-1">
-                      <div className="rounded-lg bg-white p-2 border border-emerald-100">
-                        <p className="font-bold text-ink">{syncStats.uploaded}</p>
-                        <p className="text-[11px] text-muted">Uploaded</p>
-                      </div>
-                      <div className="rounded-lg bg-white p-2 border border-emerald-100">
-                        <p className="font-bold text-ink">{syncStats.duplicates}</p>
-                        <p className="text-[11px] text-muted">Skipped</p>
-                      </div>
-                      <div className="rounded-lg bg-white p-2 border border-emerald-100">
-                        <p className="font-bold text-ink">{syncStats.deletedLocal}</p>
-                        <p className="text-[11px] text-muted">Cleaned</p>
-                      </div>
-                    </div>
-                    {syncStats.lastFile && (
-                      <p className="text-[11px] text-emerald-800 truncate">Last synced: {syncStats.lastFile}</p>
-                    )}
-                  </div>
-                ) : (
+              <div className="mt-4 space-y-3">
+                {!watching ? (
                   <Button
                     type="button"
+                    onClick={startFolderWatch}
                     className="w-full"
-                    onClick={startFolderSync}
-                    icon={<Play className="h-4 w-4" />}
+                    disabled={!selectedEvent}
                   >
+                    <Play className="h-4 w-4" />
                     Select Camera Folder & Start Live Sync
                   </Button>
+                ) : (
+                  <div className="space-y-3 rounded-xl border border-emerald-200 bg-emerald-50/50 p-3.5">
+                    <div className="flex items-center justify-between gap-2">
+                      <div className="flex min-w-0 items-center gap-2 text-xs font-medium text-emerald-900">
+                        <FolderSync className="h-4 w-4 shrink-0 text-emerald-700" />
+                        <span className="truncate">
+                          Folder: <strong>{watchFolderName}</strong>
+                        </span>
+                      </div>
+                      <Button
+                        type="button"
+                        variant="outline"
+                        size="sm"
+                        onClick={stopFolderWatch}
+                        className="h-8 shrink-0 text-xs"
+                      >
+                        <Square className="h-3 w-3 fill-current" />
+                        Stop
+                      </Button>
+                    </div>
+                    <div className="grid grid-cols-3 gap-2 text-center text-xs">
+                      <div className="rounded-lg bg-white p-2">
+                        <div className="text-base font-semibold text-emerald-700">
+                          {watchStats.synced}
+                        </div>
+                        <div className="text-[11px] text-[var(--muted-foreground)]">Uploaded</div>
+                      </div>
+                      <div className="rounded-lg bg-white p-2">
+                        <div className="text-base font-semibold text-[var(--foreground)]">
+                          {watchStats.deletedLocal}
+                        </div>
+                        <div className="text-[11px] text-[var(--muted-foreground)]">Cleaned</div>
+                      </div>
+                      <div className="rounded-lg bg-white p-2">
+                        <div className="text-base font-semibold text-rose-600">
+                          {watchStats.errors}
+                        </div>
+                        <div className="text-[11px] text-[var(--muted-foreground)]">Errors</div>
+                      </div>
+                    </div>
+                    {lastSyncedFile && (
+                      <div className="truncate text-[11px] text-emerald-800">
+                        Last synced: {lastSyncedFile}
+                      </div>
+                    )}
+                  </div>
                 )}
               </div>
             </Card>
 
-            {/* 4. Canon EOS R FTP Quick Guide */}
-            <Card className="overflow-hidden">
+            {/* Camera Setup Guide */}
+            <Card>
               <CardHeader
-                title={`${settings.cameraModel} FTP Setup Guide`}
-                description="Enter these settings on your camera for direct wireless transfer"
+                title={guide.label}
+                description={
+                  guide.isFtp
+                    ? "Enter these settings in your camera menu for direct wireless transfer."
+                    : "Follow these steps to sync photos from any camera without FTP."
+                }
               />
-              <div className="p-5 space-y-3 text-xs text-muted">
-                <ol className="list-decimal pl-4 space-y-1.5 text-ink">
-                  <li>Connect camera to Venue Wi-Fi or Phone Hotspot.</li>
-                  <li>Open <span className="font-semibold">Wi-Fi / Bluetooth connection → Transfer images to FTP server</span>.</li>
-                  <li>Set <span className="font-semibold">FTP Mode: FTP</span> (Passive Mode: <span className="font-semibold">{settings.ftpPassiveMode ? "Enable" : "Disable"}</span>).</li>
-                  <li>Address: <code className="rounded bg-canvas px-1.5 py-0.5 font-mono">{settings.ftpHost}</code> · Port: <code className="rounded bg-canvas px-1.5 py-0.5 font-mono">{settings.ftpPort}</code>.</li>
-                  <li>Login Method: Normal · Enter your FTP Username & Password above.</li>
-                  <li>Enable <span className="font-semibold">Automatic Transfer</span> — photos go straight to cloud & AI face indexing!</li>
-                </ol>
+              <ol className="mt-4 space-y-2.5 text-xs text-[var(--foreground)]">
+                {guide.steps.map((step, index) => (
+                  <li key={index} className="flex gap-2.5 leading-relaxed">
+                    <span className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-[var(--brand-soft)] text-[11px] font-semibold text-[var(--brand)]">
+                      {index + 1}
+                    </span>
+                    <span>{step}</span>
+                  </li>
+                ))}
+              </ol>
 
-                <Alert tone="info" title="KVM2 Cloud FTP Note">
-                  Direct Camera-to-Cloud FTP (port {settings.ftpPort}) activates once your backend runs on Hostinger KVM2 VPS. Until then, use{" "}
-                  <strong>Live Folder Auto-Sync</strong> above or <strong>Zigmaa-Camera-Sync.exe</strong> on Windows.
-                </Alert>
-              </div>
-            </Card>
-
-            {/* 5. Desktop .exe Option (Preserved) */}
-            <Card className="overflow-hidden">
-              <CardHeader
-                title="Windows Desktop Sync (.exe)"
-                description="Optional local FTP & USB tether bridge for Windows laptops"
-              />
-              <div className="p-5 space-y-3 text-xs text-muted">
-                <div className="flex items-start gap-3 rounded-xl border border-line bg-canvas/50 p-3">
-                  <Laptop className="h-5 w-5 text-brand-600 shrink-0 mt-0.5" />
-                  <div>
-                    <p className="font-semibold text-ink flex items-center gap-1.5">
-                      <Camera className="h-3.5 w-3.5 text-brand-600" />
-                      Zigmaa-Camera-Sync.exe
-                    </p>
-                    <p className="mt-1">
-                      Keep using <code className="font-mono">Zigmaa-Camera-Sync.exe</code> on your Windows studio laptop for local FTP or USB camera tethering.
-                      {selectedEvent ? ` Active target event: ${selectedEvent.name}.` : ""}
-                    </p>
-                  </div>
-                </div>
-              </div>
+              <Alert tone="info" className="mt-4" icon={<Info className="h-4 w-4" />}>
+                <span className="text-xs leading-relaxed">{guide.note}</span>
+              </Alert>
             </Card>
           </div>
         </div>

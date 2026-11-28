@@ -8,7 +8,7 @@ import {
   ACCEPTED_IMAGE_EXTENSIONS,
   ACCEPTED_IMAGE_TYPES,
   MAX_UPLOAD_MB,
-  SKIP_UPLOAD_COMPRESSION,
+  shouldSkipUploadCompression,
   UPLOAD_BATCH_BYTES,
   UPLOAD_BATCH_FILES,
   UPLOAD_CONCURRENCY,
@@ -169,11 +169,12 @@ export function UploadPanel({ eventId, disabled, onUploaded }: {
   async function addFiles(list: FileList | File[] | null) {
     if (!list || disabled) return;
     const rawFiles = Array.from(list);
+    const skipCompression = shouldSkipUploadCompression();
     // Process in chunks so uploads start immediately instead of blocking on all files
     const CHUNK_SIZE = 12;
     for (let i = 0; i < rawFiles.length; i += CHUNK_SIZE) {
       const chunk = rawFiles.slice(i, i + CHUNK_SIZE);
-      const processed = SKIP_UPLOAD_COMPRESSION
+      const processed = skipCompression
         ? chunk
         : await poolMap(chunk, (file) => optimizePhotoForUpload(file), 4);
       const added: UploadItem[] = processed.map((file) => {
