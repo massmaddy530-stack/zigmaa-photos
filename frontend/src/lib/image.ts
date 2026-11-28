@@ -473,12 +473,28 @@ export async function applyWatermark(blob: Blob, customConfig?: WatermarkConfig)
           await drawLayer(layer);
         }
 
+        try {
+          const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
+          const { default: encodeJpeg } = await import("@jsquash/jpeg/encode");
+          const jpegBuffer = await encodeJpeg(imageData, {
+            quality: 98,
+            auto_subsample: false,
+            chroma_subsample: 1, // 4:4:4 zero chroma subsampling
+          });
+          if (jpegBuffer && jpegBuffer.byteLength > 0) {
+            resolve(new Blob([jpegBuffer], { type: "image/jpeg" }));
+            return;
+          }
+        } catch {
+          // Fallback to native canvas JPEG if WASM is unavailable
+        }
+
         canvas.toBlob(
           (watermarkedBlob) => {
             resolve(watermarkedBlob || blob);
           },
           "image/jpeg",
-          0.99
+          1.0
         );
       } catch {
         resolve(blob);
