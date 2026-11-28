@@ -234,9 +234,10 @@ export default function CameraSettingsPage() {
 
         const defaultEvent = evRes.items[0];
         setSettings((prev) => {
+          const loaded = cfgRes?.settings || cfgRes || {};
           const merged: CameraSettingsState = {
             ...prev,
-            ...(cfgRes || {}),
+            ...loaded,
           };
           if (!merged.targetEventId && defaultEvent) {
             merged.targetEventId = defaultEvent.id;

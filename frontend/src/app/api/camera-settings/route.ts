@@ -141,6 +141,7 @@ export async function POST(req: NextRequest) {
 
   const sanitized: CameraSettingsPayload = {
     cloudOnlyMode: Boolean(body.cloudOnlyMode),
+    allowGuestBrowseAll: body.allowGuestBrowseAll !== false,
     ftpEnabled: body.ftpEnabled !== false,
     ftpHost: typeof body.ftpHost === "string" && body.ftpHost.trim() ? body.ftpHost.trim().slice(0, 120) : DEFAULT_SETTINGS.ftpHost,
     ftpPort: Number.isInteger(Number(body.ftpPort)) && Number(body.ftpPort) >= 1 && Number(body.ftpPort) <= 65535
