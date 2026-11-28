@@ -28,9 +28,11 @@ export function getPool(): Pool | null {
   if (!connectionString) return null;
 
   try {
+    const isLocalDb =
+      connectionString.includes("127.0.0.1") || connectionString.includes("localhost");
     poolInstance = new Pool({
       connectionString,
-      ssl: { rejectUnauthorized: false },
+      ssl: isLocalDb ? false : { rejectUnauthorized: false },
       max: 5,
       idleTimeoutMillis: 30000,
       connectionTimeoutMillis: 5000,
