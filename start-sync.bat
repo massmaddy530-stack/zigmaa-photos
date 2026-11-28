@@ -8,6 +8,13 @@ echo.
 
 set ROOT_DIR=%~dp0
 set EXE_PATH=%ROOT_DIR%Zigmaa-Camera-Sync.exe
+set API_BASE_URL=https://zigmaamoments.com
+if exist "%ROOT_DIR%ingestion-agent\.env" (
+    for /f "usebackq tokens=1,* delims==" %%a in ("%ROOT_DIR%ingestion-agent\.env") do (
+        if "%%a"=="API_BASE_URL" set API_BASE_URL=%%b
+        if "%%a"=="INGEST_API_KEY" set INGEST_API_KEY=%%b
+    )
+)
 
 :: Unblock to ensure smooth execution without SmartScreen warnings
 powershell -NoProfile -ExecutionPolicy Bypass -Command "Unblock-File -Path '%EXE_PATH%' -ErrorAction SilentlyContinue"
